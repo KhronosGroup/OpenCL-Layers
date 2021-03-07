@@ -26,9 +26,9 @@
 #include <string.h>
 #include <CL/cl_layer.h>
 
-struct _cl_icd_dispatch dispatch = {NULL};
+static struct _cl_icd_dispatch dispatch = {NULL};
 
-const struct _cl_icd_dispatch *tdispatch;
+static const struct _cl_icd_dispatch *tdispatch;
 
 CL_API_ENTRY cl_int CL_API_CALL
 clGetLayerInfo(
