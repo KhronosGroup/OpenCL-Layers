@@ -1035,8 +1035,11 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfo_wrap(
 {
   CHECK_EXISTS(PROGRAM, program);
 
-  cl_int result;
-  result = tdispatch->clGetProgramInfo(
+  size_t param_value_size_ret_force;
+  if (param_name == CL_PROGRAM_DEVICES && param_value && !param_value_size_ret)
+    param_value_size_ret = &param_value_size_ret_force;
+
+  cl_int result = tdispatch->clGetProgramInfo(
     program,
     param_name,
     param_value_size,
