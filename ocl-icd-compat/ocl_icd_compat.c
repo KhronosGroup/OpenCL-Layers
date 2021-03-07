@@ -115,7 +115,7 @@ static void _set_default_id() {
     if (*default_platform == '\0' || *end_scan != '\0')
       return;
   }
-  if (num_default_platform < 0 || num_default_platform >= _num_platforms)
+  if (num_default_platform < 0 || num_default_platform >= (int)_num_platforms)
     return;
   _default_id = _platforms[num_default_platform].pid;
 }
