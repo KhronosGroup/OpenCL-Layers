@@ -407,22 +407,29 @@ void check_retain<MEM>(const std::string_view &func, void *handle) {
   objects_mutex.unlock();
 }
 
-#define CHECK_RETAIN(type, handle) check_retain<type>(RTRIM_FUNC, handle)
-
-static cl_platform_id context_properties_get_platform(const cl_context_properties *properties) {
-  if (properties == NULL)
-    return NULL;
-  cl_platform_id platform = NULL;
-  for (const cl_context_properties *property = properties; property && property[0]; property += 2)
-    if ((cl_context_properties)CL_CONTEXT_PLATFORM == property[0])
-      platform = (cl_platform_id)property[1];
-  return platform;
+static void report() {
+  objects_mutex.lock();
+  std::cerr << "OpenCL objects leaks:\n";
+  for (auto it = objects.begin(); it != objects.end(); ++it) {
+    if (std::get<1>(it->second) > 0) {
+      object_type t = std::get<0>(it->second);
+      std::cerr << object_type_names[t] << " (" <<
+                it->first << ") reference count: " <<
+                std::get<1>(it->second) << "\n";
+    }
+  }
+  objects.clear();
+  deleted_objects.clear();
+  objects_mutex.unlock();
 }
+
+#define CHECK_RETAIN(type, handle) check_retain<type>(RTRIM_FUNC, handle)
 
 static struct _cl_icd_dispatch dispatch = {};
 
 static const struct _cl_icd_dispatch *tdispatch;
 
+  /* Layer API entry points */
 CL_API_ENTRY cl_int CL_API_CALL
 clGetLayerInfo(
     cl_layer_info  param_name,
@@ -464,9 +471,32 @@ clInitLayer(
 
   *layer_dispatch_ret = &dispatch;
   *num_entries_out = sizeof(dispatch)/sizeof(dispatch.clGetPlatformIDs);
+  atexit(report);
   return CL_SUCCESS;
 }
 
+  /* helper functions */
+static cl_platform_id context_properties_get_platform(const cl_context_properties *properties) {
+  if (properties == NULL)
+    return NULL;
+  cl_platform_id platform = NULL;
+  for (const cl_context_properties *property = properties; property && property[0]; property += 2)
+    if ((cl_context_properties)CL_CONTEXT_PLATFORM == property[0])
+      platform = (cl_platform_id)property[1];
+  return platform;
+}
+
+static inline object_type get_device_type(cl_device_id dev) {
+  cl_device_id parent;
+  cl_int res;
+  res = tdispatch->clGetDeviceInfo(dev, CL_DEVICE_PARENT_DEVICE, sizeof(cl_device_id), &parent, NULL);
+  if (res == CL_SUCCESS && parent)
+    return SUB_DEVICE;
+  res = tdispatch->clGetDeviceInfo(dev, CL_DEVICE_PARENT_DEVICE_EXT, sizeof(cl_device_id), &parent, NULL);
+  if (res == CL_SUCCESS && parent)
+    return SUB_DEVICE;
+  return DEVICE;
+}
 
   /* OpenCL 1.0 */
 static CL_API_ENTRY cl_int CL_API_CALL clGetPlatformIDs_wrap(
@@ -603,18 +633,6 @@ static CL_API_ENTRY cl_int CL_API_CALL clReleaseContext_wrap(
   CHECK_RELEASE(CONTEXT, context);
   return tdispatch->clReleaseContext(
     context);
-}
-
-static inline object_type get_device_type(cl_device_id dev) {
-  cl_device_id parent;
-  cl_int res;
-  res = tdispatch->clGetDeviceInfo(dev, CL_DEVICE_PARENT_DEVICE, sizeof(cl_device_id), &parent, NULL);
-  if (res == CL_SUCCESS && parent)
-    return SUB_DEVICE;
-  res = tdispatch->clGetDeviceInfo(dev, CL_DEVICE_PARENT_DEVICE_EXT, sizeof(cl_device_id), &parent, NULL);
-  if (res == CL_SUCCESS && parent)
-    return SUB_DEVICE;
-  return DEVICE;
 }
 
 static CL_API_ENTRY cl_int CL_API_CALL clGetContextInfo_wrap(
