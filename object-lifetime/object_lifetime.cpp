@@ -31,6 +31,10 @@
 #include <iostream>
 #include <list>
 
+#if defined(_WIN32)
+#undef CONTEXT
+#endif
+
 typedef enum object_type_e {
   PLATFORM,
   DEVICE,
@@ -70,13 +74,13 @@ static inline constexpr std::string_view rtrim(const std::string_view s) {
 
 #define RTRIM_FUNC rtrim(__func__)
 
-typedef std::tuple<object_type, ssize_t> type_count;
+typedef std::tuple<object_type, cl_long> type_count;
 
 std::map<void*, type_count> objects;
 std::map<void*, std::list<type_count>> deleted_objects;
 std::mutex objects_mutex;
 
-static void error_already_exist(const std::string_view &func, void *handle, object_type t, ssize_t ref_count) {
+static void error_already_exist(const std::string_view &func, void *handle, object_type t, cl_long ref_count) {
   std::cerr << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -84,7 +88,7 @@ static void error_already_exist(const std::string_view &func, void *handle, obje
   std::cerr.flush();
 }
 
-static void error_ref_count(const std::string_view &func, void *handle, object_type t, ssize_t ref_count) {
+static void error_ref_count(const std::string_view &func, void *handle, object_type t, cl_long ref_count) {
   std::cerr << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
