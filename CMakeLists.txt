@@ -14,7 +14,7 @@ set (OPENCL_ICD_LOADER_HEADERS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/inc CACHE PATH "P
 include_directories (${OPENCL_ICD_LOADER_HEADERS_DIR})
 add_definitions (-DCL_TARGET_OPENCL_VERSION=300)
 if (WIN32)
-	add_compile_options(/Wall /WX)
+	add_compile_options(/WX)
 else ()
 	add_compile_options(-Wall -Wextra -pedantic -Werror)
 endif ()
