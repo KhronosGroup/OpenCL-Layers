@@ -8,14 +8,10 @@ set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_C_STANDARD 99)
 set (CMAKE_C_STANDARD_REQUIRED ON)
 
-string (APPEND CMAKE_C_FLAGS "-Wall -Werror")
-
 set (OPENCL_ICD_LOADER_HEADERS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/inc CACHE PATH "Path to OpenCL Headers")
 include_directories (${OPENCL_ICD_LOADER_HEADERS_DIR})
 add_definitions (-DCL_TARGET_OPENCL_VERSION=300)
-if (WIN32)
-	add_compile_options(/WX)
-else ()
+if (NOT WIN32)
 	add_compile_options(-Wall -Wextra -pedantic -Werror)
 endif ()
 
