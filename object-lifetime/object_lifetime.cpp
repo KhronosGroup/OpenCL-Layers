@@ -1906,7 +1906,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetGLContextInfoKHR_wrap(
     if (CL_CURRENT_DEVICE_FOR_GL_CONTEXT_KHR && param_value_size_ret != 0)
       CHECK_CREATION(OCL_DEVICE, *(cl_device_id *)param_value);
     if (CL_DEVICES_FOR_GL_CONTEXT_KHR)
-      CHECK_CREATION_LIST(OCL_DEVICE, *param_value_size_ret/sizeof(cl_device_id), param_value);
+      CHECK_CREATION_LIST(OCL_DEVICE, (cl_uint)(*param_value_size_ret/sizeof(cl_device_id)), param_value);
   }
   return result;
 }
