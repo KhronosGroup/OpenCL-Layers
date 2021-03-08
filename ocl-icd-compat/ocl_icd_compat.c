@@ -26,7 +26,7 @@
 #include <string.h>
 #include <CL/cl_layer.h>
 
-static struct _cl_icd_dispatch dispatch = {NULL};
+static struct _cl_icd_dispatch dispatch;
 
 static const struct _cl_icd_dispatch *tdispatch;
 
