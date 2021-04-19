@@ -412,16 +412,13 @@ clGetLayerInfo(
     size_t         param_value_size,
     void          *param_value,
     size_t        *param_value_size_ret) {
-  if (param_value_size && !param_value)
-    return CL_INVALID_VALUE;
-  if (!param_value && !param_value_size_ret)
-    return CL_INVALID_VALUE;
   switch (param_name) {
   case CL_LAYER_API_VERSION:
-    if (param_value_size < sizeof(cl_layer_api_version))
-      return CL_INVALID_VALUE;
-    if (param_value)
+    if (param_value) {
+      if (param_value_size < sizeof(cl_layer_api_version))
+        return CL_INVALID_VALUE;
       *((cl_layer_api_version *)param_value) = CL_LAYER_API_VERSION_100;
+    }
     if (param_value_size_ret)
       *param_value_size_ret = sizeof(cl_layer_api_version);
     break;
