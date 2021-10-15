@@ -1318,6 +1318,34 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueNDRangeKernel_wrap(
   return result;
 }
 
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueTask_wrap(
+    cl_command_queue command_queue,
+    cl_kernel kernel,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  std::vector<cl_mem> images;
+  std::vector<cl_event> events;
+  std::vector<image_state *> states;
+
+  collect_image_arguments(kernel, images);
+  multiple_images_command_pre_enqueue(
+    CL_COMMAND_NDRANGE_KERNEL,
+    command_queue, images, num_events_in_wait_list, event_wait_list,
+    events, states);
+
+  cl_int result = tdispatch->clEnqueueTask(
+    command_queue,
+    kernel,
+    num_events_in_wait_list,
+    event_wait_list,
+    event);
+
+  multiple_images_command_post_enqueue(result, events, states);
+  return result;
+}
+
 static void _init_dispatch(void) {
   dispatch.clCreateFromGLTexture2D             = &clCreateFromGLTexture2D_wrap;
   dispatch.clCreateFromGLTexture3D             = &clCreateFromGLTexture3D_wrap;
@@ -1354,4 +1382,5 @@ static void _init_dispatch(void) {
   dispatch.clCreateKernelsInProgram            = &clCreateKernelsInProgram_wrap;
   dispatch.clSetKernelArg                      = &clSetKernelArg_wrap;
   dispatch.clEnqueueNDRangeKernel              = &clEnqueueNDRangeKernel_wrap;
+  dispatch.clEnqueueTask                       = &clEnqueueTask_wrap;
 }
