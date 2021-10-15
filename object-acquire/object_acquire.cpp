@@ -43,7 +43,10 @@ clInitLayer(
     const struct _cl_icd_dispatch  *target_dispatch,
     cl_uint                        *num_entries_out,
     const struct _cl_icd_dispatch **layer_dispatch_ret) {
-  if (!target_dispatch || !layer_dispatch_ret ||!num_entries_out || num_entries < sizeof(dispatch)/sizeof(dispatch.clGetPlatformIDs))
+  if (!target_dispatch ||
+      !layer_dispatch_ret ||
+      !num_entries_out ||
+      num_entries < sizeof(dispatch)/sizeof(dispatch.clGetPlatformIDs))
     return CL_INVALID_VALUE;
 
   tdispatch = target_dispatch;
@@ -54,15 +57,46 @@ clInitLayer(
   return CL_SUCCESS;
 }
 
-typedef std::tuple<cl_mem, cl_long> object_count;
-static std::map<cl_mem, object_count> objects;
+enum image_type {
+  CL_GL_IMAGE = 0,
+  CL_EGL_IMAGE,
+  CL_D3D10_IMAGE,
+  CL_D3D11_IMAGE,
+  CL_DX9_IMAGE
+};
+
+static std::map<image_type, const char *> image_type_names = {
+  {CL_GL_IMAGE, "GL"},
+  {CL_EGL_IMAGE, "EGL"},
+  {CL_D3D10_IMAGE, "D3D10"},
+  {CL_D3D11_IMAGE, "D3D11"},
+  {CL_DX9_IMAGE, "DX9"}
+};
+
+static std::map<cl_command_type, const char *> commands_type_names = {
+  {CL_COMMAND_READ_IMAGE, "ReadImage"},
+  {CL_COMMAND_WRITE_IMAGE, "WriteImage"},
+  {CL_COMMAND_COPY_IMAGE, "CopyImage"},
+  {CL_COMMAND_COPY_IMAGE_TO_BUFFER, "CopyImageToBuffer"},
+  {CL_COMMAND_COPY_BUFFER_TO_IMAGE, "CopyBufferToImage"},
+  {CL_COMMAND_MAP_IMAGE, "MapImage"},
+  {CL_COMMAND_UNMAP_MEM_OBJECT, "UnmapMemObject"},
+  {CL_COMMAND_FILL_IMAGE, "EnqueueFillImage"}
+};
+
+struct image_desc {
+  cl_mem buffer;
+  image_type type;
+};
+
+static std::map<cl_mem, image_desc> objects;
 static std::mutex objects_mutex;
 
 static cl_int zero = 0;
 static cl_int one = 1;
 
 
-void CL_CALLBACK buff_destructor(cl_mem memobj, void* user_data) {
+static void CL_CALLBACK buff_destructor(cl_mem memobj, void* user_data) {
   (void)memobj;
   objects_mutex.lock();
   auto iter = objects.find((cl_mem)user_data);
@@ -73,10 +107,217 @@ void CL_CALLBACK buff_destructor(cl_mem memobj, void* user_data) {
     objects_mutex.unlock();
 }
 
-void CL_CALLBACK image_destructor(cl_mem memobj, void* user_data) {
+static void CL_CALLBACK image_destructor(cl_mem memobj, void* user_data) {
   (void)memobj;
   tdispatch->clReleaseMemObject((cl_mem)user_data);
 }
+
+// associate images with a cl buffer to store the aquired state
+static inline void register_image(
+    cl_context context,
+    cl_mem image,
+    image_type type)
+{
+  cl_int err;
+  cl_mem buff = tdispatch->clCreateBuffer(
+    context, CL_MEM_READ_WRITE, sizeof(cl_int), NULL, &err);
+  if (CL_SUCCESS == err && buff) {
+    // Destroy the map entry when the object is destroyed.
+    tdispatch->clSetMemObjectDestructorCallback(
+      buff,
+      buff_destructor,
+      image);
+    // Destroy the buffer when the image is destroyed
+    // If it is in a queue it will be kept alive untill callbacks are finished
+    tdispatch->clSetMemObjectDestructorCallback(
+      image,
+      image_destructor,
+      buff);
+    objects_mutex.lock();
+    objects[image] = {buff, type};
+    objects_mutex.unlock();
+  }
+}
+
+static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromGLTexture2D_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    cl_GLenum target,
+    cl_GLint miplevel,
+    cl_GLuint texture,
+    cl_int* errcode_ret)
+{
+  cl_mem image = tdispatch->clCreateFromGLTexture2D(
+    context,
+    flags,
+    target,
+    miplevel,
+    texture,
+    errcode_ret);
+
+  if (image)
+    register_image(context, image, CL_GL_IMAGE);
+  return image;
+}
+
+static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromGLTexture3D_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    cl_GLenum target,
+    cl_GLint miplevel,
+    cl_GLuint texture,
+    cl_int* errcode_ret)
+{
+  cl_mem image = tdispatch->clCreateFromGLTexture3D(
+    context,
+    flags,
+    target,
+    miplevel,
+    texture,
+    errcode_ret);
+
+  if (image)
+    register_image(context, image, CL_GL_IMAGE);
+  return image;
+}
+
+static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromGLRenderbuffer_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    cl_GLuint renderbuffer,
+    cl_int* errcode_ret)
+{
+  cl_mem image = tdispatch->clCreateFromGLRenderbuffer(
+    context,
+    flags,
+    renderbuffer,
+    errcode_ret);
+
+  if (image)
+    register_image(context, image, CL_GL_IMAGE);
+  return image;
+}
+
+static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromGLTexture_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    cl_GLenum target,
+    cl_GLint miplevel,
+    cl_GLuint texture,
+    cl_int* errcode_ret)
+{
+  cl_mem image = tdispatch->clCreateFromGLTexture(
+    context,
+    flags,
+    target,
+    miplevel,
+    texture,
+    errcode_ret);
+
+  if (image)
+    register_image(context, image, CL_GL_IMAGE);
+  return image;
+}
+
+#if defined(_WIN32)
+static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10Texture2DKHR_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    ID3D10Texture2D* resource,
+    UINT subresource,
+    cl_int* errcode_ret)
+{
+  cl_mem image = tdispatch->clCreateFromD3D10Texture2DKHR(
+    context,
+    flags,
+    resource,
+    subresource,
+    errcode_ret);
+
+  if (image)
+    register_image(context, image, CL_D3D10_IMAGE);
+  return image;
+}
+
+static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10Texture3DKHR_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    ID3D10Texture3D* resource,
+    UINT subresource,
+    cl_int* errcode_ret)
+{
+  cl_mem image = tdispatch->clCreateFromD3D10Texture3DKHR(
+    context,
+    flags,
+    resource,
+    subresource,
+    errcode_ret);
+
+  if (image)
+    register_image(context, image, CL_D3D10_IMAGE);
+  return image;
+}
+
+static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D11Texture2DKHR_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    ID3D11Texture2D* resource,
+    UINT subresource,
+    cl_int* errcode_ret)
+{
+  cl_mem image = tdispatch->clCreateFromD3D11Texture2DKHR(
+    context,
+    flags,
+    resource,
+    subresource,
+    errcode_ret);
+
+  if (image)
+    register_image(context, image, CL_D3D11_IMAGE);
+  return image;
+}
+
+static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D11Texture3DKHR_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    ID3D11Texture3D* resource,
+    UINT subresource,
+    cl_int* errcode_ret)
+{
+  cl_mem image = tdispatch->clCreateFromD3D11Texture3DKHR(
+    context,
+    flags,
+    resource,
+    subresource,
+    errcode_ret);
+
+  if (image)
+    register_image(context, image, CL_D3D11_IMAGE);
+  return image;
+}
+
+static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromDX9MediaSurfaceKHR_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    cl_dx9_media_adapter_type_khr adapter_type,
+    void* surface_info,
+    cl_uint plane,
+    cl_int* errcode_ret)
+{
+  cl_mem image = tdispatch->clCreateFromDX9MediaSurfaceKHR(
+    context,
+    flags,
+    adapter_type,
+    surface_info,
+    plane,
+    errcode_ret);
+
+  if (image)
+    register_image(context, image, CL_DX9_IMAGE);
+  return image;
+}
+
+#endif
 
 static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromEGLImageKHR_wrap(
     cl_context context,
@@ -94,35 +335,15 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromEGLImageKHR_wrap(
     properties,
     errcode_ret);
 
-  // associate images with a cl buffer to store the aquired state
-  if (image) {
-    cl_int err;
-    cl_mem buff = tdispatch->clCreateBuffer(
-      context, CL_MEM_READ_WRITE, sizeof(cl_int), NULL, &err);
-    if (CL_SUCCESS == err && buff) {
-      // Destroy the map entry when the object is destroyed.
-      tdispatch->clSetMemObjectDestructorCallback(
-        buff,
-        buff_destructor,
-        image);
-      // Destroy the buffer when the image is destroyed
-      // If it is in a queue it will be kept alive untill callbacks are finished
-      tdispatch->clSetMemObjectDestructorCallback(
-        image,
-        image_destructor,
-        buff);
-      objects_mutex.lock();
-      objects[image] = std::make_tuple(buff, 1);
-      objects_mutex.unlock();
-    }
-  }
+  if (image)
+    register_image(context, image, CL_EGL_IMAGE);
   return image;
 }
 
 
 // Enqueue a write into each of the associated mem objects
 // to change the status
-static inline void enqueueWriteChain(
+static inline void enqueue_write_chain(
     cl_command_queue command_queue,
     cl_uint num_objects,
     const cl_mem* mem_objects,
@@ -135,18 +356,19 @@ static inline void enqueueWriteChain(
   std::vector<cl_event> events;
   events.push_back(first_event);
   for (cl_uint i = 0; i < num_objects; i++) {
-    object_count oc;
+    image_desc desc;
     objects_mutex.lock();
     auto iter = objects.find(mem_objects[i]);
     if (iter != objects.end()) {
-      oc = iter->second;
+      desc = iter->second;
       objects_mutex.unlock();
     } else {
-      // this should technically not occur
+      // this can occur wehen the object is not a texture
+      // (a buffer for instance)
       objects_mutex.unlock();
       continue;
     }
-    cl_mem buff = std::get<0>(oc);
+    cl_mem buff = desc.buffer;
     cl_event evt = events.back();
     if (event)
       events.push_back(NULL);
@@ -163,6 +385,96 @@ static inline void enqueueWriteChain(
       tdispatch->clReleaseEvent(*it);
   } else
     tdispatch->clReleaseEvent(first_event);
+}
+
+// Enqueue a write into each of the associated mem objects
+// to change the status to acquired
+static inline void set_objects_status_aquired(
+  cl_command_queue command_queue,
+  cl_uint num_objects,
+  const cl_mem* mem_objects,
+  cl_event first_event,
+  cl_event *event)
+{
+  enqueue_write_chain(
+    command_queue,
+    num_objects,
+    mem_objects,
+    first_event,
+    &one,
+    event);
+}
+
+// Enqueue a write into each of the associated mem objects
+// to change the status to released
+static inline void set_objects_status_released(
+  cl_command_queue command_queue,
+  cl_uint num_objects,
+  const cl_mem* mem_objects,
+  cl_event first_event,
+  cl_event *event)
+{
+  enqueue_write_chain(
+    command_queue,
+    num_objects,
+    mem_objects,
+    first_event,
+    &zero,
+    event);
+}
+
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireGLObjects_wrap(
+    cl_command_queue command_queue,
+    cl_uint num_objects,
+    const cl_mem* mem_objects,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  cl_event first_event;
+  cl_int result = tdispatch->clEnqueueAcquireGLObjects(
+    command_queue,
+    num_objects,
+    mem_objects,
+    num_events_in_wait_list,
+    event_wait_list,
+    &first_event);
+
+  if (result == CL_SUCCESS)
+    set_objects_status_aquired(
+      command_queue,
+      num_objects,
+      mem_objects,
+      first_event,
+      event);
+  return result;
+}
+
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseGLObjects_wrap(
+    cl_command_queue command_queue,
+    cl_uint num_objects,
+    const cl_mem* mem_objects,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  cl_event first_event;
+  cl_int result = tdispatch->clEnqueueReleaseGLObjects(
+    command_queue,
+    num_objects,
+    mem_objects,
+    num_events_in_wait_list,
+    event_wait_list,
+    &first_event);
+
+  if (result == CL_SUCCESS)
+    set_objects_status_released(
+      command_queue,
+      num_objects,
+      mem_objects,
+      first_event,
+      event);
+  return result;
 }
 
 static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireEGLObjectsKHR_wrap(
@@ -182,19 +494,19 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireEGLObjectsKHR_wrap(
     event_wait_list,
     &first_event);
 
-  // Enqueue a write into each of the associated mem objects
-  // to change the status to acquired
   if (result == CL_SUCCESS)
-    enqueueWriteChain(
+    set_objects_status_aquired(
       command_queue,
       num_objects,
       mem_objects,
       first_event,
-      &one,
       event);
   return result;
 }
 
+// Here we could change the aquire status before the release,
+// but that would be assuming the release is enqueued correctly
+// so keep the same pattern as before
 static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseEGLObjectsKHR_wrap(
     cl_command_queue command_queue,
     cl_uint num_objects,
@@ -203,9 +515,6 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseEGLObjectsKHR_wrap(
     const cl_event* event_wait_list,
     cl_event* event)
 {
-  // Here we could change the aquire status before the release,
-  // but that would be assuming the release is enqueued correctly
-  // so keep the same pattern as before
   cl_event first_event;
   cl_int result = tdispatch->clEnqueueReleaseEGLObjectsKHR(
     command_queue,
@@ -215,55 +524,219 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseEGLObjectsKHR_wrap(
     event_wait_list,
     &first_event);
 
-  // Enqueue a write into each of the associated mem objects
-  // to change the status to released
   if (result == CL_SUCCESS)
-    enqueueWriteChain(
+    set_objects_status_released(
       command_queue,
       num_objects,
       mem_objects,
       first_event,
-      &zero,
       event);
   return result;
 }
 
-static inline cl_int enqueueImageStateCopy(
+#if defined(_WIN32)
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireD3D10ObjectsKHR_wrap(
     cl_command_queue command_queue,
-    cl_mem image,
-    cl_int *ptr,
+    cl_uint num_objects,
+    const cl_mem* mem_objects,
     cl_uint num_events_in_wait_list,
     const cl_event* event_wait_list,
     cl_event* event)
 {
-  object_count oc;
+  cl_event first_event;
+  cl_int result = tdispatch->clEnqueueAcquireD3D10ObjectsKHR(
+    command_queue,
+    num_objects,
+    mem_objects,
+    num_events_in_wait_list,
+    event_wait_list,
+    &first_event);
+
+  if (result == CL_SUCCESS)
+    set_objects_status_aquired(
+      command_queue,
+      num_objects,
+      mem_objects,
+      first_event,
+      event);
+  return result;
+}
+
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseD3D10ObjectsKHR_wrap(
+    cl_command_queue command_queue,
+    cl_uint num_objects,
+    const cl_mem* mem_objects,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  cl_event first_event;
+  cl_int result = tdispatch->clEnqueueReleaseD3D10ObjectsKHR(
+    command_queue,
+    num_objects,
+    mem_objects,
+    num_events_in_wait_list,
+    event_wait_list,
+    &first_event);
+
+  if (result == CL_SUCCESS)
+    set_objects_status_released(
+      command_queue,
+      num_objects,
+      mem_objects,
+      first_event,
+      event);
+  return result;
+}
+
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireD3D11ObjectsKHR_wrap(
+    cl_command_queue command_queue,
+    cl_uint num_objects,
+    const cl_mem* mem_objects,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  cl_event first_event;
+  cl_int result = tdispatch->clEnqueueAcquireD3D11ObjectsKHR(
+    command_queue,
+    num_objects,
+    mem_objects,
+    num_events_in_wait_list,
+    event_wait_list,
+    &first_event);
+
+  if (result == CL_SUCCESS)
+    set_objects_status_aquired(
+      command_queue,
+      num_objects,
+      mem_objects,
+      first_event,
+      event);
+  return result;
+}
+
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseD3D11ObjectsKHR_wrap(
+    cl_command_queue command_queue,
+    cl_uint num_objects,
+    const cl_mem* mem_objects,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  cl_event first_event;
+  cl_int result = tdispatch->clEnqueueReleaseD3D11ObjectsKHR(
+    command_queue,
+    num_objects,
+    mem_objects,
+    num_events_in_wait_list,
+    event_wait_list,
+    &first_event);
+
+  if (result == CL_SUCCESS)
+    set_objects_status_released(
+      command_queue,
+      num_objects,
+      mem_objects,
+      first_event,
+      event);
+  return result;
+}
+
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireDX9MediaSurfacesKHR_wrap(
+    cl_command_queue command_queue,
+    cl_uint num_objects,
+    const cl_mem* mem_objects,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  cl_event first_event;
+  cl_int result = tdispatch->clEnqueueAcquireDX9MediaSurfacesKHR(
+    command_queue,
+    num_objects,
+    mem_objects,
+    num_events_in_wait_list,
+    event_wait_list,
+    &first_event);
+
+  if (result == CL_SUCCESS)
+    set_objects_status_aquired(
+      command_queue,
+      num_objects,
+      mem_objects,
+      first_event,
+      event);
+  return result;
+}
+
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseDX9MediaSurfacesKHR_wrap(
+    cl_command_queue command_queue,
+    cl_uint num_objects,
+    const cl_mem* mem_objects,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  cl_event first_event;
+  cl_int result = tdispatch->clEnqueueReleaseDX9MediaSurfacesKHR(
+    command_queue,
+    num_objects,
+    mem_objects,
+    num_events_in_wait_list,
+    event_wait_list,
+    &first_event);
+
+  if (result == CL_SUCCESS)
+    set_objects_status_released(
+      command_queue,
+      num_objects,
+      mem_objects,
+      first_event,
+      event);
+  return result;
+}
+#endif
+
+struct image_state {
+  cl_mem image;
+  cl_int acquired;
+  cl_command_type command_type;
+  image_type type;
+};
+
+static inline cl_int enqueue_image_state_copy(
+    cl_command_queue command_queue,
+    cl_mem image,
+    image_state *state,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  image_desc desc;
   objects_mutex.lock();
   auto iter = objects.find(image);
   if (iter != objects.end()) {
-    oc = iter->second;
+    desc = iter->second;
     objects_mutex.unlock();
   } else {
     // this should technically not occur
     objects_mutex.unlock();
     return CL_INVALID_MEM_OBJECT;
   }
-  cl_mem buffer = std::get<0>(oc);
+  cl_mem buffer = desc.buffer;
+  state->type = desc.type;
   return tdispatch->clEnqueueReadBuffer(
     command_queue,
     buffer,
     CL_FALSE,
     0,
-    sizeof(*ptr),
-    ptr,
+    sizeof(state->acquired),
+    &state->acquired,
     num_events_in_wait_list,
     event_wait_list,
     event);
 }
-
-struct image_state {
-  cl_mem image;
-  cl_int acquired;
-};
 
 static void CL_CALLBACK status_check_notify(
     cl_event event,
@@ -272,7 +745,9 @@ static void CL_CALLBACK status_check_notify(
   (void)event;
   image_state *state = (image_state *)user_data;
   if (!state->acquired && CL_SUCCESS == event_command_status)
-    fprintf(stderr, "EGL Image %p was used before being acquired\n", (void*)(state->image));
+    fprintf(stderr, "%s Image %p was used in %s before being acquired\n",
+      image_type_names[state->type], (void*)(state->image),
+      commands_type_names[state->command_type]);
   delete state;
 }
 
@@ -286,7 +761,44 @@ static void CL_CALLBACK status_cleanup_notify(
   delete state;
 }
 
+static inline void multiple_images_command_pre_enqueue(
+    cl_command_type command_type,
+    cl_command_queue command_queue,
+    std::vector<cl_mem> images,
+    cl_uint &num_events_in_wait_list,
+    const cl_event * &event_wait_list,
+    std::vector<cl_event> &events,
+    std::vector<image_state *> &states)
+{
+  for (auto image: images) {
+    image_state * state = new image_state();
+    state->image = image;
+    state->acquired = 0;
+    state->command_type = command_type;
+    events.push_back(NULL);
+    cl_int result = enqueue_image_state_copy(
+      command_queue,
+      image,
+      state,
+      num_events_in_wait_list,
+      event_wait_list,
+      &events.back());
+    if (CL_SUCCESS == result && events.back()) {
+      states.push_back(state);
+    } else {
+      delete state;
+      events.pop_back();
+    }
+  }
+
+  if (events.size() > 0) {
+    num_events_in_wait_list = events.size();
+    event_wait_list = events.data();
+  }
+}
+
 static inline cl_int simple_command_pre_enqueue(
+    cl_command_type type,
     cl_command_queue command_queue,
     cl_mem image,
     cl_uint &num_events_in_wait_list,
@@ -297,11 +809,12 @@ static inline cl_int simple_command_pre_enqueue(
   state = new image_state();
   state->image = image;
   state->acquired = 0;
+  state->command_type = type;
 
-  cl_int result = enqueueImageStateCopy(
+  cl_int result = enqueue_image_state_copy(
     command_queue,
     image,
-    &state->acquired,
+    state,
     num_events_in_wait_list,
     event_wait_list,
     &event);
@@ -313,6 +826,30 @@ static inline cl_int simple_command_pre_enqueue(
     delete state;
   }
   return result;
+}
+
+static inline void multiple_images_command_post_enqueue(
+    cl_int result,
+    std::vector<cl_event> &events,
+    std::vector<image_state *> &states)
+{
+  for (size_t i = 0; i < events.size(); i++) {
+    auto event = events[i];
+    auto state = states[i];
+    if (CL_SUCCESS == result)
+      tdispatch->clSetEventCallback(
+        event,
+        CL_COMPLETE,
+        status_check_notify,
+        state);
+    else
+      tdispatch->clSetEventCallback(
+        event,
+        CL_COMPLETE,
+        status_cleanup_notify,
+        state);
+    tdispatch->clReleaseEvent(event);
+  }
 }
 
 static inline void simple_command_post_enqueue(
@@ -354,6 +891,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadImage_wrap(
   cl_event first_event;
   image_state *state;
   cl_int result_pre = simple_command_pre_enqueue(
+    CL_COMMAND_READ_IMAGE,
     command_queue, image, num_events_in_wait_list,
     event_wait_list, first_event, state);
 
@@ -392,6 +930,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteImage_wrap(
   cl_event first_event;
   image_state *state;
   cl_int result_pre = simple_command_pre_enqueue(
+    CL_COMMAND_WRITE_IMAGE,
     command_queue, image, num_events_in_wait_list,
     event_wait_list, first_event, state);
 
@@ -414,6 +953,41 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteImage_wrap(
   return result;
 }
 
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImage_wrap(
+    cl_command_queue command_queue,
+    cl_mem src_image,
+    cl_mem dst_image,
+    const size_t* src_origin,
+    const size_t* dst_origin,
+    const size_t* region,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  std::vector<cl_mem> images = {src_image, dst_image};
+  std::vector<cl_event> events;
+  std::vector<image_state *> states;
+
+  multiple_images_command_pre_enqueue(
+    CL_COMMAND_COPY_IMAGE,
+    command_queue, images, num_events_in_wait_list, event_wait_list,
+    events, states);
+
+  cl_int result = tdispatch->clEnqueueCopyImage(
+    command_queue,
+    src_image,
+    dst_image,
+    src_origin,
+    dst_origin,
+    region,
+    num_events_in_wait_list,
+    event_wait_list,
+    event);
+
+  multiple_images_command_post_enqueue(result, events, states);
+  return result;
+}
+
 static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageToBuffer_wrap(
     cl_command_queue command_queue,
     cl_mem src_image,
@@ -428,6 +1002,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageToBuffer_wrap(
   cl_event first_event;
   image_state *state;
   cl_int result_pre = simple_command_pre_enqueue(
+    CL_COMMAND_COPY_IMAGE_TO_BUFFER,
     command_queue, src_image, num_events_in_wait_list,
     event_wait_list, first_event, state);
 
@@ -462,6 +1037,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferToImage_wrap(
   cl_event first_event;
   image_state *state;
   cl_int result_pre = simple_command_pre_enqueue(
+    CL_COMMAND_COPY_BUFFER_TO_IMAGE,
     command_queue, dst_image, num_events_in_wait_list,
     event_wait_list, first_event, state);
 
@@ -482,105 +1058,141 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferToImage_wrap(
   return result;
 }
 
-static inline void multiple_images_command_pre_enqueue(
+static CL_API_ENTRY void* CL_API_CALL clEnqueueMapImage_wrap(
     cl_command_queue command_queue,
-    std::vector<cl_mem> images,
-    cl_uint &num_events_in_wait_list,
-    const cl_event * &event_wait_list,
-    std::vector<cl_event> &events,
-    std::vector<image_state *> &states)
+    cl_mem image,
+    cl_bool blocking_map,
+    cl_map_flags map_flags,
+    const size_t* origin,
+    const size_t* region,
+    size_t* image_row_pitch,
+    size_t* image_slice_pitch,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event,
+    cl_int* errcode_ret)
 {
-  for (auto image: images) {
-    image_state * state = new image_state();
-    state->image = image;
-    state->acquired = 0;
-    events.push_back(NULL);
-    cl_int result = enqueueImageStateCopy(
-      command_queue,
-      image,
-      &state->acquired,
-      num_events_in_wait_list,
-      event_wait_list,
-      &events.back());
-    if (CL_SUCCESS == result && events.back()) {
-      states.push_back(state);
-    } else {
-      delete state;
-      events.pop_back();
-    }
-  }
+  cl_event first_event;
+  image_state *state;
+  cl_int      errcode_tmp;
+  cl_int result_pre = simple_command_pre_enqueue(
+    CL_COMMAND_MAP_IMAGE,
+    command_queue, image, num_events_in_wait_list,
+    event_wait_list, first_event, state);
 
-  if (events.size() > 0) {
-    num_events_in_wait_list = events.size();
-    event_wait_list = events.data();
-  }
+  if (!errcode_ret)
+    errcode_ret = &errcode_tmp;
+  void *result = tdispatch->clEnqueueMapImage(
+            command_queue,
+            image,
+            blocking_map,
+            map_flags,
+            origin,
+            region,
+            image_row_pitch,
+            image_slice_pitch,
+            num_events_in_wait_list,
+            event_wait_list,
+            event,
+            errcode_ret);
+
+  simple_command_post_enqueue(
+    result_pre, *errcode_ret, first_event, state);
+
+  return result;
 }
 
-static inline void multiple_images_post_enqueue(
-    cl_int result,
-    std::vector<cl_event> &events,
-    std::vector<image_state *> &states)
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueUnmapMemObject_wrap(
+    cl_command_queue command_queue,
+    cl_mem memobj,
+    void* mapped_ptr,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
 {
-  for (size_t i = 0; i < events.size(); i++) {
-    auto event = events[i];
-    auto state = states[i];
-    if (CL_SUCCESS == result)
-      tdispatch->clSetEventCallback(
-        event,
-        CL_COMPLETE,
-        status_check_notify,
-        state);
-    else
-      tdispatch->clSetEventCallback(
-        event,
-        CL_COMPLETE,
-        status_cleanup_notify,
-        state);
-    tdispatch->clReleaseEvent(event);
-  }
+  cl_event first_event;
+  image_state *state;
+  cl_int result_pre = simple_command_pre_enqueue(
+    CL_COMMAND_UNMAP_MEM_OBJECT,
+    command_queue, memobj, num_events_in_wait_list,
+    event_wait_list, first_event, state);
+
+  cl_int result = tdispatch->clEnqueueUnmapMemObject(
+    command_queue,
+    memobj,
+    mapped_ptr,
+    num_events_in_wait_list,
+    event_wait_list,
+    event);
+
+  simple_command_post_enqueue(
+    result_pre, result, first_event, state);
+
+  return result;
 }
 
-static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImage_wrap(
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImage_wrap(
     cl_command_queue command_queue,
-    cl_mem src_image,
-    cl_mem dst_image,
-    const size_t* src_origin,
-    const size_t* dst_origin,
+    cl_mem image,
+    const void* fill_color,
+    const size_t* origin,
     const size_t* region,
     cl_uint num_events_in_wait_list,
     const cl_event* event_wait_list,
     cl_event* event)
 {
-  std::vector<cl_mem> images = {src_image, dst_image};
-  std::vector<cl_event> events;
-  std::vector<image_state *> states;
+  cl_event first_event;
+  image_state *state;
+  cl_int result_pre = simple_command_pre_enqueue(
+    CL_COMMAND_FILL_IMAGE,
+    command_queue, image, num_events_in_wait_list,
+    event_wait_list, first_event, state);
 
-  multiple_images_command_pre_enqueue(
-    command_queue, images, num_events_in_wait_list, event_wait_list,
-    events, states);
-
-  cl_int result = tdispatch->clEnqueueCopyImage(
+  cl_int result = tdispatch->clEnqueueFillImage(
     command_queue,
-    src_image,
-    dst_image,
-    src_origin,
-    dst_origin,
+    image,
+    fill_color,
+    origin,
     region,
     num_events_in_wait_list,
     event_wait_list,
     event);
 
-  multiple_images_post_enqueue(result, events, states);
+  simple_command_post_enqueue(
+    result_pre, result, first_event, state);
+
   return result;
 }
 
 static void _init_dispatch(void) {
-  dispatch.clCreateFromEGLImageKHR = &clCreateFromEGLImageKHR_wrap;
-  dispatch.clEnqueueAcquireEGLObjectsKHR = &clEnqueueAcquireEGLObjectsKHR_wrap;
-  dispatch.clEnqueueReleaseEGLObjectsKHR = &clEnqueueReleaseEGLObjectsKHR_wrap;
-  dispatch.clEnqueueReadImage            = &clEnqueueReadImage_wrap;
-  dispatch.clEnqueueWriteImage           = &clEnqueueWriteImage_wrap;
-  dispatch.clEnqueueCopyBufferToImage    = &clEnqueueCopyBufferToImage_wrap;
-  dispatch.clEnqueueCopyImageToBuffer    = &clEnqueueCopyImageToBuffer_wrap;
-  dispatch.clEnqueueCopyImage            = &clEnqueueCopyImage_wrap;
+  dispatch.clCreateFromGLTexture2D             = &clCreateFromGLTexture2D_wrap;
+  dispatch.clCreateFromGLTexture3D             = &clCreateFromGLTexture3D_wrap;
+  dispatch.clCreateFromGLRenderbuffer          = &clCreateFromGLRenderbuffer_wrap;
+  dispatch.clCreateFromGLTexture               = &clCreateFromGLTexture_wrap;
+  dispatch.clEnqueueAcquireGLObjects           = &clEnqueueAcquireGLObjects_wrap;
+  dispatch.clEnqueueReleaseGLObjects           = &clEnqueueReleaseGLObjects_wrap;
+#if defined(_WIN32)
+  dispatch.clCreateFromD3D10Texture2DKHR       = &clCreateFromD3D10Texture2DKHR_wrap;
+  dispatch.clCreateFromD3D10Texture3DKHR       = &clCreateFromD3D10Texture3DKHR_wrap;
+  dispatch.clEnqueueAcquireD3D10ObjectsKHR     = &clEnqueueAcquireD3D10ObjectsKHR_wrap;
+  dispatch.clEnqueueReleaseD3D10ObjectsKHR     = &clEnqueueReleaseD3D10ObjectsKHR_wrap;
+  dispatch.clCreateFromD3D11Texture2DKHR       = &clCreateFromD3D11Texture2DKHR_wrap;
+  dispatch.clCreateFromD3D11Texture3DKHR       = &clCreateFromD3D11Texture3DKHR_wrap;
+  dispatch.clEnqueueAcquireD3D11ObjectsKHR     = &clEnqueueAcquireD3D11ObjectsKHR_wrap;
+  dispatch.clEnqueueReleaseD3D11ObjectsKHR     = &clEnqueueReleaseD3D11ObjectsKHR_wrap;
+  dispatch.clCreateFromDX9MediaSurfaceKHR      = &clCreateFromDX9MediaSurfaceKHR;
+  dispatch.clEnqueueAcquireDX9MediaSurfacesKHR = &clEnqueueAcquireDX9MediaSurfacesKHR_wrap;
+  dispatch.clEnqueueReleaseDX9MediaSurfacesKHR = &clEnqueueReleaseDX9MediaSurfacesKHR_wrap;
+#endif
+  dispatch.clCreateFromEGLImageKHR             = &clCreateFromEGLImageKHR_wrap;
+  dispatch.clEnqueueAcquireEGLObjectsKHR       = &clEnqueueAcquireEGLObjectsKHR_wrap;
+  dispatch.clEnqueueReleaseEGLObjectsKHR       = &clEnqueueReleaseEGLObjectsKHR_wrap;
+  dispatch.clEnqueueReadImage                  = &clEnqueueReadImage_wrap;
+  dispatch.clEnqueueWriteImage                 = &clEnqueueWriteImage_wrap;
+  dispatch.clEnqueueCopyImage                  = &clEnqueueCopyImage_wrap;
+  dispatch.clEnqueueCopyBufferToImage          = &clEnqueueCopyBufferToImage_wrap;
+  dispatch.clEnqueueCopyImageToBuffer          = &clEnqueueCopyImageToBuffer_wrap;
+  dispatch.clEnqueueMapImage                   = &clEnqueueMapImage_wrap;
+  dispatch.clEnqueueUnmapMemObject             = &clEnqueueUnmapMemObject_wrap;
+  dispatch.clEnqueueFillImage                  = &clEnqueueFillImage_wrap;
 }
