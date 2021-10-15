@@ -90,7 +90,9 @@ struct image_desc {
 };
 
 static std::map<cl_mem, image_desc> objects;
+static std::map<cl_kernel, std::map<cl_uint, cl_mem>> kernel_image_arguments;
 static std::mutex objects_mutex;
+
 
 static cl_int zero = 0;
 static cl_int one = 1;
@@ -1164,6 +1166,158 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImage_wrap(
   return result;
 }
 
+static inline void register_kernel(cl_kernel kernel) {
+  objects_mutex.lock();
+  auto iter = kernel_image_arguments.find(kernel);
+  if (iter != kernel_image_arguments.end())
+    kernel_image_arguments.erase(iter);
+  objects_mutex.unlock();
+}
+
+static CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel_wrap(
+    cl_program program,
+    const char* kernel_name,
+    cl_int* errcode_ret)
+{
+  cl_kernel kernel = tdispatch->clCreateKernel(
+    program,
+    kernel_name,
+    errcode_ret);
+  if (kernel)
+    register_kernel(kernel);
+  return kernel;
+}
+
+static inline void clone_kernel(cl_kernel source_kernel, cl_kernel kernel) {
+  objects_mutex.lock();
+  auto iter = kernel_image_arguments.find(source_kernel);
+  if (iter != kernel_image_arguments.end())
+    kernel_image_arguments[kernel] = iter->second;
+  objects_mutex.unlock();
+}
+
+static CL_API_ENTRY cl_kernel CL_API_CALL clCloneKernel_wrap(
+    cl_kernel source_kernel,
+    cl_int* errcode_ret)
+{
+  cl_kernel kernel = tdispatch->clCloneKernel(
+    source_kernel,
+    errcode_ret);
+  if (kernel)
+    clone_kernel(source_kernel, kernel);
+  return kernel;
+}
+
+static CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgram_wrap(
+    cl_program program,
+    cl_uint num_kernels,
+    cl_kernel* kernels,
+    cl_uint* num_kernels_ret)
+{
+  cl_uint num_kernels_ret_force;
+  if (kernels && !num_kernels_ret)
+    num_kernels_ret = &num_kernels_ret_force;
+  cl_int result = tdispatch->clCreateKernelsInProgram(
+    program,
+    num_kernels,
+    kernels,
+    num_kernels_ret);
+  if (kernels && result == CL_SUCCESS && *num_kernels_ret > 0) {
+    for (cl_uint i = 0; i < *num_kernels_ret; i++)
+      register_kernel(kernels[i]);
+  }
+  return result;
+}
+
+static void register_kernel_argument(
+    cl_kernel kernel,
+    cl_uint arg_index,
+    size_t arg_size,
+    const void* arg_value)
+{
+  if (sizeof(cl_mem) == arg_size) {
+    cl_mem memobj = *(cl_mem *)arg_value;
+    objects_mutex.lock();
+    auto iter = objects.find(memobj);
+    if (iter != objects.end()) {
+      auto arguments = kernel_image_arguments[kernel];
+      arguments[arg_index] = memobj;
+      objects_mutex.unlock();
+    } else {
+      objects_mutex.unlock();
+    }
+  }
+}
+
+static CL_API_ENTRY cl_int CL_API_CALL clSetKernelArg_wrap(
+    cl_kernel kernel,
+    cl_uint arg_index,
+    size_t arg_size,
+    const void* arg_value)
+{
+  cl_int result = tdispatch->clSetKernelArg(
+    kernel,
+    arg_index,
+    arg_size,
+    arg_value);
+  if (CL_SUCCESS == result)
+    register_kernel_argument(
+      kernel,
+      arg_index,
+      arg_size,
+      arg_value);
+  return result;
+}
+
+static void collect_image_arguments(
+    cl_kernel kernel,
+    std::vector<cl_mem> &images)
+{
+  objects_mutex.lock();
+  auto iter = kernel_image_arguments.find(kernel);
+  if (iter != kernel_image_arguments.end()) {
+    for (auto it = iter->second.begin(); it != iter->second.end(); ++it)
+      images.push_back(it->second);
+  }
+  objects_mutex.unlock();
+}
+
+static CL_API_ENTRY cl_int CL_API_CALL clEnqueueNDRangeKernel_wrap(
+    cl_command_queue command_queue,
+    cl_kernel kernel,
+    cl_uint work_dim,
+    const size_t* global_work_offset,
+    const size_t* global_work_size,
+    const size_t* local_work_size,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event)
+{
+  std::vector<cl_mem> images;
+  std::vector<cl_event> events;
+  std::vector<image_state *> states;
+
+  collect_image_arguments(kernel, images);
+  multiple_images_command_pre_enqueue(
+    CL_COMMAND_NDRANGE_KERNEL,
+    command_queue, images, num_events_in_wait_list, event_wait_list,
+    events, states);
+
+  cl_int result = tdispatch->clEnqueueNDRangeKernel(
+    command_queue,
+    kernel,
+    work_dim,
+    global_work_offset,
+    global_work_size,
+    local_work_size,
+    num_events_in_wait_list,
+    event_wait_list,
+    event);
+
+  multiple_images_command_post_enqueue(result, events, states);
+  return result;
+}
+
 static void _init_dispatch(void) {
   dispatch.clCreateFromGLTexture2D             = &clCreateFromGLTexture2D_wrap;
   dispatch.clCreateFromGLTexture3D             = &clCreateFromGLTexture3D_wrap;
@@ -1195,4 +1349,9 @@ static void _init_dispatch(void) {
   dispatch.clEnqueueMapImage                   = &clEnqueueMapImage_wrap;
   dispatch.clEnqueueUnmapMemObject             = &clEnqueueUnmapMemObject_wrap;
   dispatch.clEnqueueFillImage                  = &clEnqueueFillImage_wrap;
+  dispatch.clCreateKernel                      = &clCreateKernel_wrap;
+  dispatch.clCloneKernel                       = &clCloneKernel_wrap;
+  dispatch.clCreateKernelsInProgram            = &clCreateKernelsInProgram_wrap;
+  dispatch.clSetKernelArg                      = &clSetKernelArg_wrap;
+  dispatch.clEnqueueNDRangeKernel              = &clEnqueueNDRangeKernel_wrap;
 }
