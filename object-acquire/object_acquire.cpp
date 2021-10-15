@@ -1180,7 +1180,7 @@ static void _init_dispatch(void) {
   dispatch.clCreateFromD3D11Texture3DKHR       = &clCreateFromD3D11Texture3DKHR_wrap;
   dispatch.clEnqueueAcquireD3D11ObjectsKHR     = &clEnqueueAcquireD3D11ObjectsKHR_wrap;
   dispatch.clEnqueueReleaseD3D11ObjectsKHR     = &clEnqueueReleaseD3D11ObjectsKHR_wrap;
-  dispatch.clCreateFromDX9MediaSurfaceKHR      = &clCreateFromDX9MediaSurfaceKHR;
+  dispatch.clCreateFromDX9MediaSurfaceKHR      = &clCreateFromDX9MediaSurfaceKHR_wrap;
   dispatch.clEnqueueAcquireDX9MediaSurfacesKHR = &clEnqueueAcquireDX9MediaSurfacesKHR_wrap;
   dispatch.clEnqueueReleaseDX9MediaSurfacesKHR = &clEnqueueReleaseDX9MediaSurfacesKHR_wrap;
 #endif
