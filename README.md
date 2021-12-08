@@ -39,3 +39,8 @@ OCL_ICD_FILENAMES=/path/to/vendor/libOpenCL.so \
 OPENCL_LAYERS=/path/to/OpenCL-Layers/build/object-lifetime/libCLObjectLifetimeLayer.so \
 /path/to/application
 ```
+
+## Tutorial
+
+A more in-depth tutorial can be found here:
+[OpenCL-Layers-Tutorial](https://github.com/Kerilk/OpenCL-Layers-Tutorial)
