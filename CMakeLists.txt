@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.1)
+cmake_minimum_required (VERSION 3.8) # cxx_std_17
 
 project (OpenCL-Layers VERSION 0.1)
 include (GNUInstallDirs)
