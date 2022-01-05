@@ -54,6 +54,9 @@ set_target_properties (LayersCommon
         C_EXTENSIONS OFF
         CXX_EXTENSIONS OFF
 )
+
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR OPENCL_LAYERS_BUILD_TESTING)
+    include (CTest)
 endif ()
 
 add_subdirectory (simple-print)
