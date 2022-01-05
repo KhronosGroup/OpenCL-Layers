@@ -26,6 +26,34 @@ else ()
         find_package (OpenCLHeaders REQUIRED)
     endif ()
 endif ()
+
+# Common layer flags
+add_library (LayersCommon INTERFACE)
+
+target_link_libraries (LayersCommon INTERFACE OpenCL::Headers)
+
+target_compile_features (LayersCommon
+    INTERFACE
+        c_std_11
+        cxx_std_17
+)
+
+target_compile_definitions (LayersCommon
+    INTERFACE
+        CL_TARGET_OPENCL_VERSION=300
+        CL_USE_DEPRECATED_OPENCL_1_0_APIS
+        CL_USE_DEPRECATED_OPENCL_1_1_APIS
+        CL_USE_DEPRECATED_OPENCL_1_2_APIS
+        CL_USE_DEPRECATED_OPENCL_2_0_APIS
+        CL_USE_DEPRECATED_OPENCL_2_1_APIS
+        CL_USE_DEPRECATED_OPENCL_2_2_APIS
+)
+
+set_target_properties (LayersCommon
+    PROPERTIES
+        C_EXTENSIONS OFF
+        CXX_EXTENSIONS OFF
+)
 endif ()
 
 add_subdirectory (simple-print)
