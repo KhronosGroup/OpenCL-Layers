@@ -1,7 +1,9 @@
 cmake_minimum_required (VERSION 3.8) # cxx_std_17
 
-project (OpenCL-Layers VERSION 0.1)
-include (GNUInstallDirs)
+# Include guard for including this project multiple times
+if (TARGET PrintLayer)
+    return ()
+endif ()
 
 set (CMAKE_CXX_STANDARD 17)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
