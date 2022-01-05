@@ -59,6 +59,8 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR OPENCL_LAYERS_BUILD_TESTING)
     include (CTest)
 endif ()
 
+include (GNUInstallDirs)
+
 add_subdirectory (simple-print)
 add_subdirectory (ocl-icd-compat)
 add_subdirectory (object-lifetime)
