@@ -8,7 +8,6 @@ jobs:
     strategy:
       matrix:
         VER: [v141, v142, v143]
-        EXT: [OFF] # OFF: error C2079: 'statbuf' uses undefined struct 'stat'
         GEN: [Visual Studio 17 2022, Ninja Multi-Config]
         BIN: [x64, x86]
         CMAKE: [3.22.0]
@@ -163,8 +162,6 @@ jobs:
           -T ${{matrix.VER}} ^
           -D BUILD_TESTING=ON ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
-          -D CMAKE_C_STANDARD=${{matrix.STD}} ^
-          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
           -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\install ^
           -D CMAKE_PREFIX_PATH="%GITHUB_WORKSPACE%\external\OpenCL-Headers\install;%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install" ^
           -S %GITHUB_WORKSPACE% ^
@@ -188,8 +185,6 @@ jobs:
           -D CMAKE_MAKE_PROGRAM=%NINJA_EXE% ^
           -D BUILD_TESTING=ON ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
-          -D CMAKE_C_STANDARD=${{matrix.STD}} ^
-          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
           -D CMAKE_EXE_LINKER_FLAGS=/INCREMENTAL ^
           -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\install ^
           -D CMAKE_PREFIX_PATH="%GITHUB_WORKSPACE%\external\OpenCL-Headers\install;%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install" ^

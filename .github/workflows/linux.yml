@@ -9,7 +9,6 @@ jobs:
       matrix:
         OS: [ubuntu-18.04]
         VER: [7, 8]
-        EXT: [OFF]
         GEN: [Unix Makefiles]
         CONFIG: [Debug, Release]
         BIN: [64, 32]
@@ -57,7 +56,6 @@ jobs:
         -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}
         -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
         -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
-        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
         -B$GITHUB_WORKSPACE/external/OpenCL-Headers/build
         -H$GITHUB_WORKSPACE/external/OpenCL-Headers &&
@@ -73,7 +71,6 @@ jobs:
         -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}
         -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
         -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
-        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install
         -B$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
@@ -97,8 +94,6 @@ jobs:
         -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}
         -D CMAKE_CXX_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
         -D CMAKE_CXX_COMPILER=g++-${{matrix.VER}}
-        -D CMAKE_CXX_STANDARD=${{matrix.STD}}
-        -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install"
         -B$GITHUB_WORKSPACE/build
@@ -168,7 +163,6 @@ jobs:
         -G "${{matrix.GEN}}"
         -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
         -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
-        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
         -B$GITHUB_WORKSPACE/external/OpenCL-Headers/build
         -H$GITHUB_WORKSPACE/external/OpenCL-Headers &&
@@ -184,7 +178,6 @@ jobs:
         -G "${{matrix.GEN}}"
         -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
         -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
-        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install
         -B$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
@@ -207,10 +200,8 @@ jobs:
         -D BUILD_EXAMPLES=ON
         -D CMAKE_C_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
         -D CMAKE_C_COMPILER=g++-${{matrix.VER}}
-        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_CXX_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
         -D CMAKE_CXX_COMPILER=g++-${{matrix.VER}}
-        -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install"
         -B$GITHUB_WORKSPACE/build
