@@ -66,8 +66,21 @@ static void _count_devices(struct platform_icd *p) {
 
 static void _sort_platforms(struct platform_icd *picds, cl_uint npicds) {
   if (npicds > 1) {
+#ifndef _MSC_VER
     char* ocl_sort=getenv("OCL_ICD_PLATFORM_SORT");
     if (ocl_sort!=NULL && !strcmp(ocl_sort, "none")) {
+#else
+    #define ocl_sort_max_len 5
+    char ocl_sort[ocl_sort_max_len];
+    errno_t err = getenv_s(
+      NULL,
+      ocl_sort,
+      (rsize_t)ocl_sort_max_len,
+      "OCL_ICD_PLATFORM_SORT"
+    );
+    #undef ocl_sort_max_len
+    if(err==0 && !strcmp(ocl_sort, "none")) {
+#endif
       /* Platform not sorted */
       return;
     } else {
@@ -81,8 +94,21 @@ static void _sort_platforms(struct platform_icd *picds, cl_uint npicds) {
 
 static void _set_default_id() {
   int num_default_platform = 0;
-  const char *default_platform = getenv("OCL_ICD_DEFAULT_PLATFORM");
-  if (default_platform) {
+#ifndef _MSC_VER
+    const char *default_platform = getenv("OCL_ICD_DEFAULT_PLATFORM");
+    if (default_platform) {
+#else
+    #define default_platform_max_len 5
+    const char default_platform[default_platform_max_len];
+    errno_t err = getenv_s(
+      NULL,
+      (char*)default_platform,
+      (rsize_t)default_platform_max_len,
+      "OCL_ICD_DEFAULT_PLATFORM"
+    );
+    #undef default_platform_max_len
+    if(err==0) {
+#endif
     char *end_scan;
     num_default_platform = strtol(default_platform, &end_scan, 10);
     if (*default_platform == '\0' || *end_scan != '\0')
