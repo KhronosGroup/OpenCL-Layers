@@ -43,7 +43,7 @@ jobs:
         if [[ "${{matrix.GEN}}" =~ "Ninja" && ! `which ninja` ]]; then sudo apt install -y ninja-build; fi;
         sudo apt install gcc-${{matrix.VER}} g++-${{matrix.VER}}; 
         if [[ "${{matrix.BIN}}" == "32" ]];
-        then sudo apt install gcc-${COMPILER_VER}-multilib;
+        then sudo apt install gcc-${VER}-multilib;
         fi;
         mkdir -p /opt/Kitware/CMake;
         wget -c $CMAKE_URL -O - | tar -xz --directory /opt/Kitware/CMake;
@@ -119,7 +119,7 @@ jobs:
         EXT: [ON, OFF]
         GEN: [Ninja Multi-Config]
         BIN: [64, 32]
-        CMAKE: [3.21.2]
+        CMAKE: [3.22.1]
     env:
       CMAKE_URL: https://github.com/Kitware/CMake/releases/download/v${{ matrix.CMAKE }}/cmake-${{ matrix.CMAKE }}-Linux-x86_64.tar.gz
       CMAKE_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/cmake
