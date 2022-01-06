@@ -9,6 +9,7 @@ jobs:
       matrix:
         OS: [ubuntu-18.04]
         VER: [7, 8]
+        EXT: [OFF]
         GEN: [Unix Makefiles]
         CONFIG: [Debug, Release]
         BIN: [64, 32]
@@ -43,7 +44,7 @@ jobs:
         if [[ "${{matrix.GEN}}" =~ "Ninja" && ! `which ninja` ]]; then sudo apt install -y ninja-build; fi;
         sudo apt install gcc-${{matrix.VER}} g++-${{matrix.VER}}; 
         if [[ "${{matrix.BIN}}" == "32" ]];
-        then sudo apt install gcc-${{matrix.VER}}-multilib;
+        then sudo apt install gcc-${{matrix.VER}-multilib;
         fi;
         mkdir -p /opt/Kitware/CMake;
         wget -c $CMAKE_URL -O - | tar -xz --directory /opt/Kitware/CMake;
@@ -56,6 +57,7 @@ jobs:
         -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}
         -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
         -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
+        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
         -B$GITHUB_WORKSPACE/external/OpenCL-Headers/build
         -H$GITHUB_WORKSPACE/external/OpenCL-Headers &&
@@ -71,6 +73,7 @@ jobs:
         -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}
         -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
         -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
+        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install
         -B$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
@@ -92,8 +95,12 @@ jobs:
         -D BUILD_TESTING=ON
         -D BUILD_EXAMPLES=ON
         -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}
+        -D CMAKE_C_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
+        -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
+        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_CXX_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
         -D CMAKE_CXX_COMPILER=g++-${{matrix.VER}}
+        -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install"
         -B$GITHUB_WORKSPACE/build
@@ -116,7 +123,7 @@ jobs:
       matrix:
         OS : [ubuntu-20.04]
         VER: [9, 11] # clang-11, clang-13
-        EXT: [ON, OFF]
+        EXT: [OFF]
         GEN: [Ninja Multi-Config]
         BIN: [64, 32]
         CMAKE: [3.22.1]
@@ -163,6 +170,7 @@ jobs:
         -G "${{matrix.GEN}}"
         -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
         -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
+        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
         -B$GITHUB_WORKSPACE/external/OpenCL-Headers/build
         -H$GITHUB_WORKSPACE/external/OpenCL-Headers &&
@@ -178,6 +186,7 @@ jobs:
         -G "${{matrix.GEN}}"
         -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
         -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
+        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install
         -B$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
@@ -199,9 +208,11 @@ jobs:
         -D BUILD_TESTING=ON
         -D BUILD_EXAMPLES=ON
         -D CMAKE_C_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
-        -D CMAKE_C_COMPILER=g++-${{matrix.VER}}
+        -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
+        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_CXX_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
         -D CMAKE_CXX_COMPILER=g++-${{matrix.VER}}
+        -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install"
         -B$GITHUB_WORKSPACE/build

@@ -49,12 +49,6 @@ target_compile_definitions (LayersCommon
         CL_USE_DEPRECATED_OPENCL_2_2_APIS
 )
 
-set_target_properties (LayersCommon
-    PROPERTIES
-        C_EXTENSIONS OFF
-        CXX_EXTENSIONS OFF
-)
-
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR OPENCL_LAYERS_BUILD_TESTING)
     include (CTest)
 endif ()

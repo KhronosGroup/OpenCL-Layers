@@ -8,6 +8,7 @@ jobs:
     strategy:
       matrix:
         VER: [v141, v142, v143]
+        EXT: [OFF]
         GEN: [Visual Studio 17 2022, Ninja Multi-Config]
         BIN: [x64, x86]
         CMAKE: [3.22.0]
@@ -62,6 +63,7 @@ jobs:
           -A %BIN% ^
           -T ${{matrix.VER}} ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
+          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
           -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\external\OpenCL-Headers\install ^
           -S %GITHUB_WORKSPACE%\external\OpenCL-Headers ^
           -B %GITHUB_WORKSPACE%\external\OpenCL-Headers\build
@@ -88,6 +90,7 @@ jobs:
           -G "${{matrix.GEN}}" ^
           -D CMAKE_MAKE_PROGRAM=%NINJA_EXE% ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
+          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
           -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\external\OpenCL-Headers\install ^
           -S %GITHUB_WORKSPACE%\external\OpenCL-Headers ^
           -B %GITHUB_WORKSPACE%\external\OpenCL-Headers\build
@@ -108,6 +111,7 @@ jobs:
           -A %BIN% ^
           -T ${{matrix.VER}} ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
+          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
           -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install ^
           -D CMAKE_PREFIX_PATH=%GITHUB_WORKSPACE%\external\OpenCL-Headers\install ^
           -S %GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader ^
@@ -135,6 +139,7 @@ jobs:
           -G "${{matrix.GEN}}" ^
           -D CMAKE_MAKE_PROGRAM=%NINJA_EXE% ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
+          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
           -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install ^
           -D CMAKE_PREFIX_PATH=%GITHUB_WORKSPACE%\external\OpenCL-Headers\install ^
           -S %GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader ^
@@ -162,6 +167,9 @@ jobs:
           -T ${{matrix.VER}} ^
           -D BUILD_TESTING=ON ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
+          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
+          -D CMAKE_CXX_FLAGS=%CXX_FLAGS% ^
+          -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}} ^
           -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\install ^
           -D CMAKE_PREFIX_PATH="%GITHUB_WORKSPACE%\external\OpenCL-Headers\install;%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install" ^
           -S %GITHUB_WORKSPACE% ^
@@ -185,6 +193,9 @@ jobs:
           -D CMAKE_MAKE_PROGRAM=%NINJA_EXE% ^
           -D BUILD_TESTING=ON ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
+          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
+          -D CMAKE_CXX_FLAGS=%CXX_FLAGS% ^
+          -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}} ^
           -D CMAKE_EXE_LINKER_FLAGS=/INCREMENTAL ^
           -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\install ^
           -D CMAKE_PREFIX_PATH="%GITHUB_WORKSPACE%\external\OpenCL-Headers\install;%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install" ^
