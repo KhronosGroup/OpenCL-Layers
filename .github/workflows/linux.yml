@@ -151,7 +151,7 @@ jobs:
         if [[ "${{matrix.GEN}}" =~ "Ninja" && ! `which ninja` ]]; then sudo apt install -y ninja-build; fi;
         sudo apt install gcc-${{matrix.VER}} g++-${{matrix.VER}}; 
         if [[ "${{matrix.BIN}}" == "32" ]];
-        then sudo apt install gcc-${COMPILER_VER}-multilib;
+        then sudo apt install gcc-${VER}-multilib;
         fi;
         mkdir -p /opt/Kitware/CMake;
         wget -c $CMAKE_URL -O - | tar -xz --directory /opt/Kitware/CMake;
