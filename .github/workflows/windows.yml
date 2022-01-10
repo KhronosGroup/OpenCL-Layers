@@ -4,7 +4,6 @@ on: [push, pull_request]
 
 jobs:
   msvc:
-    if: false
     runs-on: windows-2022
     strategy:
       matrix:
@@ -14,11 +13,13 @@ jobs:
         BIN: [x64, x86]
         CMAKE: [3.22.0]
     env:
+      NINJA_URL: https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip
+      NINJA_EXE: C:\Tools\Ninja\ninja.exe
       CMAKE_URL: https://github.com/Kitware/CMake/releases/download/v${{matrix.CMAKE}}/cmake-${{matrix.CMAKE}}-windows-x86_64.zip
       CMAKE_EXE: C:\Tools\Kitware\CMake\${{matrix.CMAKE}}\bin\cmake.exe
       CTEST_EXE: C:\Tools\Kitware\CMake\${{matrix.CMAKE}}\bin\ctest.exe
-      NINJA_URL: https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip
-      NINJA_EXE: C:\Tools\Ninja\ninja.exe
+      INTEL_OCL_URL: https://github.com/intel/llvm/releases/download/2021-WW50/win-oclcpuexp-2021.13.11.0.23_rel.zip
+      INTEL_TBB_URL: https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-win.zip
 
     steps:
     - name: Checkout OpenCL-Layers
@@ -29,8 +30,7 @@ jobs:
     - name: Checkout OpenCL-Headers
       uses: actions/checkout@v2
       with:
-        repository: StreamHPC/OpenCL-Headers
-        ref: develop_stream
+        repository: KhronosGroup/OpenCL-Headers
         path: external/OpenCL-Headers
 
     - name: Checkout OpenCL-ICD-Loader
@@ -41,17 +41,69 @@ jobs:
         path: external/OpenCL-ICD-Loader
       # Temporary redirection to external repo. Changes needed from there.
 
-    - name: Create Build Environment
+    - name: Cache Ninja install
+      id: ninja-install
+      uses: actions/cache@v2
+      with:
+        path: |
+          C:\Tools\Ninja
+        key: ${{runner.os}}-ninja-${{env.NINJA_URL}}
+
+    - name: Cache CMake install
+      id: cmake-install
+      uses: actions/cache@v2
+      with:
+        path: |
+          C:\Tools\Kitware\CMake\${{matrix.CMAKE}}
+        key: ${{runner.os}}-cmake-${{matrix.CMAKE}}
+
+    - name: Cache Intel OpenCL CPU install
+      id: intel-ocl-install
+      uses: actions/cache@v2
+      with:
+        path: |
+          C:\Tools\Intel
+        key: ${{runner.os}}-ocl-url-${INTEL_OCL_URL}-tbb-url-${INTEL_TBB_URL}
+
+    - name: Install Ninja
+      if: steps.ninja-install.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        Invoke-WebRequest ${env:NINJA_URL} -OutFile ~\Downloads\ninja-win.zip
+        Expand-Archive ~\Downloads\ninja-win.zip -DestinationPath C:\Tools\Ninja\
+        Remove-Item ~\Downloads\*
+
+    - name: Install CMake
+      if: steps.cmake-install.outputs.cache-hit != 'true'
       shell: pwsh
       run: |
         Invoke-WebRequest ${env:CMAKE_URL} -OutFile ~\Downloads\cmake-${{matrix.CMAKE}}-windows-x86_64.zip
         Expand-Archive ~\Downloads\cmake-${{matrix.CMAKE}}-windows-x86_64.zip -DestinationPath C:\Tools\Kitware\CMake\
         Rename-Item C:\Tools\Kitware\CMake\* ${{matrix.CMAKE}}
-        Invoke-WebRequest ${env:NINJA_URL} -OutFile ~\Downloads\ninja-win.zip
-        Expand-Archive ~\Downloads\ninja-win.zip -DestinationPath C:\Tools\Ninja\
         Remove-Item ~\Downloads\*
+
+    - name: Install Intel OpenCL CPU
+      if: steps.intel-ocl-install.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        Invoke-WebRequest ${env:INTEL_OCL_URL} -OutFile ('~\Downloads\' + (Split-Path ${env:INTEL_OCL_URL} -Leaf))
+        Expand-Archive ~\Downloads\*.zip -DestinationPath C:\Tools\Intel\oclcpuexp
+        Remove-Item ~\Downloads\*.zip
+        Invoke-WebRequest ${env:INTEL_TBB_URL} -OutFile ('~\Downloads\' + (Split-Path ${env:INTEL_TBB_URL} -Leaf))
+        Expand-Archive ~\Downloads\$INTEL_TBB_NAME -DestinationPath C:\Tools\Intel
+        Get-ChildItem C:\Tools\Intel\oneapi-tbb* | Rename-Item -NewName oneapi-tbb
+        Remove-Item ~\Downloads\*.zip
+        Copy-Item C:\Tools\Intel\oclcpuexp\OpenCL.dll C:\Windows\System32
+        [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp;C:\Tools\Intel\oneapi-tbb', [EnvironmentVariableTarget]::Machine)
+        New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Force
+        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Name C:\Tools\Intel\oclcpuexp\intelocl64.dll -Type DWord -Value 0
+
+    - name: Probe Environment
+      shell: pwsh
+      run: |
         & ${env:CMAKE_EXE} --version
         & ${env:NINJA_EXE} --version
+        Get-Item C:\Windows\System32\OpenCL.dll | Select-Object -ExpandProperty VersionInfo
 
     - name: Build & install OpenCL-Headers (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
@@ -221,3 +273,10 @@ jobs:
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{matrix.BIN}} /vcvars_ver=%VER%
         %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Release
         %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Debug
+
+    - name: Test
+      shell: bash
+      working-directory: ${{runner.workspace}}/OpenCL-Layers/build
+      run: |
+        $CTEST_EXE --output-on-failure -C Release --parallel %NUMBER_OF_PROCESSORS%;
+        $CTEST_EXE --output-on-failure -C Debug   --parallel %NUMBER_OF_PROCESSORS%;

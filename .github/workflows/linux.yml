@@ -19,6 +19,8 @@ jobs:
       CMAKE_URL: https://github.com/Kitware/CMake/releases/download/v${{ matrix.CMAKE }}/cmake-${{ matrix.CMAKE }}-Linux-x86_64.tar.gz
       CMAKE_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/cmake
       CTEST_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/ctest
+      INTEL_OCL_URL: https://github.com/intel/llvm/releases/download/2021-WW50/oclcpuexp-2021.13.11.0.23_rel.tar.gz
+      INTEL_TBB_URL: https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz
 
 
     steps:
@@ -55,7 +57,7 @@ jobs:
       with:
         path: |
           /opt/Intel
-        key: ${{runner.os}}-ocl-url-${INTEL_OCL_URL}-tbb-url-${INTEL_TBB_URL}
+        key: ${{runner.os}}-ocl-url-${{env.INTEL_OCL_URL}}-tbb-url-${{env.INTEL_TBB_URL}}
 
     - name: Install CMake
       if: steps.cmake-install.outputs.cache-hit != 'true'
@@ -214,7 +216,7 @@ jobs:
       with:
         path: |
           /opt/Intel
-        key: ${{runner.os}}-ocl-url-${INTEL_OCL_URL}-tbb-url-${INTEL_TBB_URL}
+        key: ${{runner.os}}-ocl-url-${{env.INTEL_OCL_URL}}-tbb-url-${{env.INTEL_TBB_URL}}
 
     - name: Install CMake
       if: steps.cmake-install.outputs.cache-hit != 'true'
