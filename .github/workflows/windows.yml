@@ -104,6 +104,7 @@ jobs:
         & ${env:NINJA_EXE} --version
         Copy-Item C:\Tools\Intel\oclcpuexp\OpenCL.dll C:\Windows\System32
         Get-Item C:\Windows\System32\OpenCL.dll | Select-Object -ExpandProperty VersionInfo
+        $env:Path
 
     - name: Build & install OpenCL-Headers (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
