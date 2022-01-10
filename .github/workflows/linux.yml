@@ -190,8 +190,8 @@ jobs:
         ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so   /opt/Intel/oclcpuexp/x64libtbbmalloc.so
         ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so.12      /opt/Intel/oclcpuexp/x64libtbb.so.12
         ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so.2 /opt/Intel/oclcpuexp/x64libtbbmalloc.so.2
-        mkdir -p /etc/OpenCL/vendors
-        echo /opt/Intel/oclcpuexp/x64/libintelocl.so > /etc/OpenCL/vendors/intel_expcpu.icd
+        sudo mkdir -p /etc/OpenCL/vendors
+        sudo echo /opt/Intel/oclcpuexp/x64/libintelocl.so > /etc/OpenCL/vendors/intel_expcpu.icd
 
     - name: Create Build Environment
       run: sudo apt-get update -q;
