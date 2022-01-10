@@ -290,5 +290,5 @@ jobs:
       shell: cmd
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
       run: |
-        %CTEST_EXE% --output-on-failure -C Release --parallel %NUMBER_OF_PROCESSORS%;
         %CTEST_EXE% --output-on-failure -C Debug   --parallel %NUMBER_OF_PROCESSORS%;
+        %CTEST_EXE% --output-on-failure -C Release --parallel %NUMBER_OF_PROCESSORS%;
