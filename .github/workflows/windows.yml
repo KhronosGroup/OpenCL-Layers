@@ -287,7 +287,7 @@ jobs:
         %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Debug
 
     - name: Test
-      shell: bash
+      shell: cmd
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
       run: |
         $CTEST_EXE --output-on-failure -C Release --parallel %NUMBER_OF_PROCESSORS%;
