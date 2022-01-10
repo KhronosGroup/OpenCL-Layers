@@ -201,7 +201,7 @@ jobs:
         then sudo apt install gcc-${{matrix.VER}}-multilib g++-${{matrix.VER}}-multilib;
         fi;
         echo /opt/Intel/oclcpuexp/x64 > /etc/ld.so.conf.d/libintelopenclexp.conf
-        ldconfig
+        sudo ldconfig
 
 
 
