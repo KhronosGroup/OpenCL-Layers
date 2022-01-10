@@ -263,3 +263,10 @@ jobs:
       run: |
         $CMAKE_EXE --build $GITHUB_WORKSPACE/build --config Release -- -j`nproc`;
         $CMAKE_EXE --build $GITHUB_WORKSPACE/build --config Debug   -- -j`nproc`
+
+    - name: Test
+      shell: bash
+      working-directory: ${{runner.workspace}}/OpenCL-Layers/build
+      run: |
+        $CTEST_EXE --output-on-failure -C Release --parallel `nproc`;
+        $CTEST_EXE --output-on-failure -C Debug   --parallel `nproc`;
