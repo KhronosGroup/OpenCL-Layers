@@ -289,5 +289,5 @@ jobs:
       run: |
         Copy-Item ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll C:\Windows\System32
         Get-Item C:\Windows\System32\OpenCL.dll | Select-Object -ExpandProperty VersionInfo
-        $CTEST_EXE --output-on-failure -C Release --parallel ${env:NUMBER_OF_PROCESSORS};
-        $CTEST_EXE --output-on-failure -C Debug   --parallel ${env:NUMBER_OF_PROCESSORS};
+        & ${env:CTEST_EXE} --output-on-failure -C Release --parallel ${env:NUMBER_OF_PROCESSORS};
+        & ${env:CTEST_EXE} --output-on-failure -C Debug   --parallel ${env:NUMBER_OF_PROCESSORS};
