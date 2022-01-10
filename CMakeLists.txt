@@ -64,27 +64,3 @@ include (GNUInstallDirs)
 add_subdirectory (simple-print)
 add_subdirectory (ocl-icd-compat)
 add_subdirectory (object-lifetime)
-
-set (INSTALL_TARGETS
-    PrintLayer
-    OclIcdCompatLayer
-    CLObjectLifetimeLayer
-)
-set (BUILD_TARGETS ${INSTALL_TARGETS})
-if (OPENCL_LAYERS_BUILD_TESTING)
-    list (APPEND BUILD_TARGETS
-        PrintLayerTest
-        #OclIcdCompatLayerTest
-        #CLObjectLifetimeLayerTest
-    )
-endif ()
-
-set_target_properties (${BUILD_TARGETS}
-    PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
-        LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
-        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
-        PDB_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
-        INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
-        FOLDER "Layers/${OPENCL_SAMPLE_CATEGORY}/${OPENCL_SAMPLE_TARGET}"
-)
