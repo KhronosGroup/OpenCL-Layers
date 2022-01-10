@@ -95,18 +95,19 @@ jobs:
         Remove-Item ~\Downloads\*.zip
         New-Item -Type Directory C:\Tools\Intel\oclcpuexp\tbb
         Get-ChildItem C:\Tools\Intel\oneapi-tbb\redist\intel64\vc14\*.dll | ForEach-Object { New-Item -Type SymbolicLink -Path C:\Tools\Intel\oclcpuexp\tbb -Name $_.Name -Value $_.FullName | Out-Null }
-        [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp;C:\Tools\Intel\oneapi-tbb', [EnvironmentVariableTarget]::Machine)
+        [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp\tbb', [EnvironmentVariableTarget]::Machine)
         New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Force | Out-Null
         Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Name C:\Tools\Intel\oclcpuexp\intelocl64.dll -Type DWord -Value 0
 
     - name: Create Build Environment
       shell: pwsh
       run: |
+        Copy-Item C:\Tools\Intel\oclcpuexp\OpenCL.dll C:\Windows\System32
+        Get-Item C:\Windows\System32\OpenCL.dll | Select-Object -ExpandProperty VersionInfo
         Get-Item C:\Tools\Intel\oclcpuexp\intelocl64.dll | Select-Object -ExpandProperty VersionInfo
         Get-Item HKLM:\SOFTWARE\Khronos\OpenCL\Vendors
         & ${env:CMAKE_EXE} --version
         & ${env:NINJA_EXE} --version
-        $env:Path
 
     - name: Build & install OpenCL-Headers (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
@@ -284,10 +285,8 @@ jobs:
         %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Debug
 
     - name: Test
-      shell: pwsh
+      shell: bash
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
       run: |
-        Copy-Item ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll C:\Windows\System32
-        Get-Item C:\Windows\System32\OpenCL.dll | Select-Object -ExpandProperty VersionInfo
-        & ${env:CTEST_EXE} --output-on-failure -C Release --parallel ${env:NUMBER_OF_PROCESSORS};
-        & ${env:CTEST_EXE} --output-on-failure -C Debug   --parallel ${env:NUMBER_OF_PROCESSORS};
+        $CTEST_EXE --output-on-failure -C Release --parallel %NUMBER_OF_PROCESSORS%;
+        $CTEST_EXE --output-on-failure -C Debug   --parallel %NUMBER_OF_PROCESSORS%;
