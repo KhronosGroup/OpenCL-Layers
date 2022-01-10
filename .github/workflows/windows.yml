@@ -57,13 +57,13 @@ jobs:
           C:\Tools\Kitware\CMake\${{matrix.CMAKE}}
         key: ${{runner.os}}-cmake-${{matrix.CMAKE}}
 
-    - name: Cache Intel OpenCL CPU install
-      id: intel-ocl-install
-      uses: actions/cache@v2
-      with:
-        path: |
-          C:\Tools\Intel
-        key: ${{runner.os}}-ocl-url-${INTEL_OCL_URL}-tbb-url-${INTEL_TBB_URL}
+    #- name: Cache Intel OpenCL CPU install
+    #  id: intel-ocl-install
+    #  uses: actions/cache@v2
+    #  with:
+    #    path: |
+    #      C:\Tools\Intel
+    #    key: ${{runner.os}}-ocl-url-${INTEL_OCL_URL}-tbb-url-${INTEL_TBB_URL}
 
     - name: Install Ninja
       if: steps.ninja-install.outputs.cache-hit != 'true'
@@ -83,7 +83,7 @@ jobs:
         Remove-Item ~\Downloads\*
 
     - name: Install Intel OpenCL CPU
-      if: steps.intel-ocl-install.outputs.cache-hit != 'true'
+      #if: steps.intel-ocl-install.outputs.cache-hit != 'true'
       shell: pwsh
       run: |
         Invoke-WebRequest ${env:INTEL_OCL_URL} -OutFile ('~\Downloads\' + (Split-Path ${env:INTEL_OCL_URL} -Leaf))
@@ -93,6 +93,8 @@ jobs:
         Expand-Archive ~\Downloads\*.zip -DestinationPath C:\Tools\Intel
         Get-ChildItem C:\Tools\Intel\oneapi-tbb* | Rename-Item -NewName oneapi-tbb
         Remove-Item ~\Downloads\*.zip
+        New-Item -Type Directory C:\Tools\Intel\oclcpuexp\tbb
+        Get-ChildItem C:\Tools\Intel\oneapi-tbb\redist\intel64\vc14\*.dll | ForEach-Object { New-Item -Type SymbolicLink -Path C:\Tools\Intel\oclcpuexp\tbb -Name $_.Name -Value $_.FullName | Out-Null }
         [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp;C:\Tools\Intel\oneapi-tbb', [EnvironmentVariableTarget]::Machine)
         New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Force | Out-Null
         Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Name C:\Tools\Intel\oclcpuexp\intelocl64.dll -Type DWord -Value 0
@@ -100,10 +102,13 @@ jobs:
     - name: Create Build Environment
       shell: pwsh
       run: |
-        & ${env:CMAKE_EXE} --version
-        & ${env:NINJA_EXE} --version
         Copy-Item C:\Tools\Intel\oclcpuexp\OpenCL.dll C:\Windows\System32
         Get-Item C:\Windows\System32\OpenCL.dll | Select-Object -ExpandProperty VersionInfo
+        Get-Item C:\Tools\Intel\oclcpuexp\intelocl64.dll | Select-Object -ExpandProperty VersionInfo
+        Get-Item HKLM:\SOFTWARE\Khronos\OpenCL\Vendors
+        & ${env:CMAKE_EXE} --version
+        & ${env:NINJA_EXE} --version
+        
         $env:Path
 
     - name: Build & install OpenCL-Headers (MSBuild)

@@ -73,10 +73,10 @@ jobs:
         wget -c -O - ${INTEL_OCL_URL} | tar -xz --directory /opt/Intel/oclcpuexp
         wget -c -O - ${INTEL_TBB_URL} | tar -xz --directory /opt/Intel
         mv /opt/Intel/oneapi-tbb* /opt/Intel/oneapi-tbb
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so         /opt/Intel/oclcpuexp/x64libtbb.so
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so   /opt/Intel/oclcpuexp/x64libtbbmalloc.so
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so.12      /opt/Intel/oclcpuexp/x64libtbb.so.12
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so.2 /opt/Intel/oclcpuexp/x64libtbbmalloc.so.2
+        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so         /opt/Intel/oclcpuexp/x64/libtbb.so
+        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so   /opt/Intel/oclcpuexp/x64/libtbbmalloc.so
+        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so.12      /opt/Intel/oclcpuexp/x64/libtbb.so.12
+        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so.2 /opt/Intel/oclcpuexp/x64/libtbbmalloc.so.2
         sudo mkdir -p /etc/OpenCL/vendors
         echo /opt/Intel/oclcpuexp/x64/libintelocl.so | sudo tee /etc/OpenCL/vendors/intel_expcpu.icd
 
@@ -232,10 +232,10 @@ jobs:
         wget -c -O - ${INTEL_OCL_URL} | tar -xz --directory /opt/Intel/oclcpuexp
         wget -c -O - ${INTEL_TBB_URL} | tar -xz --directory /opt/Intel
         mv /opt/Intel/oneapi-tbb* /opt/Intel/oneapi-tbb
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so         /opt/Intel/oclcpuexp/x64libtbb.so
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so   /opt/Intel/oclcpuexp/x64libtbbmalloc.so
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so.12      /opt/Intel/oclcpuexp/x64libtbb.so.12
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so.2 /opt/Intel/oclcpuexp/x64libtbbmalloc.so.2
+        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so         /opt/Intel/oclcpuexp/x64/libtbb.so
+        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so   /opt/Intel/oclcpuexp/x64/libtbbmalloc.so
+        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so.12      /opt/Intel/oclcpuexp/x64/libtbb.so.12
+        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so.2 /opt/Intel/oclcpuexp/x64/libtbbmalloc.so.2
         sudo mkdir -p /etc/OpenCL/vendors
         echo /opt/Intel/oclcpuexp/x64/libintelocl.so | sudo tee /etc/OpenCL/vendors/intel_expcpu.icd
 
