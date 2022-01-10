@@ -4,6 +4,7 @@ on: [push, pull_request]
 
 jobs:
   cmake-minimum:
+    if: false
     runs-on: ${{ matrix.OS }}
     strategy:
       matrix:
@@ -181,7 +182,7 @@ jobs:
     - name: Install Intel OpenCL CPU
       if: steps.intel-ocl-install.outputs.cache-hit != 'true'
       run: |
-        mkdir -p /opt/Intel
+        mkdir -p /opt/Intel/oclcpuexp
         wget -c -O - ${INTEL_OCL_URL} | tar -xz --directory /opt/Intel/oclcpuexp
         wget -c -O - ${INTEL_TBB_URL} | tar -xz --directory /opt/Intel
         mv /opt/Intel/oneapi-tbb* /opt/Intel/oneapi-tbb
