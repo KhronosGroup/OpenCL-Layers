@@ -10,5 +10,9 @@ if (NOT WIN32 AND NOT APPLE)
     set_target_properties (CLObjectLifetimeLayer PROPERTIES LINK_FLAGS "-Wl,--version-script -Wl,${CMAKE_CURRENT_SOURCE_DIR}/object_lifetime.map")
 endif ()
 
-install (TARGETS CLObjectLifetimeLayer
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install (
+    TARGETS CLObjectLifetimeLayer
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
