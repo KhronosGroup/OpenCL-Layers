@@ -221,8 +221,8 @@ jobs:
       # warning C4459: declaration of 'platform' hides global declaration
       # warning C4100: 'input_headers': unreferenced formal parameter
       run: |
-        set C_FLAGS="/W4"
-        set CXX_FLAGS="/W4"
+        set C_FLAGS="/W4 /MP"
+        set CXX_FLAGS="/W4 /MP"
         if /I "${{matrix.BIN}}"=="x86" (set BIN=Win32) else (set BIN=x64)
         %CMAKE_EXE% ^
           -G "${{matrix.GEN}}" ^
@@ -290,5 +290,5 @@ jobs:
       shell: cmd
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
       run: |
-        $CTEST_EXE --output-on-failure -C Release --parallel %NUMBER_OF_PROCESSORS%;
-        $CTEST_EXE --output-on-failure -C Debug   --parallel %NUMBER_OF_PROCESSORS%;
+        %CTEST_EXE% --output-on-failure -C Release --parallel %NUMBER_OF_PROCESSORS%;
+        %CTEST_EXE% --output-on-failure -C Debug   --parallel %NUMBER_OF_PROCESSORS%;
