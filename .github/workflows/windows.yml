@@ -93,16 +93,16 @@ jobs:
         Expand-Archive ~\Downloads\*.zip -DestinationPath C:\Tools\Intel
         Get-ChildItem C:\Tools\Intel\oneapi-tbb* | Rename-Item -NewName oneapi-tbb
         Remove-Item ~\Downloads\*.zip
-        Copy-Item C:\Tools\Intel\oclcpuexp\OpenCL.dll C:\Windows\System32
         [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp;C:\Tools\Intel\oneapi-tbb', [EnvironmentVariableTarget]::Machine)
         New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Force | Out-Null
         Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Name C:\Tools\Intel\oclcpuexp\intelocl64.dll -Type DWord -Value 0
 
-    - name: Probe Environment
+    - name: Create Build Environment
       shell: pwsh
       run: |
         & ${env:CMAKE_EXE} --version
         & ${env:NINJA_EXE} --version
+        Copy-Item C:\Tools\Intel\oclcpuexp\OpenCL.dll C:\Windows\System32
         Get-Item C:\Windows\System32\OpenCL.dll | Select-Object -ExpandProperty VersionInfo
 
     - name: Build & install OpenCL-Headers (MSBuild)
