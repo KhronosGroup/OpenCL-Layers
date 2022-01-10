@@ -163,6 +163,7 @@ jobs:
           -G "${{matrix.GEN}}" ^
           -A %BIN% ^
           -T ${{matrix.VER}} ^
+          -D OPENCL_ICD_LOADER_BUILD_TESTING=OFF ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
           -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
           -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install ^
@@ -190,6 +191,7 @@ jobs:
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{matrix.BIN}} /vcvars_ver=%VER%
         %CMAKE_EXE% ^
           -G "${{matrix.GEN}}" ^
+          -D OPENCL_ICD_LOADER_BUILD_TESTING=OFF ^
           -D CMAKE_MAKE_PROGRAM=%NINJA_EXE% ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
           -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
