@@ -218,6 +218,7 @@ jobs:
           -G "${{matrix.GEN}}" ^
           -A %BIN% ^
           -T ${{matrix.VER}} ^
+          -D OPENCL_LAYERS_BUILD_TESTING=ON ^
           -D BUILD_TESTING=ON ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
           -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
@@ -244,6 +245,7 @@ jobs:
         %CMAKE_EXE% ^
           -G "${{matrix.GEN}}" ^
           -D CMAKE_MAKE_PROGRAM=%NINJA_EXE% ^
+          -D OPENCL_LAYERS_BUILD_TESTING=ON ^
           -D BUILD_TESTING=ON ^
           -D CMAKE_C_FLAGS=%C_FLAGS% ^
           -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
