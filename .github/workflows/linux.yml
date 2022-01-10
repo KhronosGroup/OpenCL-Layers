@@ -200,7 +200,7 @@ jobs:
         if [[ "${{matrix.BIN}}" == "32" ]];
         then sudo apt install gcc-${{matrix.VER}}-multilib g++-${{matrix.VER}}-multilib;
         fi;
-        echo /opt/Intel/oclcpuexp/x64 > /etc/ld.so.conf.d/libintelopenclexp.conf
+        echo /opt/Intel/oclcpuexp/x64 | sudo tee /etc/ld.so.conf.d/libintelopenclexp.conf
         sudo ldconfig
 
 
