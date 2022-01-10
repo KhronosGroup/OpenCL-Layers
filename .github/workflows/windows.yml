@@ -7,10 +7,10 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        VER: [v141, v142, v143]
+        VER: [v141] # , v142, v143
         EXT: [OFF]
-        GEN: [Visual Studio 17 2022, Ninja Multi-Config]
-        BIN: [x64, x86]
+        GEN: [Visual Studio 17 2022] x , Ninja Multi-Config
+        BIN: [x64] x , x86
         CMAKE: [3.22.0]
     env:
       NINJA_URL: https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip
@@ -90,7 +90,7 @@ jobs:
         Expand-Archive ~\Downloads\*.zip -DestinationPath C:\Tools\Intel\oclcpuexp
         Remove-Item ~\Downloads\*.zip
         Invoke-WebRequest ${env:INTEL_TBB_URL} -OutFile ('~\Downloads\' + (Split-Path ${env:INTEL_TBB_URL} -Leaf))
-        Expand-Archive ~\Downloads\$INTEL_TBB_NAME -DestinationPath C:\Tools\Intel
+        Expand-Archive ~\Downloads\*.zip -DestinationPath C:\Tools\Intel
         Get-ChildItem C:\Tools\Intel\oneapi-tbb* | Rename-Item -NewName oneapi-tbb
         Remove-Item ~\Downloads\*.zip
         Copy-Item C:\Tools\Intel\oclcpuexp\OpenCL.dll C:\Windows\System32
