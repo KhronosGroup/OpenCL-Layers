@@ -108,6 +108,8 @@ jobs:
         Get-Item HKLM:\SOFTWARE\Khronos\OpenCL\Vendors
         & ${env:CMAKE_EXE} --version
         & ${env:NINJA_EXE} --version
+        Write-Host 'Folders with OpenCL.dll in them'
+        ($env:Path).Split(';') | where { Test-Path (Join-Path $_ 'OpenCL.dll') }
 
     - name: Build & install OpenCL-Headers (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
