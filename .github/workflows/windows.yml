@@ -102,13 +102,10 @@ jobs:
     - name: Create Build Environment
       shell: pwsh
       run: |
-        Copy-Item C:\Tools\Intel\oclcpuexp\OpenCL.dll C:\Windows\System32
-        Get-Item C:\Windows\System32\OpenCL.dll | Select-Object -ExpandProperty VersionInfo
         Get-Item C:\Tools\Intel\oclcpuexp\intelocl64.dll | Select-Object -ExpandProperty VersionInfo
         Get-Item HKLM:\SOFTWARE\Khronos\OpenCL\Vendors
         & ${env:CMAKE_EXE} --version
         & ${env:NINJA_EXE} --version
-        
         $env:Path
 
     - name: Build & install OpenCL-Headers (MSBuild)
@@ -287,8 +284,10 @@ jobs:
         %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Debug
 
     - name: Test
-      shell: bash
+      shell: pwsh
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
       run: |
-        $CTEST_EXE --output-on-failure -C Release --parallel %NUMBER_OF_PROCESSORS%;
-        $CTEST_EXE --output-on-failure -C Debug   --parallel %NUMBER_OF_PROCESSORS%;
+        Copy-Item ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll C:\Windows\System32
+        Get-Item C:\Windows\System32\OpenCL.dll | Select-Object -ExpandProperty VersionInfo
+        $CTEST_EXE --output-on-failure -C Release --parallel ${env:NUMBER_OF_PROCESSORS};
+        $CTEST_EXE --output-on-failure -C Debug   --parallel ${env:NUMBER_OF_PROCESSORS};
