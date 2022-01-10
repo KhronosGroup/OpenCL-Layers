@@ -245,6 +245,7 @@ jobs:
       # warning: unused parameter [-Wunused-parameter]
       run: $CMAKE_EXE
         -G "${{matrix.GEN}}"
+        -D OPENCL_LAYERS_BUILD_TESTING=ON
         -D BUILD_TESTING=ON
         -D BUILD_EXAMPLES=ON
         -D CMAKE_C_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
