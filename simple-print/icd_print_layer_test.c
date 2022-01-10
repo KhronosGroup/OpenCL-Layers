@@ -22,6 +22,9 @@ int main()
     cl_int CL_err = CL_SUCCESS;
     cl_uint numPlatforms = 0;
 
+    char* var = getenv("OPENCL_LAYERS");
+    if(var != NULL) printf("OPENCL_LAYERS: %s\n", var);
+
     CL_err = clGetPlatformIDs(0, NULL, &numPlatforms);
     checkErr(CL_err, "clGetPlatformIDs(numPlatforms)");
 
