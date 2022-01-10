@@ -9,8 +9,8 @@ jobs:
       matrix:
         VER: [v141] # , v142, v143
         EXT: [OFF]
-        GEN: [Visual Studio 17 2022] x , Ninja Multi-Config
-        BIN: [x64] x , x86
+        GEN: [Visual Studio 17 2022] # , Ninja Multi-Config
+        BIN: [x64] # , x86
         CMAKE: [3.22.0]
     env:
       NINJA_URL: https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip
