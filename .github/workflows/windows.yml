@@ -5,6 +5,9 @@ on: [push, pull_request]
 jobs:
   msvc:
     runs-on: windows-2022
+    container:
+      image: windows-2022
+      options: --user ContainerUser
     strategy:
       matrix:
         VER: [v141] # , v142, v143
