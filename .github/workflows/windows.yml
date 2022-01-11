@@ -5,6 +5,8 @@ on: [push, pull_request]
 jobs:
   msvc:
     runs-on: windows-2022
+    container:
+      options: --user ContainerUser
     strategy:
       matrix:
         VER: [v141] # , v142, v143
@@ -93,23 +95,21 @@ jobs:
         Expand-Archive ~\Downloads\*.zip -DestinationPath C:\Tools\Intel
         Get-ChildItem C:\Tools\Intel\oneapi-tbb* | Rename-Item -NewName oneapi-tbb
         Remove-Item ~\Downloads\*.zip
-        New-Item -Type Directory C:\Tools\Intel\oclcpuexp\tbb
+        New-Item -Type Directory C:\Tools\Intel\oclcpuexp\tbb | Out-Null
         Get-ChildItem C:\Tools\Intel\oneapi-tbb\redist\intel64\vc14\*.dll | ForEach-Object { New-Item -Type SymbolicLink -Path C:\Tools\Intel\oclcpuexp\tbb -Name $_.Name -Value $_.FullName | Out-Null }
-        [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp\tbb', [EnvironmentVariableTarget]::Machine)
-        New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Force | Out-Null
-        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Name C:\Tools\Intel\oclcpuexp\intelocl64.dll -Type DWord -Value 0
+        [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp;C:\Tools\Intel\oclcpuexp\tbb', [EnvironmentVariableTarget]::User)
+        [Environment]::SetEnvironmentVariable('OCL_ICD_FILENAMES', 'C:\Tools\Intel\oclcpuexp\intelocl64.dll', [EnvironmentVariableTarget]::User)
+      #  [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp\tbb', [EnvironmentVariableTarget]::Machine)
+      #  New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Force | Out-Null
+      #  Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Name C:\Tools\Intel\oclcpuexp\intelocl64.dll -Type DWord -Value 0
 
     - name: Create Build Environment
       shell: pwsh
       run: |
-        Copy-Item C:\Tools\Intel\oclcpuexp\OpenCL.dll C:\Windows\System32
-        Get-Item C:\Windows\System32\OpenCL.dll | Select-Object -ExpandProperty VersionInfo
         Get-Item C:\Tools\Intel\oclcpuexp\intelocl64.dll | Select-Object -ExpandProperty VersionInfo
         Get-Item HKLM:\SOFTWARE\Khronos\OpenCL\Vendors
         & ${env:CMAKE_EXE} --version
         & ${env:NINJA_EXE} --version
-        Write-Host 'Folders with OpenCL.dll in them'
-        ($env:Path).Split(';') | where { Test-Path (Join-Path $_ 'OpenCL.dll') }
 
     - name: Build & install OpenCL-Headers (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
@@ -290,5 +290,7 @@ jobs:
       shell: cmd
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
       run: |
+        set OPENCL_LAYERS=%GITHUB_WORKSPACE%\build\bin\Debug\PrintLayer.dll
         %CTEST_EXE% --output-on-failure -C Debug   --parallel %NUMBER_OF_PROCESSORS%;
+        set OPENCL_LAYERS=%GITHUB_WORKSPACE%\build\bin\Release\PrintLayer.dll
         %CTEST_EXE% --output-on-failure -C Release --parallel %NUMBER_OF_PROCESSORS%;
