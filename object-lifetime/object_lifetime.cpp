@@ -7,6 +7,11 @@
 #include <iostream>
 #include <list>
 #include <string_view>
+#include <fstream>
+
+#include <cstdlib>
+
+#include <sys/stat.h>
 
 typedef enum object_type_e {
   OCL_PLATFORM,
@@ -429,6 +434,81 @@ clGetLayerInfo(
   return CL_SUCCESS;
 }
 
+const char *get_environment(const char *variable) {
+#ifdef __ANDROID__
+  // TODO: Implement get_environment for android
+  return "";
+#else
+  const char *output = std::getenv(variable);
+  return output != nullptr ? output : "";
+#endif
+}
+
+static std::string find_settings() {
+  struct stat file_info;
+#ifdef __linux__
+  {
+    std::string search_path = get_environment("XDG_DATA_HOME");
+    if (search_path == "") {
+      search_path = get_environment("HOME");
+      if (search_path != "") {
+        search_path += "/.local/share";
+      }
+    }
+    if (search_path != "") {
+      const std::string home_file = search_path + "/opencl/settings.d/cl_layer_settings.txt";
+      if (stat(home_file.c_str(), &file_info) == 0 &&
+          (file_info.st_mode & S_IFREG) > 0) {
+        return home_file;
+      }
+    }
+  }
+#endif
+  std::string config_path = get_environment("OPENCL_LAYERS_SETTINGS_PATH");
+  if (stat(config_path.c_str(), &file_info) == 0) {
+    if((file_info.st_mode & S_IFDIR) > 0) {
+      config_path += "/cl_layer_settings.txt";
+    }
+    return config_path;
+  }
+  return "cl_layer_settings.txt";
+}
+
+static std::string trim(std::string input) {
+  constexpr static auto* whitespace_chars = "\t ";
+  const auto last_non_whitespace = input.find_last_not_of(whitespace_chars);
+  if (last_non_whitespace < input.size() - 1) {
+    input.erase(last_non_whitespace + 1);
+  }
+  auto first_non_whitespace = input.find_first_not_of(whitespace_chars);
+  if(first_non_whitespace == std::string::npos) {
+    first_non_whitespace = input.size();
+  }
+  input.erase(input.begin(), input.begin() + first_non_whitespace);
+  return input;
+}
+
+static std::map<std::string, std::string> load_settings() {
+  auto result = std::map<std::string, std::string>{};
+  auto file = std::ifstream{find_settings()};
+  if (!file.good()) {
+    return result;
+  }
+
+  for (std::string line; std::getline(file, line);) {
+    const auto comment_pos = line.find_first_of("#");
+    if(comment_pos != std::string::npos) {
+      line.erase(comment_pos);
+    }
+    const auto equals_pos = line.find_first_of("=");
+    if(equals_pos != std::string::npos) {
+      auto option = trim(line.substr(0, equals_pos)); 
+      result[option] = trim(line.substr(equals_pos + 1));
+    }
+  }
+  return result;
+}
+
 static void _init_dispatch(void);
 
 CL_API_ENTRY cl_int CL_API_CALL
@@ -439,6 +519,14 @@ clInitLayer(
     const struct _cl_icd_dispatch **layer_dispatch_ret) {
   if (!target_dispatch || !layer_dispatch_ret ||!num_entries_out || num_entries < sizeof(dispatch)/sizeof(dispatch.clGetPlatformIDs))
     return CL_INVALID_VALUE;
+
+  const auto settings = load_settings();
+  if (settings.count("debug_dump_settings") > 0) {
+    std::cerr << "Loaded settings from cl_layer_settings.txt:\n";
+    for (const auto &pair : settings) {
+      std::cerr << pair.first << " = " << pair.second << '\n';
+    }
+  }
 
   tdispatch = target_dispatch;
   _init_dispatch();

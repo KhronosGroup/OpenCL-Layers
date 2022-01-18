@@ -1,0 +1,19 @@
+# Set debug_dump_settings to dump the settings that have been found
+debug_dump_settings = true
+
+# Whitespace is trimmed from the start and end of keys and values
+has spaces = value also has spaces
+	has tab=	value	also 	has tabs
+   
+#empty lines are ignored
+	  
+# malformed values are ignored
+ignored_has_no_value
+
+has_empty_value=
+
+value_has_equals=this-should-contain=the-equals-sign
+inline_comments_ignored=true#anything after the first # should be ignored
+
+#no newline at the end of the file
+doesnt_have_newline=yes
