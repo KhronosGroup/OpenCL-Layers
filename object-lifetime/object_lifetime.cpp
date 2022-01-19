@@ -8,6 +8,7 @@
 #include <list>
 #include <string_view>
 #include <fstream>
+#include <algorithm>
 
 #include <cstdlib>
 
@@ -509,6 +510,92 @@ static std::map<std::string, std::string> load_settings() {
   return result;
 }
 
+namespace {
+
+struct layer_settings {
+  enum class DebugLogType { StdOut, StdErr, File };
+
+  static layer_settings load();
+
+  DebugLogType log_type = DebugLogType::StdErr;
+  std::string log_filename;
+  bool transparent = false;
+
+  void set_log_type(std::string option);
+  void set_log_filename(std::string option);
+  void set_transparent(std::string option);
+};
+
+layer_settings layer_settings::load() {
+  const auto settings_from_file = load_settings();
+  auto settings = layer_settings{};
+  if(settings_from_file.find("cl_object_lifetime.log_sink") != settings_from_file.end()) {
+    settings.set_log_type(settings_from_file.at("cl_object_lifetime.log_sink"));
+  }
+  if(settings_from_file.find("cl_object_lifetime.log_filename") != settings_from_file.end()) {
+    settings.set_log_filename(settings_from_file.at("cl_object_lifetime.log_filename"));
+  }
+  if(settings_from_file.find("cl_object_lifetime.transparent") != settings_from_file.end()) {
+    settings.set_transparent(settings_from_file.at("cl_object_lifetime.transparent"));
+  }
+  // Environment variables override settings from file
+  settings.set_log_type(get_environment("CL_OBJECT_LIFETIME_LOG_SINK"));
+  settings.set_log_filename(get_environment("CL_OBJECT_LIFETIME_LOG_FILENAME"));
+  settings.set_transparent(get_environment("CL_OBJECT_LIFETIME_TRANSPARENT"));
+
+  return settings;
+}
+
+}; // namespace
+
+static void parse_bool(const std::string& option, bool& out) {
+  static constexpr auto positive_words = {
+      "on",
+      "y",
+      "yes",
+      "1",
+      "true",
+  };
+  static constexpr auto negative_words = {
+    "off",
+    "n",
+    "no",
+    "0",
+    "false"
+  };
+  if(std::find(positive_words.begin(), positive_words.end(), option) != positive_words.end()) {
+    out = true;
+    return;
+  }
+  if(std::find(negative_words.begin(), negative_words.end(), option) != negative_words.end()) {
+    out = false;
+    return;
+  }
+}
+
+static void parse_log_type(const std::string& option, layer_settings::DebugLogType& out) {
+  if(option == "stdout") {
+    out = layer_settings::DebugLogType::StdOut;
+  } else if (option == "stderr") {
+    out = layer_settings::DebugLogType::StdErr;
+  } else if (option == "file") {
+    out = layer_settings::DebugLogType::File;
+  }
+}
+
+void layer_settings::set_log_type(std::string option) {
+  parse_log_type(option, log_type);
+}
+
+void layer_settings::set_log_filename(std::string option) {
+  if(option != "") {
+    log_filename = option;
+  }
+}
+void layer_settings::set_transparent(std::string option) {
+  parse_bool(option, transparent);
+}
+
 static void _init_dispatch(void);
 
 CL_API_ENTRY cl_int CL_API_CALL
@@ -520,13 +607,11 @@ clInitLayer(
   if (!target_dispatch || !layer_dispatch_ret ||!num_entries_out || num_entries < sizeof(dispatch)/sizeof(dispatch.clGetPlatformIDs))
     return CL_INVALID_VALUE;
 
-  const auto settings = load_settings();
-  if (settings.count("debug_dump_settings") > 0) {
-    std::cerr << "Loaded settings from cl_layer_settings.txt:\n";
-    for (const auto &pair : settings) {
-      std::cerr << pair.first << " = " << pair.second << '\n';
-    }
-  }
+  const auto settings = layer_settings::load();
+  std::cerr << "Loaded settings from cl_layer_settings.txt:\n";
+  std::cerr << "  Log type: " << (int)settings.log_type << '\n';
+  std::cerr << "  Log filename: " << settings.log_filename << '\n';
+  std::cerr << "  transparent: " << std::boolalpha << settings.transparent << '\n';
 
   tdispatch = target_dispatch;
   _init_dispatch();
