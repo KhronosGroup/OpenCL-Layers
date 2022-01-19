@@ -163,18 +163,17 @@ jobs:
 
 
   cmake-latest:
-    if: false
     runs-on: ${{ matrix.OS }}
+    container: streamhpc/opencl-sdk-base:ubuntu-18.04-20211119
     strategy:
       matrix:
         OS : [ubuntu-20.04]
-        VER: [9, 11] # clang-11, clang-13
+        VER: [9, 10] # clang-11, clang-13
         EXT: [OFF]
         GEN: [Ninja Multi-Config]
-        BIN: [64, 32]
-        CMAKE: [3.22.1]
+        BIN: [64] # 32 (no multilib package installed in image)
+        CMAKE: [3.21.2]
     env:
-      CMAKE_URL: https://github.com/Kitware/CMake/releases/download/v${{ matrix.CMAKE }}/cmake-${{ matrix.CMAKE }}-Linux-x86_64.tar.gz
       CMAKE_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/cmake
       CTEST_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/ctest
       INTEL_OCL_URL: https://github.com/intel/llvm/releases/download/2021-WW50/oclcpuexp-2021.13.11.0.23_rel.tar.gz
@@ -201,14 +200,6 @@ jobs:
         path: external/OpenCL-ICD-Loader
       # Temporary redirection to external repo. Changes needed from there.
 
-    - name: Cache CMake install
-      id: cmake-install
-      uses: actions/cache@v2
-      with:
-        path: |
-          /opt/Kitware
-        key: ${{runner.os}}-cmake-${{matrix.CMAKE}}
-
     - name: Cache Intel OpenCL CPU install
       id: intel-ocl-install
       uses: actions/cache@v2
@@ -216,13 +207,6 @@ jobs:
         path: |
           /opt/Intel
         key: ${{runner.os}}-ocl-url-${{env.INTEL_OCL_URL}}-tbb-url-${{env.INTEL_TBB_URL}}
-
-    - name: Install CMake
-      if: steps.cmake-install.outputs.cache-hit != 'true'
-      run: |
-        mkdir -p /opt/Kitware/CMake;
-        wget -c $CMAKE_URL -O - | tar -xz --directory /opt/Kitware/CMake;
-        mv /opt/Kitware/CMake/cmake-${{ matrix.CMAKE }}-* /opt/Kitware/CMake/${{ matrix.CMAKE }}
 
     - name: Install Intel OpenCL CPU
       if: steps.intel-ocl-install.outputs.cache-hit != 'true'
@@ -239,12 +223,7 @@ jobs:
         echo /opt/Intel/oclcpuexp/x64/libintelocl.so | sudo tee /etc/OpenCL/vendors/intel_expcpu.icd
 
     - name: Create Build Environment
-      run: sudo apt-get update -q;
-        if [[ "${{matrix.GEN}}" =~ "Ninja" && ! `which ninja` ]]; then sudo apt install -y ninja-build; fi;
-        sudo apt install gcc-${{matrix.VER}} g++-${{matrix.VER}}; 
-        if [[ "${{matrix.BIN}}" == "32" ]];
-        then sudo apt install gcc-${{matrix.VER}}-multilib g++-${{matrix.VER}}-multilib;
-        fi;
+      run: |
         echo /opt/Intel/oclcpuexp/x64 | sudo tee /etc/ld.so.conf.d/libintelopenclexp.conf
         sudo ldconfig
 
