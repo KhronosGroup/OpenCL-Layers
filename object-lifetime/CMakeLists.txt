@@ -4,7 +4,7 @@ add_library (CLObjectLifetimeLayer SHARED
     $<$<CXX_COMPILER_ID:GNU>:object_lifetime.map>
 )
 
-target_link_libraries (CLObjectLifetimeLayer PRIVATE LayersCommon)
+target_link_libraries (CLObjectLifetimeLayer PRIVATE LayersUtils LayersCommon)
 
 if (NOT WIN32 AND NOT APPLE)
     set_target_properties (CLObjectLifetimeLayer PROPERTIES LINK_FLAGS "-Wl,--version-script -Wl,${CMAKE_CURRENT_SOURCE_DIR}/object_lifetime.map")

@@ -1,8 +1,8 @@
 # Where to log errors 'stderr' for standard error 'stdout' for standard output or 'file'
-cl_object_lifetime.log_sink = asdasd
+object_lifetime.log_sink = stderr
 # Filename to log errors to if log_sink is 'file'
-cl_object_lifetime.log_filename = file. log
+object_lifetime.log_filename = cl_object_lifetime.log
 # Set to false (default) to return errors to the the application on invalid object usage 
 # When set to true the errors are only logged, the API calls made by the apllication are passed
 # through unmodified
-cl_object_lifetime.transparent = 0
+object_lifetime.transparent = no

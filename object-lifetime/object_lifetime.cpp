@@ -1,3 +1,5 @@
+#include "utils.hpp"
+
 #include <stdlib.h>
 #include <string.h>
 #include <CL/cl_layer.h>
@@ -435,81 +437,6 @@ clGetLayerInfo(
   return CL_SUCCESS;
 }
 
-const char *get_environment(const char *variable) {
-#ifdef __ANDROID__
-  // TODO: Implement get_environment for android
-  return "";
-#else
-  const char *output = std::getenv(variable);
-  return output != nullptr ? output : "";
-#endif
-}
-
-static std::string find_settings() {
-  struct stat file_info;
-#ifdef __linux__
-  {
-    std::string search_path = get_environment("XDG_DATA_HOME");
-    if (search_path == "") {
-      search_path = get_environment("HOME");
-      if (search_path != "") {
-        search_path += "/.local/share";
-      }
-    }
-    if (search_path != "") {
-      const std::string home_file = search_path + "/opencl/settings.d/cl_layer_settings.txt";
-      if (stat(home_file.c_str(), &file_info) == 0 &&
-          (file_info.st_mode & S_IFREG) > 0) {
-        return home_file;
-      }
-    }
-  }
-#endif
-  std::string config_path = get_environment("OPENCL_LAYERS_SETTINGS_PATH");
-  if (stat(config_path.c_str(), &file_info) == 0) {
-    if((file_info.st_mode & S_IFDIR) > 0) {
-      config_path += "/cl_layer_settings.txt";
-    }
-    return config_path;
-  }
-  return "cl_layer_settings.txt";
-}
-
-static std::string trim(std::string input) {
-  constexpr static auto* whitespace_chars = "\t ";
-  const auto last_non_whitespace = input.find_last_not_of(whitespace_chars);
-  if (last_non_whitespace < input.size() - 1) {
-    input.erase(last_non_whitespace + 1);
-  }
-  auto first_non_whitespace = input.find_first_not_of(whitespace_chars);
-  if(first_non_whitespace == std::string::npos) {
-    first_non_whitespace = input.size();
-  }
-  input.erase(input.begin(), input.begin() + first_non_whitespace);
-  return input;
-}
-
-static std::map<std::string, std::string> load_settings() {
-  auto result = std::map<std::string, std::string>{};
-  auto file = std::ifstream{find_settings()};
-  if (!file.good()) {
-    return result;
-  }
-
-  for (std::string line; std::getline(file, line);) {
-    const auto comment_pos = line.find_first_of("#");
-    if(comment_pos != std::string::npos) {
-      line.erase(comment_pos);
-    }
-    const auto equals_pos = line.find_first_of("=");
-    if(equals_pos != std::string::npos) {
-      auto option = trim(line.substr(0, equals_pos)); 
-      result[option] = trim(line.substr(equals_pos + 1));
-    }
-  }
-  return result;
-}
-
 namespace {
 
 struct layer_settings {
@@ -520,81 +447,26 @@ struct layer_settings {
   DebugLogType log_type = DebugLogType::StdErr;
   std::string log_filename;
   bool transparent = false;
-
-  void set_log_type(std::string option);
-  void set_log_filename(std::string option);
-  void set_transparent(std::string option);
 };
 
 layer_settings layer_settings::load() {
-  const auto settings_from_file = load_settings();
+  const auto settings_from_file = ocl_layer_utils::load_settings();
+  const auto parser =
+      ocl_layer_utils::settings_parser("object_lifetime", settings_from_file);
+
   auto settings = layer_settings{};
-  if(settings_from_file.find("cl_object_lifetime.log_sink") != settings_from_file.end()) {
-    settings.set_log_type(settings_from_file.at("cl_object_lifetime.log_sink"));
-  }
-  if(settings_from_file.find("cl_object_lifetime.log_filename") != settings_from_file.end()) {
-    settings.set_log_filename(settings_from_file.at("cl_object_lifetime.log_filename"));
-  }
-  if(settings_from_file.find("cl_object_lifetime.transparent") != settings_from_file.end()) {
-    settings.set_transparent(settings_from_file.at("cl_object_lifetime.transparent"));
-  }
-  // Environment variables override settings from file
-  settings.set_log_type(get_environment("CL_OBJECT_LIFETIME_LOG_SINK"));
-  settings.set_log_filename(get_environment("CL_OBJECT_LIFETIME_LOG_FILENAME"));
-  settings.set_transparent(get_environment("CL_OBJECT_LIFETIME_TRANSPARENT"));
+  const auto debug_log_values =
+      std::map<std::string, DebugLogType>{{"stdout", DebugLogType::StdOut},
+                                          {"stderr", DebugLogType::StdErr},
+                                          {"file", DebugLogType::File}};
+  parser.get_enumeration("log_sink", debug_log_values, settings.log_type);
+  parser.get_filename("log_filename", settings.log_filename);
+  parser.get_bool("transparent", settings.transparent);
 
   return settings;
 }
 
 }; // namespace
-
-static void parse_bool(const std::string& option, bool& out) {
-  static constexpr auto positive_words = {
-      "on",
-      "y",
-      "yes",
-      "1",
-      "true",
-  };
-  static constexpr auto negative_words = {
-    "off",
-    "n",
-    "no",
-    "0",
-    "false"
-  };
-  if(std::find(positive_words.begin(), positive_words.end(), option) != positive_words.end()) {
-    out = true;
-    return;
-  }
-  if(std::find(negative_words.begin(), negative_words.end(), option) != negative_words.end()) {
-    out = false;
-    return;
-  }
-}
-
-static void parse_log_type(const std::string& option, layer_settings::DebugLogType& out) {
-  if(option == "stdout") {
-    out = layer_settings::DebugLogType::StdOut;
-  } else if (option == "stderr") {
-    out = layer_settings::DebugLogType::StdErr;
-  } else if (option == "file") {
-    out = layer_settings::DebugLogType::File;
-  }
-}
-
-void layer_settings::set_log_type(std::string option) {
-  parse_log_type(option, log_type);
-}
-
-void layer_settings::set_log_filename(std::string option) {
-  if(option != "") {
-    log_filename = option;
-  }
-}
-void layer_settings::set_transparent(std::string option) {
-  parse_bool(option, transparent);
-}
 
 static void _init_dispatch(void);
 
