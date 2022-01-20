@@ -287,12 +287,3 @@ jobs:
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{matrix.BIN}} /vcvars_ver=%VER%
         %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Release
         %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Debug
-
-    - name: Test
-      shell: cmd
-      working-directory: ${{runner.workspace}}/OpenCL-Layers/build
-      run: |
-        set OPENCL_LAYERS=%GITHUB_WORKSPACE%\build\bin\Debug\PrintLayer.dll
-        %CTEST_EXE% --output-on-failure -C Debug   --parallel %NUMBER_OF_PROCESSORS%;
-        set OPENCL_LAYERS=%GITHUB_WORKSPACE%\build\bin\Release\PrintLayer.dll
-        %CTEST_EXE% --output-on-failure -C Release --parallel %NUMBER_OF_PROCESSORS%;

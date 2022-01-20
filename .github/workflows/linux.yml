@@ -3,24 +3,57 @@ name: Linux
 on: [push, pull_request]
 
 jobs:
-  cmake-minimum:
-    if: false
+  compatibility:
     runs-on: ${{ matrix.OS }}
+    container: streamhpc/opencl-sdk-intelcpu:${{ matrix.OS }}-20220120
     strategy:
       matrix:
         OS: [ubuntu-18.04]
-        VER: [7, 8]
         EXT: [OFF]
-        GEN: [Unix Makefiles]
-        CONFIG: [Debug, Release]
         BIN: [64, 32]
-        CMAKE: [3.8.2]
+        # TODO: CMake 3.10.3 is SDK minimum (and ubuntu 18.04 canonical apt repo ver), not this repo's min
+        # Replace once backport to C++14 happened
+        include:
+          # Unix Makefiles
+          - C_COMPILER: [gcc-7]
+            CXX_COMPILER: [g++-7]
+            CMAKE: [3.10.3]
+            GEN: [Unix Makefiles]
+            CONFIG: [Debug, Release]
+          - C_COMPILER: [gcc-11]
+            CXX_COMPILER: [g++-11]
+            CMAKE: [3.10.3]
+            GEN: [Unix Makefiles]
+            CONFIG: [Debug, Release]
+          - C_COMPILER: [clang-8]
+            CXX_COMPILER: [clang++-8]
+            CMAKE: [3.10.3]
+            GEN: [Unix Makefiles]
+            CONFIG: [Debug, Release]
+          - C_COMPILER: [clang-13]
+            CXX_COMPILER: [clang++-13]
+            CMAKE: [3.10.3]
+            GEN: [Unix Makefiles]
+            CONFIG: [Debug, Release]
+          - C_COMPILER: [gcc-7]
+            CXX_COMPILER: [g++-7]
+            CMAKE: [3.22.1]
+            GEN: [Ninja Multi-Config]
+          - C_COMPILER: [gcc-11]
+            CXX_COMPILER: [g++-11]
+            CMAKE: [3.22.1]
+            GEN: [Ninja Multi-Config]
+          - C_COMPILER: [clang-8]
+            CXX_COMPILER: [clang++-8]
+            CMAKE: [3.22.1]
+            GEN: [Ninja Multi-Config]
+          - C_COMPILER: [clang-13]
+            CXX_COMPILER: [clang++-13]
+            CMAKE: [3.22.1]
+            GEN: [Ninja Multi-Config]
     env:
-      CMAKE_URL: https://github.com/Kitware/CMake/releases/download/v${{ matrix.CMAKE }}/cmake-${{ matrix.CMAKE }}-Linux-x86_64.tar.gz
       CMAKE_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/cmake
       CTEST_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/ctest
-      INTEL_OCL_URL: https://github.com/intel/llvm/releases/download/2021-WW50/oclcpuexp-2021.13.11.0.23_rel.tar.gz
-      INTEL_TBB_URL: https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz
 
 
     steps:
@@ -38,107 +71,58 @@ jobs:
     - name: Checkout OpenCL-ICD-Loader
       uses: actions/checkout@v2
       with:
-        repository: StreamHPC/OpenCL-ICD-Loader
-        ref: develop_stream
+        repository: KhronosGroup/OpenCL-ICD-Loader
         path: external/OpenCL-ICD-Loader
-      # Temporary redirection to external repo. Changes needed from there.
-
-    - name: Cache CMake install
-      id: cmake-install
-      uses: actions/cache@v2
-      with:
-        path: |
-          /opt/Kitware
-        key: ${{runner.os}}-cmake-${{matrix.CMAKE}}
-
-    - name: Cache Intel OpenCL CPU install
-      id: intel-ocl-install
-      uses: actions/cache@v2
-      with:
-        path: |
-          /opt/Intel
-        key: ${{runner.os}}-ocl-url-${{env.INTEL_OCL_URL}}-tbb-url-${{env.INTEL_TBB_URL}}
-
-    - name: Install CMake
-      if: steps.cmake-install.outputs.cache-hit != 'true'
-      run: |
-        mkdir -p /opt/Kitware/CMake;
-        wget -c $CMAKE_URL -O - | tar -xz --directory /opt/Kitware/CMake;
-        mv /opt/Kitware/CMake/cmake-${{ matrix.CMAKE }}-* /opt/Kitware/CMake/${{ matrix.CMAKE }}
-
-    - name: Install Intel OpenCL CPU
-      if: steps.intel-ocl-install.outputs.cache-hit != 'true'
-      run: |
-        mkdir -p /opt/Intel/oclcpuexp
-        wget -c -O - ${INTEL_OCL_URL} | tar -xz --directory /opt/Intel/oclcpuexp
-        wget -c -O - ${INTEL_TBB_URL} | tar -xz --directory /opt/Intel
-        mv /opt/Intel/oneapi-tbb* /opt/Intel/oneapi-tbb
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so         /opt/Intel/oclcpuexp/x64/libtbb.so
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so   /opt/Intel/oclcpuexp/x64/libtbbmalloc.so
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so.12      /opt/Intel/oclcpuexp/x64/libtbb.so.12
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so.2 /opt/Intel/oclcpuexp/x64/libtbbmalloc.so.2
-        sudo mkdir -p /etc/OpenCL/vendors
-        echo /opt/Intel/oclcpuexp/x64/libintelocl.so | sudo tee /etc/OpenCL/vendors/intel_expcpu.icd
-
-    - name: Create Build Environment
-      run: sudo apt-get update -q;
-        if [[ "${{matrix.GEN}}" =~ "Ninja" && ! `which ninja` ]]; then sudo apt install -y ninja-build; fi;
-        sudo apt install gcc-${{matrix.VER}} g++-${{matrix.VER}}; 
-        if [[ "${{matrix.BIN}}" == "32" ]];
-        then sudo apt install gcc-${{matrix.VER}}-multilib g++-${{matrix.VER}}-multilib;
-        fi;
-        echo /opt/Intel/oclcpuexp/x64 | sudo tee /etc/ld.so.conf.d/libintelopenclexp.conf
-        sudo ldconfig
 
     - name: Build & install OpenCL-Headers
-      run: $CMAKE_EXE
-        -G "${{matrix.GEN}}"
-        -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}
-        -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
-        -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
-        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
-        -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
-        -B$GITHUB_WORKSPACE/external/OpenCL-Headers/build
-        -H$GITHUB_WORKSPACE/external/OpenCL-Headers &&
-        $CMAKE_EXE
-        --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build
-        --target install
-        --
-        -j`nproc`
+      run: |
+        $CMAKE_EXE \
+          -G "${{matrix.GEN}}" \
+          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}`; fi;` \
+          -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}" \
+          -D CMAKE_C_COMPILER=${{matrix.C_COMPILER}} \
+          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} \
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install \
+          -B$GITHUB_WORKSPACE/external/OpenCL-Headers/build \
+          -H$GITHUB_WORKSPACE/external/OpenCL-Headers ;
+        $CMAKE_EXE \
+          --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build \
+          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo --config Release`; fi;` \
+          --target install \
+          -- \
+          -j`nproc`
 
     - name: Build & install OpenCL-ICD-Loader
-      run: $CMAKE_EXE
-        -G "${{matrix.GEN}}"
-        -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}
-        -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
-        -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
-        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
-        -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
-        -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install
-        -B$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
-        -H$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader &&
-        $CMAKE_EXE
-        --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
-        --target install
-        --
-        -j`nproc`
+      run: |
+        $CMAKE_EXE \
+          -G "${{matrix.GEN}}" \
+          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}`; fi;` \
+          -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}" \
+          -D CMAKE_C_COMPILER=${{matrix.C_COMPILER}} \
+          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} \
+          -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install \
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install \
+          -B$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build \
+          -H$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader ;
+        $CMAKE_EXE \
+          --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build \
+          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo --config Release`; fi;` \
+          --target install \
+          -- \
+          -j`nproc`
 
     - name: Configure
       shell: bash
-      # no -Werror during configuration because:
-      # warning: ISO C forbids assignment between function pointer and ‘void *’ [-Wpedantic]
-      # warning: unused parameter [-Wunused-parameter]
-      run:
-        $CMAKE_EXE
+      run: $CMAKE_EXE
         -G "${{matrix.GEN}}"
         -D OPENCL_LAYERS_BUILD_TESTING=ON
         -D BUILD_TESTING=ON
-        -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}
+        `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}`; fi;`
         -D CMAKE_C_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
-        -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
+        -D CMAKE_C_COMPILER=${{matrix.C_COMPILER}}
         -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_CXX_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
-        -D CMAKE_CXX_COMPILER=g++-${{matrix.VER}}
+        -D CMAKE_CXX_COMPILER=${{matrix.CXX_COMPILER}}
         -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install"
@@ -147,147 +131,21 @@ jobs:
 
     - name: Build
       shell: bash
-      run: $CMAKE_EXE
-        --build $GITHUB_WORKSPACE/build
-        --
-        -j`nproc`
+      run: if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]];
+        then
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/build -- -j`nproc`;
+        else
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/build --config Debug   -- -j`nproc`;
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/build --config Release -- -j`nproc`;
+        fi;
 
     - name: Test
       shell: bash
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
-      run: $CTEST_EXE
-        --output-on-failure
-        --parallel `nproc`
-
-
-
-
-  cmake-latest:
-    runs-on: ${{ matrix.OS }}
-    container: streamhpc/opencl-sdk-base:ubuntu-18.04-20211119
-    strategy:
-      matrix:
-        OS : [ubuntu-20.04]
-        VER: [9, 10] # clang-11, clang-13
-        EXT: [OFF]
-        GEN: [Ninja Multi-Config]
-        BIN: [64] # 32 (no multilib package installed in image)
-        CMAKE: [3.21.2]
-    env:
-      CMAKE_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/cmake
-      CTEST_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/ctest
-      INTEL_OCL_URL: https://github.com/intel/llvm/releases/download/2021-WW50/oclcpuexp-2021.13.11.0.23_rel.tar.gz
-      INTEL_TBB_URL: https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz
-
-
-    steps:
-    - name: Checkout OpenCL-Layers
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-
-    - name: Checkout OpenCL-Headers
-      uses: actions/checkout@v2
-      with:
-        repository: KhronosGroup/OpenCL-Headers
-        path: external/OpenCL-Headers
-
-    - name: Checkout OpenCL-ICD-Loader
-      uses: actions/checkout@v2
-      with:
-        repository: StreamHPC/OpenCL-ICD-Loader
-        ref: develop_stream
-        path: external/OpenCL-ICD-Loader
-      # Temporary redirection to external repo. Changes needed from there.
-
-    - name: Cache Intel OpenCL CPU install
-      id: intel-ocl-install
-      uses: actions/cache@v2
-      with:
-        path: |
-          /opt/Intel
-        key: ${{runner.os}}-ocl-url-${{env.INTEL_OCL_URL}}-tbb-url-${{env.INTEL_TBB_URL}}
-
-    - name: Install Intel OpenCL CPU
-      if: steps.intel-ocl-install.outputs.cache-hit != 'true'
-      run: |
-        mkdir -p /opt/Intel/oclcpuexp
-        wget -c -O - ${INTEL_OCL_URL} | tar -xz --directory /opt/Intel/oclcpuexp
-        wget -c -O - ${INTEL_TBB_URL} | tar -xz --directory /opt/Intel
-        mv /opt/Intel/oneapi-tbb* /opt/Intel/oneapi-tbb
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so         /opt/Intel/oclcpuexp/x64/libtbb.so
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so   /opt/Intel/oclcpuexp/x64/libtbbmalloc.so
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbb.so.12      /opt/Intel/oclcpuexp/x64/libtbb.so.12
-        ln -s /opt/Intel/oneapi-tbb/lib/intel64/gcc4.8/libtbbmalloc.so.2 /opt/Intel/oclcpuexp/x64/libtbbmalloc.so.2
-        sudo mkdir -p /etc/OpenCL/vendors
-        echo /opt/Intel/oclcpuexp/x64/libintelocl.so | sudo tee /etc/OpenCL/vendors/intel_expcpu.icd
-
-    - name: Create Build Environment
-      run: |
-        echo /opt/Intel/oclcpuexp/x64 | sudo tee /etc/ld.so.conf.d/libintelopenclexp.conf
-        sudo ldconfig
-
-
-
-    - name: Build & install OpenCL-Headers
-      run: $CMAKE_EXE
-        -G "${{matrix.GEN}}"
-        -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
-        -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
-        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
-        -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
-        -B $GITHUB_WORKSPACE/external/OpenCL-Headers/build
-        -S $GITHUB_WORKSPACE/external/OpenCL-Headers &&
-        $CMAKE_EXE
-        --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build
-        --target install
-        --config Release
-        --
-        -j`nproc`
-
-    - name: Build & install OpenCL-ICD-Loader
-      run: $CMAKE_EXE
-        -G "${{matrix.GEN}}"
-        -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
-        -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
-        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
-        -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
-        -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install
-        -B $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
-        -S $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader &&
-        $CMAKE_EXE
-        --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
-        --target install
-        --config Release
-        --
-        -j`nproc`
-
-    - name: Configure
-      shell: bash
-      run: $CMAKE_EXE
-        -G "${{matrix.GEN}}"
-        -D OPENCL_LAYERS_BUILD_TESTING=ON
-        -D BUILD_TESTING=ON
-        -D CMAKE_C_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
-        -D CMAKE_C_COMPILER=gcc-${{matrix.VER}}
-        -D CMAKE_C_EXTENSIONS=${{matrix.EXT}}
-        -D CMAKE_CXX_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
-        -D CMAKE_CXX_COMPILER=g++-${{matrix.VER}}
-        -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}}
-        -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
-        -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install"
-        -B $GITHUB_WORKSPACE/build
-        -S $GITHUB_WORKSPACE
-
-    - name: Build
-      shell: bash
-      run: |
-        $CMAKE_EXE --build $GITHUB_WORKSPACE/build --config Release -- -j`nproc`;
-        $CMAKE_EXE --build $GITHUB_WORKSPACE/build --config Debug   -- -j`nproc`
-
-    - name: Test
-      shell: bash
-      working-directory: ${{runner.workspace}}/OpenCL-Layers/build
-      run: |
-        $CTEST_EXE --output-on-failure -C Release --parallel `nproc`;
-        $CTEST_EXE --output-on-failure -C Debug   --parallel `nproc`;
+      run: if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]];
+        then
+          $CTEST_EXE --output-on-failure --parallel `nproc`;
+        else
+          $CTEST_EXE --output-on-failure -C Debug   --parallel `nproc`;
+          $CTEST_EXE --output-on-failure -C Release --parallel `nproc`;
+        fi;
