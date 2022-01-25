@@ -1,4 +1,5 @@
-cmake_minimum_required (VERSION 3.8) # cxx_std_17
+cmake_minimum_required (VERSION 3.1)
+cmake_policy(VERSION 3.1..3.21)
 
 # Include guard for including this project multiple times
 if (TARGET PrintLayer)
@@ -26,6 +27,26 @@ else ()
         find_package (OpenCLHeaders REQUIRED)
     endif ()
 endif ()
+
+if(OPENCL_LAYERS_BUILD_TESTING)
+    if (NOT TARGET OpenCL)
+        if(APPLE) # Apple's own loader can't load layers. We have to avoid it.
+          find_package (OpenCLICDLoader REQUIRED)
+        else()
+          find_package (OpenCL REQUIRED)
+        endif()
+    endif ()
+endif ()
+
+if(CMAKE_VERSION VERSION_LESS 3.7)
+    add_library(OpenCL_lib INTERFACE)
+    target_include_directories(OpenCL_lib INTERFACE ${OpenCL_INCLUDE_DIRS})
+    target_link_libraries(OpenCL_lib INTERFACE ${OpenCL_LIBRARIES})
+    add_library(OpenCL::OpenCL ALIAS OpenCL_lib)
+endif()
+
+set(CMAKE_C_EXTENSIONS OFF)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Common layer flags
 add_library (LayersCommon INTERFACE)

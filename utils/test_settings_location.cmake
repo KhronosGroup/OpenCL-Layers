@@ -1,5 +1,7 @@
+include(CMakeParseArguments)
+
 function(run_cmd_expect)
-    cmake_parse_arguments(PARSE_ARGV 0 ARG "" "EXPECTED" "COMMAND")
+    cmake_parse_arguments(ARG "" "EXPECTED" "COMMAND" "${ARGV}")
 
     execute_process(
         COMMAND ${ARG_COMMAND}
