@@ -30,13 +30,17 @@ endif ()
 # Common layer flags
 add_library (LayersCommon INTERFACE)
 
-target_link_libraries (LayersCommon INTERFACE OpenCL::Headers)
+# C and C++ standard, 
+if (CMAKE_VERSION VERSION_LESS 3.8)
+    set(CMAKE_C_STANDARD 11)
+    set(CMAKE_C_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_STANDARD 14)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+else()
+    target_compile_features(LayersCommon INTERFACE c_std_11 cxx_std_14)
+endif()
 
-target_compile_features (LayersCommon
-    INTERFACE
-        c_std_11
-        cxx_std_17
-)
+target_link_libraries (LayersCommon INTERFACE OpenCL::Headers)
 
 target_compile_definitions (LayersCommon
     INTERFACE

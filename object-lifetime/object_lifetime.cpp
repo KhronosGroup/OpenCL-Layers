@@ -8,7 +8,7 @@
 #include <map>
 #include <iostream>
 #include <list>
-#include <string_view>
+#include <string>
 #include <fstream>
 #include <algorithm>
 
@@ -49,7 +49,7 @@ static const char * object_type_names[] = {
   "SAMPLER"
 };
 
-static inline constexpr std::string_view rtrim(const std::string_view s) {
+static inline std::string rtrim(const std::string& s) {
   return s.substr(0, s.size() - 5);
 }
 
@@ -61,7 +61,7 @@ std::map<void*, type_count> objects;
 std::map<void*, std::list<type_count>> deleted_objects;
 std::mutex objects_mutex;
 
-static void error_already_exist(const std::string_view &func, void *handle, object_type t, cl_long ref_count) {
+static void error_already_exist(const std::string& func, void *handle, object_type t, cl_long ref_count) {
   std::cerr << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -69,7 +69,7 @@ static void error_already_exist(const std::string_view &func, void *handle, obje
   std::cerr.flush();
 }
 
-static void error_ref_count(const std::string_view &func, void *handle, object_type t, cl_long ref_count) {
+static void error_ref_count(const std::string& func, void *handle, object_type t, cl_long ref_count) {
   std::cerr << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -77,7 +77,7 @@ static void error_ref_count(const std::string_view &func, void *handle, object_t
   std::cerr.flush();
 }
 
-static void error_invalid_type(const std::string_view &func, void *handle, object_type t, object_type expect) {
+static void error_invalid_type(const std::string& func, void *handle, object_type t, object_type expect) {
   std::cerr << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -86,7 +86,7 @@ static void error_invalid_type(const std::string_view &func, void *handle, objec
   std::cerr.flush();
 }
 
-static void error_does_not_exist(const std::string_view &func, void *handle, object_type t) {
+static void error_does_not_exist(const std::string& func, void *handle, object_type t) {
   std::cerr << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -101,7 +101,7 @@ static void error_does_not_exist(const std::string_view &func, void *handle, obj
   std::cerr.flush();
 }
 
-static void error_invalid_release(const std::string_view &func, void *handle, object_type t) {
+static void error_invalid_release(const std::string& func, void *handle, object_type t) {
   std::cerr << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -110,7 +110,7 @@ static void error_invalid_release(const std::string_view &func, void *handle, ob
 }
 
 template<object_type T>
-static inline void check_exists_no_lock(const std::string_view &func, void *handle) {
+static inline void check_exists_no_lock(const std::string& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     error_does_not_exist(func, handle, T);
@@ -122,14 +122,14 @@ static inline void check_exists_no_lock(const std::string_view &func, void *hand
 }
 
 template<object_type T>
-static void check_exists(const std::string_view &func, void *handle) {
+static void check_exists(const std::string& func, void *handle) {
   objects_mutex.lock();
   check_exists_no_lock<T>(func, handle);
   objects_mutex.unlock();
 }
 
 template<>
-void check_exists_no_lock<OCL_PLATFORM>(const std::string_view &func, void *handle) {
+void check_exists_no_lock<OCL_PLATFORM>(const std::string& func, void *handle) {
   if(!handle)
     return;
   auto it = objects.find(handle);
@@ -141,7 +141,7 @@ void check_exists_no_lock<OCL_PLATFORM>(const std::string_view &func, void *hand
 }
 
 template<>
-void check_exists_no_lock<OCL_DEVICE>(const std::string_view &func, void *handle) {
+void check_exists_no_lock<OCL_DEVICE>(const std::string& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     error_does_not_exist(func, handle, OCL_DEVICE);
@@ -153,7 +153,7 @@ void check_exists_no_lock<OCL_DEVICE>(const std::string_view &func, void *handle
 }
 
 template<>
-void check_exists_no_lock<OCL_MEM>(const std::string_view &func, void *handle) {
+void check_exists_no_lock<OCL_MEM>(const std::string& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     error_does_not_exist(func, handle, OCL_MEM);
@@ -176,7 +176,7 @@ void check_exists_no_lock<OCL_MEM>(const std::string_view &func, void *handle) {
 #define CHECK_EXISTS(type, handle) check_exists<type>(RTRIM_FUNC, handle)
 
 template<object_type T>
-static void check_exist_list(const std::string_view &func, cl_uint num_handles, void **handles) {
+static void check_exist_list(const std::string& func, cl_uint num_handles, void **handles) {
   if (!handles)
     return;
   objects_mutex.lock();
@@ -189,7 +189,7 @@ static void check_exist_list(const std::string_view &func, cl_uint num_handles, 
 #define CHECK_EXIST_LIST(type, num_handles, handles) check_exist_list<type>(RTRIM_FUNC, num_handles, (void **)handles)
 
 template<object_type T>
-static inline void check_creation_no_lock(const std::string_view &func, void *handle) {
+static inline void check_creation_no_lock(const std::string& func, void *handle) {
   auto it = objects.find(handle);
   if (it != objects.end()) {
     if (std::get<1>(it->second) > 0) {
@@ -201,7 +201,7 @@ static inline void check_creation_no_lock(const std::string_view &func, void *ha
 }
 
 template<>
-void check_creation_no_lock<OCL_DEVICE>(const std::string_view &func, void *handle) {
+void check_creation_no_lock<OCL_DEVICE>(const std::string& func, void *handle) {
   auto it = objects.find(handle);
   if (it != objects.end() && std::get<0>(it->second) != OCL_DEVICE) {
     error_already_exist(func, handle, std::get<0>(it->second), std::get<1>(it->second));
@@ -211,7 +211,7 @@ void check_creation_no_lock<OCL_DEVICE>(const std::string_view &func, void *hand
 }
 
 template<>
-void check_creation_no_lock<OCL_PLATFORM>(const std::string_view &func, void *handle) {
+void check_creation_no_lock<OCL_PLATFORM>(const std::string& func, void *handle) {
   auto it = objects.find(handle);
   if (it != objects.end() && std::get<0>(it->second) != OCL_PLATFORM) {
     error_already_exist(func, handle, std::get<0>(it->second), std::get<1>(it->second));
@@ -221,7 +221,7 @@ void check_creation_no_lock<OCL_PLATFORM>(const std::string_view &func, void *ha
 }
 
 template<object_type T>
-static void check_creation(const std::string_view &func, void *handle) {
+static void check_creation(const std::string& func, void *handle) {
   objects_mutex.lock();
   check_creation_no_lock<T>(func, handle);
   objects_mutex.unlock();
@@ -230,7 +230,7 @@ static void check_creation(const std::string_view &func, void *handle) {
 #define CHECK_CREATION(type, handle) check_creation<type>(RTRIM_FUNC, handle)
 
 template<object_type T>
-static void check_creation_list(const std::string_view &func, cl_uint num_handles, void **handles) {
+static void check_creation_list(const std::string& func, cl_uint num_handles, void **handles) {
   objects_mutex.lock();
   for (cl_uint i = 0; i < num_handles; i++) {
     check_creation_no_lock<T>(func, handles[i]);
@@ -241,7 +241,7 @@ static void check_creation_list(const std::string_view &func, cl_uint num_handle
 #define CHECK_CREATION_LIST(type, num_handles, handles) check_creation_list<type>(RTRIM_FUNC, num_handles, (void **)handles)
 
 template<object_type T>
-static void check_add_or_exists(const std::string_view &func, void *handle) {
+static void check_add_or_exists(const std::string& func, void *handle) {
   objects_mutex.lock();
   auto it = objects.find(handle);
   if (it != objects.end()) {
@@ -261,7 +261,7 @@ static void check_add_or_exists(const std::string_view &func, void *handle) {
 #define CHECK_ADD_OR_EXISTS(type, handle) check_add_or_exists<type>(RTRIM_FUNC, handle)
 
 template<object_type T>
-static void check_release(const std::string_view &func, void *handle) {
+static void check_release(const std::string& func, void *handle) {
   objects_mutex.lock();
   auto it = objects.find(handle);
   if (it == objects.end()) {
@@ -281,7 +281,7 @@ static void check_release(const std::string_view &func, void *handle) {
 }
 
 template<>
-void check_release<OCL_DEVICE>(const std::string_view &func, void *handle) {
+void check_release<OCL_DEVICE>(const std::string& func, void *handle) {
   objects_mutex.lock();
   auto it = objects.find(handle);
   if (it == objects.end()) {
@@ -305,7 +305,7 @@ void check_release<OCL_DEVICE>(const std::string_view &func, void *handle) {
 }
 
 template<>
-void check_release<OCL_MEM>(const std::string_view &func, void *handle) {
+void check_release<OCL_MEM>(const std::string& func, void *handle) {
   objects_mutex.lock();
   auto it = objects.find(handle);
   if (it == objects.end()) {
@@ -334,7 +334,7 @@ void check_release<OCL_MEM>(const std::string_view &func, void *handle) {
 #define CHECK_RELEASE(type, handle) check_release<type>(RTRIM_FUNC, handle);
 
 template<object_type T>
-static void check_retain(const std::string_view &func, void *handle) {
+static void check_retain(const std::string& func, void *handle) {
   objects_mutex.lock();
   auto it = objects.find(handle);
   if (it == objects.end()) {
@@ -351,7 +351,7 @@ static void check_retain(const std::string_view &func, void *handle) {
 }
 
 template<>
-void check_retain<OCL_DEVICE>(const std::string_view &func, void *handle) {
+void check_retain<OCL_DEVICE>(const std::string& func, void *handle) {
   objects_mutex.lock();
   auto it = objects.find(handle);
   if (it == objects.end()) {
@@ -372,7 +372,7 @@ void check_retain<OCL_DEVICE>(const std::string_view &func, void *handle) {
 }
 
 template<>
-void check_retain<OCL_MEM>(const std::string_view &func, void *handle) {
+void check_retain<OCL_MEM>(const std::string& func, void *handle) {
   objects_mutex.lock();
   auto it = objects.find(handle);
   if (it == objects.end()) {
