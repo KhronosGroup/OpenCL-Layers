@@ -11,6 +11,7 @@
 #include <string>
 #include <fstream>
 #include <algorithm>
+#include <memory>
 
 #include <cstdlib>
 
@@ -61,52 +62,64 @@ std::map<void*, type_count> objects;
 std::map<void*, std::list<type_count>> deleted_objects;
 std::mutex objects_mutex;
 
+namespace {
+struct stream_deleter {
+  void operator()(std::ostream *stream) noexcept {
+    if (stream != &std::cout && stream != &std::cerr) {
+      delete stream;
+    }
+  }
+};
+
+std::unique_ptr<std::ostream, stream_deleter> log_stream;
+}
+
 static void error_already_exist(const std::string& func, void *handle, object_type t, cl_long ref_count) {
-  std::cerr << "In " << func << " " <<
+  *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
                " already exist with refcount: " << ref_count << "\n";
-  std::cerr.flush();
+  log_stream->flush();
 }
 
 static void error_ref_count(const std::string& func, void *handle, object_type t, cl_long ref_count) {
-  std::cerr << "In " << func << " " <<
+  *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
                " used with refcount: " << ref_count << "\n";
-  std::cerr.flush();
+  log_stream->flush();
 }
 
 static void error_invalid_type(const std::string& func, void *handle, object_type t, object_type expect) {
-  std::cerr << "In " << func << " " <<
+  *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
                " was used whereas function expects: " <<
                object_type_names[expect] << "\n";
-  std::cerr.flush();
+  log_stream->flush();
 }
 
 static void error_does_not_exist(const std::string& func, void *handle, object_type t) {
-  std::cerr << "In " << func << " " <<
+  *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
                " was used but ";
   auto it = deleted_objects.find(handle);
   if (it == deleted_objects.end()) {
-    std::cerr << "it does not exist" << "\n";
+    *log_stream << "it does not exist" << "\n";
   } else {
-    std::cerr << "it was recently deleted with type: " <<
+    *log_stream << "it was recently deleted with type: " <<
                  object_type_names[std::get<0>(it->second.back())] << "\n";
   }
-  std::cerr.flush();
+  log_stream->flush();
 }
 
 static void error_invalid_release(const std::string& func, void *handle, object_type t) {
-  std::cerr << "In " << func << " " <<
+  *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
                " was released before being retained" << "\n";
-  std::cerr.flush();
+  log_stream->flush();
 }
 
 template<object_type T>
@@ -394,11 +407,11 @@ void check_retain<OCL_MEM>(const std::string& func, void *handle) {
 
 static void report() {
   objects_mutex.lock();
-  std::cerr << "OpenCL objects leaks:\n";
+  *log_stream << "OpenCL objects leaks:\n";
   for (auto it = objects.begin(); it != objects.end(); ++it) {
     if (std::get<1>(it->second) > 0) {
       object_type t = std::get<0>(it->second);
-      std::cerr << object_type_names[t] << " (" <<
+      *log_stream << object_type_names[t] << " (" <<
                 it->first << ") reference count: " <<
                 std::get<1>(it->second) << "\n";
     }
@@ -465,7 +478,27 @@ layer_settings layer_settings::load() {
 
   return settings;
 }
+}
 
+layer_settings settings;
+
+void init_output_stream() {
+  switch(settings.log_type) {
+  case layer_settings::DebugLogType::StdOut:
+    log_stream.reset(&std::cout);
+    break;
+  case layer_settings::DebugLogType::StdErr:
+    log_stream.reset(&std::cerr);
+    break;
+  case layer_settings::DebugLogType::File:
+    log_stream.reset(new std::ofstream(settings.log_filename));
+    break;
+  }
+
+  if(log_stream->fail()) {
+    std::cerr << "object_lifetime failed to open specified output stream: "
+              << settings.log_filename << ". Falling back to stderr." << '\n';
+  }
 }; // namespace
 
 static void _init_dispatch(void);
@@ -479,11 +512,8 @@ clInitLayer(
   if (!target_dispatch || !layer_dispatch_ret ||!num_entries_out || num_entries < sizeof(dispatch)/sizeof(dispatch.clGetPlatformIDs))
     return CL_INVALID_VALUE;
 
-  const auto settings = layer_settings::load();
-  std::cerr << "Loaded settings from cl_layer_settings.txt:\n";
-  std::cerr << "  Log type: " << (int)settings.log_type << '\n';
-  std::cerr << "  Log filename: " << settings.log_filename << '\n';
-  std::cerr << "  transparent: " << std::boolalpha << settings.transparent << '\n';
+  settings = layer_settings::load();
+  init_output_stream();
 
   tdispatch = target_dispatch;
   _init_dispatch();

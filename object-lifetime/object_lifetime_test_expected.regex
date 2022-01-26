@@ -1,0 +1,6 @@
+^SUCCESS: clGetPlatformIDs
+SUCCESS: clGetDeviceIDs
+SUCCESS: clCreateContext
+SUCCESS: clCreateContext
+SUCCESS: clCreateContext
+$
