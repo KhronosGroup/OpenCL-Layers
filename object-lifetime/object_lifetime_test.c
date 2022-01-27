@@ -69,10 +69,10 @@ int main()
     expectSuccess(CL_err, "clCreateContext");
 
     CL_err = clReleaseContext(context);
-    expectSuccess(CL_err, "clCreateContext");
+    expectSuccess(CL_err, "clReleaseContext");
 
     CL_err = clReleaseContext(context);
-    logError(CL_err, "clCreateContext");
+    logError(CL_err, "clReleaseContext");
 
     fflush(stdout);
 
