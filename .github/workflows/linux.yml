@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   compatibility:
     runs-on: ubuntu-18.04
-    container: streamhpc/opencl-sdk-intelcpu:ubuntu-18.04-20220120
+    container: streamhpc/opencl-sdk-intelcpu:ubuntu-18.04-20220127
     strategy:
       matrix:
         # TODO: CMake 3.10.3 is SDK minimum (and ubuntu 18.04 canonical apt repo ver), not this repo's min
