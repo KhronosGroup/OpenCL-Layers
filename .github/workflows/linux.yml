@@ -87,7 +87,7 @@ jobs:
       run: |
         $CMAKE_EXE \
           -G "${{matrix.GEN}}" \
-          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}`; fi;` \
+          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}; fi;` \
           -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}" \
           -D CMAKE_C_COMPILER=${{matrix.C_COMPILER}} \
           -D CMAKE_C_EXTENSIONS=OFF \
@@ -96,7 +96,7 @@ jobs:
           -H$GITHUB_WORKSPACE/external/OpenCL-Headers ;
         $CMAKE_EXE \
           --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build \
-          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo --config Release`; fi;` \
+          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo --config Release; fi;` \
           --target install \
           -- \
           -j`nproc`
@@ -105,7 +105,7 @@ jobs:
       run: |
         $CMAKE_EXE \
           -G "${{matrix.GEN}}" \
-          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}`; fi;` \
+          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}; fi;` \
           -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}" \
           -D CMAKE_C_COMPILER=${{matrix.C_COMPILER}} \
           -D CMAKE_C_EXTENSIONS=OFF \
@@ -115,7 +115,7 @@ jobs:
           -H$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader ;
         $CMAKE_EXE \
           --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build \
-          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo --config Release`; fi;` \
+          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo --config Release; fi;` \
           --target install \
           -- \
           -j`nproc`
@@ -126,7 +126,7 @@ jobs:
         -G "${{matrix.GEN}}"
         -D OPENCL_LAYERS_BUILD_TESTING=ON
         -D BUILD_TESTING=ON
-        `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}`; fi;`
+        `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}; fi;`
         -D CMAKE_C_FLAGS="-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}"
         -D CMAKE_C_COMPILER=${{matrix.C_COMPILER}}
         -D CMAKE_C_EXTENSIONS=OFF
