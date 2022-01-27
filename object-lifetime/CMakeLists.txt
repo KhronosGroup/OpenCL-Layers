@@ -30,7 +30,7 @@ if (OPENCL_LAYERS_BUILD_TESTING)
     )
     set(TEST_ENVIRONMENT
             OPENCL_LAYERS=$<TARGET_FILE:CLObjectLifetimeLayer>
-            CL_OBJECT_LIFETIME_TRANSPARENT=ON
+            CL_OBJECT_LIFETIME_TRANSPARENT=1
             CL_OBJECT_LIFETIME_LOG_SINK=file
             CL_OBJECT_LIFETIME_LOG_FILENAME=CLObjectLifetimeLayerTest.log)
     set_tests_properties (CLObjectLifetimeLayerTest
