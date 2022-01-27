@@ -84,6 +84,7 @@ jobs:
         path: external/OpenCL-ICD-Loader
 
     - name: Build & install OpenCL-Headers
+      shell: bash
       run: |
         $CMAKE_EXE \
           -G "${{matrix.GEN}}" \
@@ -102,6 +103,7 @@ jobs:
           -j`nproc`
 
     - name: Build & install OpenCL-ICD-Loader
+      shell: bash
       run: |
         $CMAKE_EXE \
           -G "${{matrix.GEN}}" \
