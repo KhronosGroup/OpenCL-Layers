@@ -96,7 +96,7 @@ jobs:
           -H$GITHUB_WORKSPACE/external/OpenCL-Headers ;
         $CMAKE_EXE \
           --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build \
-          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo --config Release; fi;` \
+          `if [[ "${{matrix.GEN}}" == "Ninja Multi-Config" ]]; then echo --config Release; fi;` \
           --target install \
           -- \
           -j`nproc`
@@ -115,7 +115,7 @@ jobs:
           -H$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader ;
         $CMAKE_EXE \
           --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build \
-          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo --config Release; fi;` \
+          `if [[ "${{matrix.GEN}}" == "Ninja Multi-Config" ]]; then echo --config Release; fi;` \
           --target install \
           -- \
           -j`nproc`
