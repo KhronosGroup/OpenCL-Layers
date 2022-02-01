@@ -72,13 +72,19 @@ static inline std::string rtrim(const std::string& s) {
 
 #define RTRIM_FUNC rtrim(__func__)
 
-typedef std::tuple<object_type, cl_long> type_count;
+namespace {
 
-std::map<void*, type_count> objects;
-std::map<void*, std::list<type_count>> deleted_objects;
+struct object_record {
+  object_type type;
+  cl_long     refcount;
+  void*       parent = nullptr;
+  cl_long     num_children = 0;
+};
+
+std::map<void*, object_record> objects;
+std::map<void*, std::list<object_record>> deleted_objects;
 std::mutex objects_mutex;
 
-namespace {
 struct stream_deleter {
   void operator()(std::ostream *stream) noexcept {
     if (stream != &std::cout && stream != &std::cerr) {
@@ -157,7 +163,7 @@ static cl_int error_does_not_exist(const std::string& func, void *handle, object
     *log_stream << "it does not exist" << "\n";
   } else {
     *log_stream << "it was recently deleted with type: " <<
-                 object_type_names[std::get<0>(it->second.back())] << "\n";
+                 object_type_names[it->second.back().type] << "\n";
   }
   log_stream->flush();
   return settings.transparent ? CL_SUCCESS : object_errors[t];
@@ -177,10 +183,10 @@ static inline cl_int check_exists_no_lock(const std::string& func, void *handle)
   auto it = objects.find(handle);
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, T);
-  } else if (std::get<0>(it->second) != T) {
-    return error_invalid_type(func, handle, std::get<0>(it->second), T);
-  } else if (std::get<1>(it->second) <= 0) {
-    return error_ref_count(func, handle, T, std::get<1>(it->second));
+  } else if (it->second.type != T) {
+    return error_invalid_type(func, handle, it->second.type, T);
+  } else if (it->second.refcount <= 0) {
+    return error_ref_count(func, handle, T, it->second.refcount);
   }
   return CL_SUCCESS;
 }
@@ -198,8 +204,8 @@ cl_int check_exists_no_lock<OCL_PLATFORM>(const std::string& func, void *handle)
   auto it = objects.find(handle);
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_PLATFORM);
-  } else if (std::get<0>(it->second) != OCL_PLATFORM) {
-    return error_invalid_type(func, handle, std::get<0>(it->second), OCL_PLATFORM);
+  } else if (it->second.type != OCL_PLATFORM) {
+    return error_invalid_type(func, handle, it->second.type, OCL_PLATFORM);
   }
   return CL_SUCCESS;
 }
@@ -209,10 +215,10 @@ cl_int check_exists_no_lock<OCL_DEVICE>(const std::string& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_DEVICE);
-  } else if (std::get<0>(it->second) != OCL_DEVICE && std::get<0>(it->second) != OCL_SUB_DEVICE) {
-    return error_invalid_type(func, handle, std::get<0>(it->second), OCL_DEVICE);
-  } else if (std::get<0>(it->second) == OCL_SUB_DEVICE && std::get<1>(it->second) <= 0) {
-    return error_ref_count(func, handle, OCL_SUB_DEVICE, std::get<1>(it->second));
+  } else if (it->second.type != OCL_DEVICE && it->second.type != OCL_SUB_DEVICE) {
+    return error_invalid_type(func, handle, it->second.type, OCL_DEVICE);
+  } else if (it->second.type == OCL_SUB_DEVICE && it->second.refcount <= 0) {
+    return error_ref_count(func, handle, OCL_SUB_DEVICE, it->second.refcount);
   }
   return CL_SUCCESS;
 }
@@ -223,17 +229,17 @@ cl_int check_exists_no_lock<OCL_MEM>(const std::string& func, void *handle) {
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_MEM);
   } else {
-    object_type t = std::get<0>(it->second);
+    object_type t = it->second.type;
     switch (t) {
     case OCL_BUFFER:
     case OCL_IMAGE:
     case OCL_PIPE:
-      if (std::get<1>(it->second) <= 0) {
-        return error_ref_count(func, handle, t, std::get<1>(it->second));
+      if (it->second.refcount <= 0) {
+        return error_ref_count(func, handle, t, it->second.refcount);
       }
       break;
     default:
-      return error_invalid_type(func, handle, std::get<0>(it->second), t);
+      return error_invalid_type(func, handle, it->second.type, t);
     }
   }
   return CL_SUCCESS;
@@ -299,12 +305,12 @@ static inline cl_int check_creation_no_lock(const std::string& func, void *handl
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end()) {
-    if (std::get<1>(it->second) > 0) {
-      result = error_already_exist(func, handle, std::get<0>(it->second), std::get<1>(it->second));
+    if (it->second.refcount > 0) {
+      result = error_already_exist(func, handle, it->second.type, it->second.refcount);
       deleted_objects[handle].push_back(it->second);
     }
   }
-  objects[handle] = type_count(T, 1);
+  objects[handle] =  object_record{T, 1};
   return result;
 }
 
@@ -312,11 +318,11 @@ template<>
 cl_int check_creation_no_lock<OCL_DEVICE>(const std::string& func, void *handle) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
-  if (it != objects.end() && std::get<0>(it->second) != OCL_DEVICE) {
-    result = error_already_exist(func, handle, std::get<0>(it->second), std::get<1>(it->second));
+  if (it != objects.end() && it->second.type != OCL_DEVICE) {
+    result = error_already_exist(func, handle, it->second.type, it->second.refcount);
     deleted_objects[handle].push_back(it->second);
   }
-  objects[handle] = type_count(OCL_DEVICE, 0);
+  objects[handle] = object_record{OCL_DEVICE, 0};
   return result;
 }
 
@@ -324,11 +330,11 @@ template<>
 cl_int check_creation_no_lock<OCL_PLATFORM>(const std::string& func, void *handle) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
-  if (it != objects.end() && std::get<0>(it->second) != OCL_PLATFORM) {
-    result = error_already_exist(func, handle, std::get<0>(it->second), std::get<1>(it->second));
+  if (it != objects.end() && it->second.type != OCL_PLATFORM) {
+    result = error_already_exist(func, handle, it->second.type, it->second.refcount);
     deleted_objects[handle].push_back(it->second);
   }
-  objects[handle] = type_count(OCL_PLATFORM, 0);
+  objects[handle] = object_record{OCL_PLATFORM, 0};
   return result;
 }
 
@@ -382,15 +388,15 @@ static cl_int check_add_or_exists(const std::string& func, void *handle) {
   std::lock_guard<std::mutex> g{objects_mutex};
   auto it = objects.find(handle);
   if (it != objects.end()) {
-    if (std::get<0>(it->second) != T) {
-      if (std::get<1>(it->second) > 0) {
-        result = error_already_exist(func, handle, std::get<0>(it->second), std::get<1>(it->second));
+    if (it->second.type != T) {
+      if (it->second.refcount > 0) {
+        result = error_already_exist(func, handle, it->second.type, it->second.refcount);
         deleted_objects[handle].push_back(it->second);
       }
-      objects[handle] = type_count(T, 0);
+      objects[handle] = object_record{T, 0};
     }
   } else {
-    objects[handle] = type_count(T, 0);
+    objects[handle] = object_record{T, 0};
   }
   return result;
 }
@@ -410,10 +416,10 @@ static cl_int check_release(const std::string& func, void *handle) {
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, T);
   } else {
-    object_type t = std::get<0>(it->second);
+    object_type t = it->second.type;
     if (t == T) {
-      std::get<1>(it->second) -= 1;
-      if (std::get<1>(it->second) < 0) {
+      it->second.refcount -= 1;
+      if (it->second.refcount < 0) {
         return error_invalid_release(func, handle, T);
       }
     } else {
@@ -430,13 +436,13 @@ cl_int check_release<OCL_DEVICE>(const std::string& func, void *handle) {
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_DEVICE);
   } else {
-    object_type t = std::get<0>(it->second);
+    object_type t = it->second.type;
     switch (t) {
     case OCL_DEVICE:
       break;
     case OCL_SUB_DEVICE:
-      std::get<1>(it->second) -= 1;
-      if (std::get<1>(it->second) < 0) {
+      it->second.refcount -= 1;
+      if (it->second.refcount < 0) {
         return error_invalid_release(func, handle, OCL_SUB_DEVICE);
       }
       break;
@@ -454,16 +460,16 @@ cl_int check_release<OCL_MEM>(const std::string& func, void *handle) {
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_MEM);
   } else {
-    object_type t = std::get<0>(it->second);
+    object_type t = it->second.type;
     switch (t) {
     case OCL_BUFFER:
     case OCL_IMAGE:
     case OCL_PIPE:
-      std::get<1>(it->second) -= 1;
-      if (std::get<1>(it->second) == 0) {
+      it->second.refcount -= 1;
+      if (it->second.refcount == 0) {
         deleted_objects[handle].push_back(it->second);
         objects.erase(it);
-      } else if (std::get<1>(it->second) < 0) {
+      } else if (it->second.refcount < 0) {
         return error_invalid_release(func, handle, t);
       }
       break;
@@ -489,9 +495,9 @@ static cl_int check_retain(const std::string& func, void *handle) {
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, T);
   } else {
-    object_type t = std::get<0>(it->second);
+    object_type t = it->second.type;
     if (t == T) {
-      std::get<1>(it->second) += 1;
+      it->second.refcount += 1;
     } else {
       return error_invalid_type(func, handle, t, T);
     }
@@ -506,12 +512,12 @@ cl_int check_retain<OCL_DEVICE>(const std::string& func, void *handle) {
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_DEVICE);
   } else {
-    object_type t = std::get<0>(it->second);
+    object_type t = it->second.type;
     switch (t) {
     case OCL_DEVICE:
       break;
     case OCL_SUB_DEVICE:
-      std::get<1>(it->second) += 1;
+      it->second.refcount += 1;
       break;
     default:
       return error_invalid_type(func, handle, t, OCL_DEVICE);
@@ -527,12 +533,12 @@ cl_int check_retain<OCL_MEM>(const std::string& func, void *handle) {
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_MEM);
   } else {
-    object_type t = std::get<0>(it->second);
+    object_type t = it->second.type;
     switch (t) {
     case OCL_BUFFER:
     case OCL_IMAGE:
     case OCL_PIPE:
-      std::get<1>(it->second) += 1;
+      it->second.refcount += 1;
       break;
     default:
       return error_invalid_type(func, handle, t, OCL_MEM);
@@ -545,16 +551,16 @@ static void report() {
   std::lock_guard<std::mutex> g{objects_mutex};
   bool header_printed = false;
   for (auto it = objects.begin(); it != objects.end(); ++it) {
-    if (std::get<1>(it->second) > 0) {
+    if (it->second.refcount > 0) {
       if(!header_printed) {
         *log_stream << "OpenCL object leaks:\n";
         header_printed = true;
       }
 
-      object_type t = std::get<0>(it->second);
+      object_type t = it->second.type;
       *log_stream << object_type_names[t] << " (" <<
                 it->first << ") reference count: " <<
-                std::get<1>(it->second) << "\n";
+                it->second.refcount << "\n";
     }
   }
   objects.clear();
