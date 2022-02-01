@@ -113,8 +113,6 @@ layer_settings layer_settings::load() {
   parser.get_filename("log_filename", settings.log_filename);
   parser.get_bool("transparent", settings.transparent);
 
-  std::cerr << "transparent: " << std::boolalpha << settings.transparent << '\n';
-
   return settings;
 }
 
