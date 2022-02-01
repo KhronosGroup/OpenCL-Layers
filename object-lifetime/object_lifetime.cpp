@@ -545,9 +545,14 @@ cl_int check_retain<OCL_MEM>(const std::string& func, void *handle) {
 
 static void report() {
   std::lock_guard<std::mutex> g{objects_mutex};
-  *log_stream << "OpenCL objects leaks:\n";
+  bool header_printed = false;
   for (auto it = objects.begin(); it != objects.end(); ++it) {
     if (std::get<1>(it->second) > 0) {
+      if(!header_printed) {
+        *log_stream << "OpenCL object leaks:\n";
+        header_printed = true;
+      }
+
       object_type t = std::get<0>(it->second);
       *log_stream << object_type_names[t] << " (" <<
                 it->first << ") reference count: " <<

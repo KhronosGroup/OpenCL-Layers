@@ -1,3 +1,2 @@
 ^In clReleaseContext CONTEXT: 0x[a-f0-9]+ was released before being retained
-OpenCL objects leaks:
 $
