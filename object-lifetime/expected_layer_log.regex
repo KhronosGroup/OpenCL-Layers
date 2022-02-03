@@ -1,2 +1,3 @@
-^In clReleaseContext CONTEXT: 0x[a-f0-9]+ was released before being retained
+^In clGetContextInfo CONTEXT: 0x[a-f0-9]+ used with refcount: 0
+In clReleaseContext CONTEXT: 0x[a-f0-9]+ was released before being retained
 $

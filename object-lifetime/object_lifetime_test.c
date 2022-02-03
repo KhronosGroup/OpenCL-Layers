@@ -68,9 +68,30 @@ int main()
         clCreateContext(properties, 1, &device, NULL, NULL, &CL_err);
     expectSuccess(CL_err, "clCreateContext");
 
+    // Create a buffer from the context
+    cl_mem buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, 1, NULL, &CL_err);
+    expectSuccess(CL_err, "clCreateBuffer");
+
+    // Release the context, but the buffer should keep it alive
     CL_err = clReleaseContext(context);
     expectSuccess(CL_err, "clReleaseContext");
 
+    // Use the context
+    cl_uint ref_count = 0;
+    CL_err = clGetContextInfo(context, CL_CONTEXT_REFERENCE_COUNT,
+                             sizeof(cl_uint), &ref_count, NULL);
+    expectSuccess(CL_err, "clGetContextInfo");
+
+    // Release the buffer, this should also release the context
+    CL_err = clReleaseMemObject(buffer);
+    expectSuccess(CL_err, "clReleaseMemObject");
+
+    // Use the context, this should fail as the context should be already deleted at this point
+    CL_err = clGetContextInfo(context, CL_CONTEXT_REFERENCE_COUNT,
+                             sizeof(cl_uint), &ref_count, NULL);
+    logError(CL_err, "clGetContextInfo");
+
+    // Try to release the context again
     CL_err = clReleaseContext(context);
     logError(CL_err, "clReleaseContext");
 

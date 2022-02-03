@@ -1,6 +1,10 @@
 ^SUCCESS: clGetPlatformIDs
 SUCCESS: clGetDeviceIDs
 SUCCESS: clCreateContext
+SUCCESS: clCreateBuffer
 SUCCESS: clReleaseContext
+SUCCESS: clGetContextInfo
+SUCCESS: clReleaseMemObject
+SUCCESS: clGetContextInfo
 SUCCESS: clReleaseContext
 $

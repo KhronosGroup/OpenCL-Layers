@@ -186,7 +186,10 @@ static inline cl_int check_exists_no_lock(const std::string& func, void *handle)
   } else if (it->second.type != T) {
     return error_invalid_type(func, handle, it->second.type, T);
   } else if (it->second.refcount <= 0) {
-    return error_ref_count(func, handle, T, it->second.refcount);
+    if(it->second.num_children <= 0) {
+      return error_ref_count(func, handle, T, it->second.refcount);
+    }
+    // TODO: Warn object only kept alive only by its children
   }
   return CL_SUCCESS;
 }
@@ -218,7 +221,12 @@ cl_int check_exists_no_lock<OCL_DEVICE>(const std::string& func, void *handle) {
   } else if (it->second.type != OCL_DEVICE && it->second.type != OCL_SUB_DEVICE) {
     return error_invalid_type(func, handle, it->second.type, OCL_DEVICE);
   } else if (it->second.type == OCL_SUB_DEVICE && it->second.refcount <= 0) {
-    return error_ref_count(func, handle, OCL_SUB_DEVICE, it->second.refcount);
+    if(it->second.num_children <= 0) {
+      return error_ref_count(func, handle, OCL_SUB_DEVICE, it->second.refcount);
+    }
+    // TODO: Warn object only kept alive only by its children
+    // TODO: Devices can be kept alive by contexts, which is not yet tracked
+    // TODO: Sub device tracking is incomplete
   }
   return CL_SUCCESS;
 }
@@ -235,7 +243,10 @@ cl_int check_exists_no_lock<OCL_MEM>(const std::string& func, void *handle) {
     case OCL_IMAGE:
     case OCL_PIPE:
       if (it->second.refcount <= 0) {
-        return error_ref_count(func, handle, t, it->second.refcount);
+        if (it->second.num_children <= 0) {
+          return error_ref_count(func, handle, t, it->second.refcount);
+        }
+        // TODO: Warn object only kept alive only by its children
       }
       break;
     default:
@@ -301,7 +312,7 @@ static cl_int check_exist_list(const std::string& func, cl_uint num_handles, voi
   } while (false)
 
 template<object_type T>
-static inline cl_int check_creation_no_lock(const std::string& func, void *handle) {
+static inline cl_int check_creation_no_lock(const std::string& func, void *handle, void* parent = nullptr) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end()) {
@@ -310,12 +321,15 @@ static inline cl_int check_creation_no_lock(const std::string& func, void *handl
       deleted_objects[handle].push_back(it->second);
     }
   }
-  objects[handle] =  object_record{T, 1};
+  objects[handle] =  object_record{T, 1, parent};
+  if(parent != nullptr) {
+    ++objects[parent].num_children;
+  }
   return result;
 }
 
 template<>
-cl_int check_creation_no_lock<OCL_DEVICE>(const std::string& func, void *handle) {
+cl_int check_creation_no_lock<OCL_DEVICE>(const std::string& func, void *handle, void*) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end() && it->second.type != OCL_DEVICE) {
@@ -327,7 +341,7 @@ cl_int check_creation_no_lock<OCL_DEVICE>(const std::string& func, void *handle)
 }
 
 template<>
-cl_int check_creation_no_lock<OCL_PLATFORM>(const std::string& func, void *handle) {
+cl_int check_creation_no_lock<OCL_PLATFORM>(const std::string& func, void *handle, void*) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end() && it->second.type != OCL_PLATFORM) {
@@ -339,33 +353,34 @@ cl_int check_creation_no_lock<OCL_PLATFORM>(const std::string& func, void *handl
 }
 
 template<object_type T>
-static cl_int check_creation(const std::string& func, void *handle) {
+static cl_int check_creation(const std::string& func, void *handle, void* parent) {
   std::lock_guard<std::mutex> g{objects_mutex};
-  return check_creation_no_lock<T>(func, handle);
+  return check_creation_no_lock<T>(func, handle, parent);
 }
 
-#define CHECK_CREATION(type, handle)                                           \
+#define CHECK_CREATION(type, handle, parent)                                   \
   do {                                                                         \
-    const cl_int _err = check_creation<type>(RTRIM_FUNC, handle);              \
+    const cl_int _err = check_creation<type>(RTRIM_FUNC, handle, parent);      \
     if (_err != CL_SUCCESS) {                                                  \
       return _err;                                                             \
     }                                                                          \
   } while (false)
 
-#define CHECK_CREATION_ERRC(type, handle, errc, return_type)                   \
+#define CHECK_CREATION_ERRC(type, handle, parent, errc, return_type)           \
   do {                                                                         \
-    *errc = check_creation<type>(RTRIM_FUNC, handle);                          \
+    *errc = check_creation<type>(RTRIM_FUNC, handle, parent);                  \
     if (*errc != CL_SUCCESS) {                                                 \
       return static_cast<return_type>(0);                                      \
     }                                                                          \
   } while (false)
 
-template<object_type T>
-static cl_int check_creation_list(const std::string& func, cl_uint num_handles, void **handles) {
+template <object_type T>
+static cl_int check_creation_list(const std::string &func, cl_uint num_handles,
+                                  void **handles, void *parent = nullptr) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
   for (cl_uint i = 0; i < num_handles; i++) {
-    const cl_int error = check_creation_no_lock<T>(func, handles[i]);
+    const cl_int error = check_creation_no_lock<T>(func, handles[i], parent);
     if(error != CL_SUCCESS && result == CL_SUCCESS) {
       result = error;
     }
@@ -373,17 +388,18 @@ static cl_int check_creation_list(const std::string& func, cl_uint num_handles, 
   return result;
 }
 
-#define CHECK_CREATION_LIST(type, num_handles, handles)                        \
+#define CHECK_CREATION_LIST(type, num_handles, handles, parent)                \
   do {                                                                         \
-    const cl_int _err =                                                        \
-        check_creation_list<type>(RTRIM_FUNC, num_handles, (void **)handles);  \
+    const cl_int _err = check_creation_list<type>(RTRIM_FUNC, num_handles,     \
+                                                  (void **)handles, parent);   \
     if (_err != CL_SUCCESS) {                                                  \
       return _err;                                                             \
     }                                                                          \
   } while (false)
 
-template<object_type T>
-static cl_int check_add_or_exists(const std::string& func, void *handle) {
+template <object_type T>
+static cl_int check_add_or_exists(const std::string &func, void *handle,
+                                  void *parent = nullptr) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
   auto it = objects.find(handle);
@@ -393,21 +409,46 @@ static cl_int check_add_or_exists(const std::string& func, void *handle) {
         result = error_already_exist(func, handle, it->second.type, it->second.refcount);
         deleted_objects[handle].push_back(it->second);
       }
-      objects[handle] = object_record{T, 0};
+      objects[handle] = object_record{T, 0, parent};
     }
   } else {
-    objects[handle] = object_record{T, 0};
+    objects[handle] = object_record{T, 0, parent};
+  }
+  if(parent != nullptr) {
+    ++objects[parent].num_children;
   }
   return result;
 }
 
-#define CHECK_ADD_OR_EXISTS(type, handle)                                      \
+#define CHECK_ADD_OR_EXISTS(type, handle, parent)                              \
   do {                                                                         \
-    const cl_int _err = check_add_or_exists<type>(RTRIM_FUNC, handle);         \
+    const cl_int _err = check_add_or_exists<type>(RTRIM_FUNC, handle, parent); \
     if (_err != CL_SUCCESS) {                                                  \
       return _err;                                                             \
     }                                                                          \
   } while (false)
+
+static void notify_child_released(const std::string &func, void *parent) {
+  // "Recursively" notify all parents if the refcount and the number of children becomes zero.
+  // This signals that the object is no longer kept alive by any of its children.
+  while (parent != nullptr) {
+    --objects[parent].num_children;
+
+    if (objects[parent].refcount == 0 && objects[parent].num_children == 0) {
+      // Propagate "release notification" to parent object
+      parent = objects[parent].parent;
+    } else if (objects[parent].num_children <= 0) {
+      *log_stream << "In " << func << " "
+                  << object_type_names[objects[parent].type] << ": " << parent
+                  << "has negative number of children. This is likely a bug in "
+                     "the object_lifetime layer.\n";
+      log_stream->flush();
+      parent = nullptr;
+    } else {
+      parent = nullptr;
+    }
+  }
+}
 
 template<object_type T>
 static cl_int check_release(const std::string& func, void *handle) {
@@ -425,6 +466,9 @@ static cl_int check_release(const std::string& func, void *handle) {
     } else {
       return error_invalid_type(func, handle, t, T);
     }
+  }
+  if (it->second.refcount == 0) {
+    notify_child_released(func, it->second.parent);
   }
   return CL_SUCCESS;
 }
@@ -450,6 +494,7 @@ cl_int check_release<OCL_DEVICE>(const std::string& func, void *handle) {
       return error_invalid_type(func, handle, t, OCL_DEVICE);
     }
   }
+  // Devices do not have parent objects
   return CL_SUCCESS;
 }
 
@@ -476,6 +521,9 @@ cl_int check_release<OCL_MEM>(const std::string& func, void *handle) {
     default:
       return error_invalid_type(func, handle, t, OCL_MEM);
     }
+  }
+  if (it->second.refcount == 0) {
+    notify_child_released(func, it->second.parent);
   }
   return CL_SUCCESS;
 }
@@ -667,6 +715,68 @@ static inline object_type get_device_type(cl_device_id dev) {
   return OCL_DEVICE;
 }
 
+static void* get_parent(cl_mem mem) {
+  cl_mem parent_mem;
+  cl_int res = tdispatch->clGetMemObjectInfo(
+    mem,
+    CL_MEM_ASSOCIATED_MEMOBJECT,
+    sizeof(parent_mem), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
+    &parent_mem, NULL);
+  if(res == CL_SUCCESS && parent_mem != NULL) {
+    return parent_mem;
+  }
+
+  cl_context parent_context;
+  res = tdispatch->clGetMemObjectInfo(
+    mem,
+    CL_MEM_CONTEXT,
+    sizeof(parent_context), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
+    &parent_context, NULL);
+  if(res == CL_SUCCESS && parent_context != NULL) {
+    return parent_context;
+  }
+  return NULL;
+}
+
+static void* get_parent(cl_command_queue queue) {
+  cl_context parent_context;
+  cl_int res = tdispatch->clGetCommandQueueInfo(
+    queue,
+    CL_QUEUE_CONTEXT,
+    sizeof(parent_context), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
+    &parent_context, NULL);
+  if(res == CL_SUCCESS && parent_context != NULL) {
+    return parent_context;
+  }
+  return NULL;
+}
+
+static void* get_parent(cl_event event) {
+  cl_context parent_context;
+  cl_int res = tdispatch->clGetEventInfo(
+    event,
+    CL_QUEUE_CONTEXT,
+    sizeof(parent_context), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
+    &parent_context, NULL);
+  if(res == CL_SUCCESS && parent_context != NULL) {
+    return parent_context;
+  }
+  return NULL;
+}
+
+static void* get_parent(cl_kernel kernel) {
+  cl_context parent_context;
+  cl_int res = tdispatch->clGetKernelInfo(
+    kernel,
+    CL_QUEUE_CONTEXT,
+    sizeof(parent_context), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
+    &parent_context, NULL);
+  if(res == CL_SUCCESS && parent_context != NULL) {
+    return parent_context;
+  }
+  return NULL;
+}
+
   /* OpenCL 1.0 */
 static CL_API_ENTRY cl_int CL_API_CALL clGetPlatformIDs_wrap(
     cl_uint num_entries,
@@ -683,7 +793,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetPlatformIDs_wrap(
     platforms,
     num_platforms);
   if (platforms && result == CL_SUCCESS && *num_platforms > 0)
-    CHECK_CREATION_LIST(OCL_PLATFORM, *num_platforms, platforms);
+    CHECK_CREATION_LIST(OCL_PLATFORM, *num_platforms, platforms, NULL);
   return result;
 }
 
@@ -723,7 +833,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDs_wrap(
     devices,
     num_devices);
   if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices);
+    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
   return result;
 }
 
@@ -763,7 +873,7 @@ static CL_API_ENTRY cl_context CL_API_CALL clCreateContext_wrap(
     errcode_ret);
 
   if (context)
-    CHECK_CREATION_ERRC(OCL_CONTEXT, context, errcode_ret, cl_context);
+    CHECK_CREATION_ERRC(OCL_CONTEXT, context, NULL, errcode_ret, cl_context);
   return context;
 }
 
@@ -784,7 +894,7 @@ static CL_API_ENTRY cl_context CL_API_CALL clCreateContextFromType_wrap(
     errcode_ret);
 
   if (context)
-    CHECK_CREATION_ERRC(OCL_CONTEXT, context, errcode_ret, cl_context);
+    CHECK_CREATION_ERRC(OCL_CONTEXT, context, NULL, errcode_ret, cl_context);
   return context;
 }
 
@@ -829,9 +939,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetContextInfo_wrap(
     for (size_t i = 0; i < *param_value_size_ret/sizeof(cl_device_id); i++) {
       cl_device_id dev = ((cl_device_id *)param_value)[i];
       if (get_device_type(dev) == OCL_SUB_DEVICE)
-        CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev);
+        CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev, NULL);
       else
-        CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev);
+        CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev, NULL);
     }
   }
   return result;
@@ -850,7 +960,7 @@ static CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueue_wrap(
     properties,
     errcode_ret);
   if (command_queue)
-    CHECK_CREATION_ERRC(OCL_COMMAND_QUEUE, command_queue, errcode_ret, cl_command_queue);
+    CHECK_CREATION_ERRC(OCL_COMMAND_QUEUE, command_queue, context, errcode_ret, cl_command_queue);
   return command_queue;
 }
 
@@ -888,11 +998,11 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetCommandQueueInfo_wrap(
     if (param_name == CL_QUEUE_DEVICE) {
       cl_device_id dev = *(cl_device_id *)param_value;
       if (get_device_type(dev) == OCL_SUB_DEVICE)
-        CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev);
+        CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev, NULL);
       else
-        CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev);
+        CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev, NULL);
     } else if (param_name == CL_QUEUE_CONTEXT) {
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value);
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
     }
   }
   return result;
@@ -927,7 +1037,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateBuffer_wrap(
     host_ptr,
     errcode_ret);
   if (mem)
-    CHECK_CREATION_ERRC(OCL_BUFFER, mem, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_BUFFER, mem, context, errcode_ret, cl_mem);
   return mem;
 }
 
@@ -952,7 +1062,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateImage2D_wrap(
     host_ptr,
     errcode_ret);
   if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, context,  errcode_ret, cl_mem);
   return image;
 }
 
@@ -981,7 +1091,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateImage3D_wrap(
     host_ptr,
     errcode_ret);
   if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, context, errcode_ret, cl_mem);
   return image;
 }
 
@@ -1035,26 +1145,25 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetMemObjectInfo_wrap(
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
     if (param_name == CL_MEM_CONTEXT) {
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value);
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
     } else if (param_name == CL_MEM_ASSOCIATED_MEMOBJECT && *(cl_mem *)param_value) {
-      cl_int res;
       cl_mem_object_type t;
       cl_mem mem = *(cl_mem *)param_value;
-      res = tdispatch->clGetMemObjectInfo(
+      cl_int res = tdispatch->clGetMemObjectInfo(
         mem,
-        CL_MEM_ASSOCIATED_MEMOBJECT,
+        CL_MEM_TYPE,
         sizeof(cl_mem_object_type),
         &t, NULL);
       if (res == CL_SUCCESS) {
         switch (t) {
         case CL_MEM_OBJECT_BUFFER:
-          CHECK_ADD_OR_EXISTS(OCL_BUFFER, mem);
+          CHECK_ADD_OR_EXISTS(OCL_BUFFER, mem, memobj);
           break;
         case CL_MEM_OBJECT_PIPE:
-          CHECK_ADD_OR_EXISTS(OCL_PIPE, mem);
+          CHECK_ADD_OR_EXISTS(OCL_PIPE, mem, memobj);
           break;
         default:
-          CHECK_ADD_OR_EXISTS(OCL_IMAGE, mem);
+          CHECK_ADD_OR_EXISTS(OCL_IMAGE, mem, memobj);
         }
       }
     }
@@ -1079,8 +1188,11 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetImageInfo_wrap(
     param_value,
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS)
-    if (param_name == CL_IMAGE_BUFFER)
-      CHECK_ADD_OR_EXISTS(OCL_BUFFER, *(cl_mem *)param_value);
+    if (param_name == CL_IMAGE_BUFFER) {
+      cl_mem mem = *(cl_mem *)param_value;
+      void* parent = get_parent(mem);
+      CHECK_ADD_OR_EXISTS(OCL_BUFFER, mem, parent);
+    }
   return result;
 }
 
@@ -1099,7 +1211,7 @@ static CL_API_ENTRY cl_sampler CL_API_CALL clCreateSampler_wrap(
     filter_mode,
     errcode_ret);
   if (sampler)
-    CHECK_CREATION_ERRC(OCL_SAMPLER, sampler, errcode_ret, cl_sampler);
+    CHECK_CREATION_ERRC(OCL_SAMPLER, sampler, context, errcode_ret, cl_sampler);
   return sampler;
 }
 
@@ -1133,7 +1245,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetSamplerInfo_wrap(
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS)
     if (param_name == CL_SAMPLER_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value);
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
   return result;
 }
 
@@ -1152,7 +1264,7 @@ static CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithSource_wrap(
     lengths,
     errcode_ret);
   if (program)
-    CHECK_CREATION_ERRC(OCL_PROGRAM, program, errcode_ret, cl_program);
+    CHECK_CREATION_ERRC(OCL_PROGRAM, program, context, errcode_ret, cl_program);
   return program;
 }
 
@@ -1176,7 +1288,7 @@ static CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBinary_wrap(
     binary_status,
     errcode_ret);
   if (program)
-    CHECK_CREATION_ERRC(OCL_PROGRAM, program, errcode_ret, cl_program);
+    CHECK_CREATION_ERRC(OCL_PROGRAM, program, context, errcode_ret, cl_program);
   return program;
 }
 
@@ -1234,14 +1346,14 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfo_wrap(
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
     if (param_name == CL_PROGRAM_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value);
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
     if (param_name == CL_PROGRAM_DEVICES) {
       for (size_t i = 0; i < *param_value_size_ret/sizeof(cl_device_id); i++) {
         cl_device_id dev = ((cl_device_id *)param_value)[i];
         if (get_device_type(dev) == OCL_SUB_DEVICE)
-          CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev);
+          CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev, NULL);
         else
-          CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev);
+          CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev, NULL);
       }
     }
   }
@@ -1278,7 +1390,7 @@ static CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel_wrap(
     kernel_name,
     errcode_ret);
   if (kernel)
-    CHECK_CREATION_ERRC(OCL_KERNEL, kernel, errcode_ret, cl_kernel);
+    CHECK_CREATION_ERRC(OCL_KERNEL, kernel, program, errcode_ret, cl_kernel);
   return kernel;
 }
 
@@ -1300,7 +1412,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgram_wrap(
     kernels,
     num_kernels_ret);
   if (kernels && result == CL_SUCCESS && *num_kernels_ret > 0)
-    CHECK_CREATION_LIST(OCL_KERNEL, *num_kernels_ret, kernels);
+    CHECK_CREATION_LIST(OCL_KERNEL, *num_kernels_ret, kernels, program);
   return result;
 }
 
@@ -1348,9 +1460,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetKernelInfo_wrap(
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
     if (param_name == CL_KERNEL_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value);
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
     if (param_name == CL_KERNEL_PROGRAM)
-      CHECK_ADD_OR_EXISTS(OCL_PROGRAM, *(cl_program *)param_value);
+      CHECK_ADD_OR_EXISTS(OCL_PROGRAM, *(cl_program *)param_value, NULL);
   }
   return result;
 }
@@ -1401,9 +1513,12 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetEventInfo_wrap(
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
     if (param_name == CL_EVENT_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value);
-    if (param_name == CL_EVENT_COMMAND_QUEUE && *(cl_command_queue *)param_value)
-      CHECK_ADD_OR_EXISTS(OCL_COMMAND_QUEUE, *(cl_command_queue *)param_value);
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+    if (param_name == CL_EVENT_COMMAND_QUEUE && *(cl_command_queue *)param_value) {
+      cl_command_queue queue = *(cl_command_queue *)param_value;
+      void* parent = get_parent(queue);
+      CHECK_ADD_OR_EXISTS(OCL_COMMAND_QUEUE, queue, parent);
+    }
   }
   return result;
 }
@@ -1478,7 +1593,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadBuffer_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1507,7 +1622,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteBuffer_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1537,7 +1652,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBuffer_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1570,7 +1685,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadImage_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1603,7 +1718,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteImage_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1633,7 +1748,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImage_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1663,7 +1778,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageToBuffer_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1693,7 +1808,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferToImage_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1724,7 +1839,7 @@ static CL_API_ENTRY void* CL_API_CALL clEnqueueMapBuffer_wrap(
     event,
     errcode_ret);
   if (result && event)
-    CHECK_CREATION_ERRC(OCL_EVENT, *event, errcode_ret, void*);
+    CHECK_CREATION_ERRC(OCL_EVENT, *event, get_parent(*event), errcode_ret, void*);
   return result;
 }
 
@@ -1759,7 +1874,7 @@ static CL_API_ENTRY void* CL_API_CALL clEnqueueMapImage_wrap(
             event,
             errcode_ret);
   if (result && event)
-    CHECK_CREATION_ERRC(OCL_EVENT, *event, errcode_ret, void*);
+    CHECK_CREATION_ERRC(OCL_EVENT, *event, get_parent(*event), errcode_ret, void*);
   return result;
 }
 
@@ -1782,7 +1897,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueUnmapMemObject_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1811,7 +1926,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueNDRangeKernel_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1832,7 +1947,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueTask_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1863,7 +1978,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueNativeKernel_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1876,7 +1991,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueMarker_wrap(
     command_queue,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -1914,7 +2029,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromGLBuffer_wrap(
     bufobj,
     errcode_ret);
   if (buffer)
-    CHECK_CREATION_ERRC(OCL_BUFFER, buffer, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_BUFFER, buffer, context, errcode_ret, cl_mem);
   return buffer;
 }
 
@@ -1935,7 +2050,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromGLTexture2D_wrap(
     texture,
     errcode_ret);
   if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, context, errcode_ret, cl_mem);
   return image;
 }
 
@@ -1956,7 +2071,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromGLTexture3D_wrap(
     texture,
     errcode_ret);
   if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, context, errcode_ret, cl_mem);
   return image;
 }
 
@@ -1973,7 +2088,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromGLRenderbuffer_wrap(
     renderbuffer,
     errcode_ret);
   if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, context, errcode_ret, cl_mem);
   return image;
 }
 
@@ -2024,7 +2139,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireGLObjects_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -2047,7 +2162,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseGLObjects_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -2073,9 +2188,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetGLContextInfoKHR_wrap(
     param_value_size_ret);
   if (result == CL_SUCCESS && param_value) {
     if (CL_CURRENT_DEVICE_FOR_GL_CONTEXT_KHR && param_value_size_ret != 0)
-      CHECK_CREATION(OCL_DEVICE, *(cl_device_id *)param_value);
+      CHECK_CREATION(OCL_DEVICE, *(cl_device_id *)param_value, NULL);
     if (CL_DEVICES_FOR_GL_CONTEXT_KHR)
-      CHECK_CREATION_LIST(OCL_DEVICE, (cl_uint)(*param_value_size_ret/sizeof(cl_device_id)), param_value);
+      CHECK_CREATION_LIST(OCL_DEVICE, (cl_uint)(*param_value_size_ret/sizeof(cl_device_id)), param_value, NULL);
   }
   return result;
 }
@@ -2242,7 +2357,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBuffer_wrap(
     buffer_create_info,
     errcode_ret);
   if (sub_buffer)
-    CHECK_CREATION_ERRC(OCL_BUFFER, sub_buffer, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_BUFFER, sub_buffer, buffer, errcode_ret, cl_mem);
   return sub_buffer;
 }
 
@@ -2267,7 +2382,7 @@ static CL_API_ENTRY cl_event CL_API_CALL clCreateUserEvent_wrap(
     context,
     errcode_ret);
   if (event)
-    CHECK_CREATION_ERRC(OCL_EVENT, event, errcode_ret, cl_event);
+    CHECK_CREATION_ERRC(OCL_EVENT, event, context, errcode_ret, cl_event);
   return event;
 }
 
@@ -2316,7 +2431,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadBufferRect_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -2355,7 +2470,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteBufferRect_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -2393,7 +2508,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferRect_wrap(
             event_wait_list,
             event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -2420,7 +2535,7 @@ clCreateSubDevicesEXT_wrap(
     out_devices,
     num_devices);
   if (out_devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices, out_devices);
+    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices, in_device, out_devices);
   return result;
 }
 
@@ -2450,7 +2565,7 @@ static CL_API_ENTRY cl_event CL_API_CALL clCreateEventFromGLsyncKHR_wrap(
     sync,
     errcode_ret);
   if (event)
-    CHECK_CREATION_ERRC(OCL_EVENT, event, errcode_ret, cl_event);
+    CHECK_CREATION_ERRC(OCL_EVENT, event, context, errcode_ret, cl_event);
   return event;
 }
 
@@ -2477,7 +2592,7 @@ clCreateSubDevices_wrap(
     num_devices_ret);
 
   if (out_devices && result == CL_SUCCESS && *num_devices_ret > 0)
-    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices_ret, out_devices);
+    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices_ret, in_device, out_devices);
   return result;
 }
 
@@ -2513,8 +2628,10 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateImage_wrap(
     image_desc,
     host_ptr,
     errcode_ret);
-  if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, errcode_ret, cl_mem);
+  if (image) {
+    void* parent = image_desc->mem_object != NULL ? (void*)image_desc->mem_object : (void*)context;
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, parent, errcode_ret, cl_mem);
+  }
   return image;
 }
 
@@ -2533,7 +2650,7 @@ static CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBuiltInKernels_wra
     kernel_names,
     errcode_ret);
   if (program)
-    CHECK_CREATION_ERRC(OCL_PROGRAM, program, errcode_ret, cl_program);
+    CHECK_CREATION_ERRC(OCL_PROGRAM, program, context, errcode_ret, cl_program);
   return program;
 }
 
@@ -2587,7 +2704,7 @@ static CL_API_ENTRY cl_program CL_API_CALL clLinkProgram_wrap(
     user_data,
     errcode_ret);
   if (program)
-    CHECK_CREATION_ERRC(OCL_PROGRAM, program, errcode_ret, cl_program);
+    CHECK_CREATION_ERRC(OCL_PROGRAM, program, context, errcode_ret, cl_program);
   return program;
 }
 
@@ -2642,7 +2759,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillBuffer_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -2669,7 +2786,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImage_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -2694,7 +2811,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjects_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -2712,7 +2829,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueMarkerWithWaitList_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -2730,7 +2847,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueBarrierWithWaitList_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3013,7 +3130,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromEGLImageKHR_wrap(
     properties,
     errcode_ret);
   if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, context, errcode_ret, cl_mem);
   return image;
 }
 
@@ -3036,7 +3153,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireEGLObjectsKHR_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3059,7 +3176,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseEGLObjectsKHR_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3093,7 +3210,7 @@ static CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueueWithPropert
     properties,
     errcode_ret);
   if (command_queue)
-    CHECK_CREATION_ERRC(OCL_COMMAND_QUEUE, command_queue, errcode_ret, cl_command_queue);
+    CHECK_CREATION_ERRC(OCL_COMMAND_QUEUE, command_queue, context, errcode_ret, cl_command_queue);
   return command_queue;
 }
 
@@ -3114,7 +3231,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreatePipe_wrap(
     properties,
     errcode_ret);
   if (pipe)
-    CHECK_CREATION_ERRC(OCL_PIPE, pipe, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_PIPE, pipe, context, errcode_ret, cl_mem);
   return pipe;
 }
 
@@ -3182,7 +3299,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMFree_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3208,7 +3325,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMemcpy_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3234,7 +3351,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMemFill_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3260,7 +3377,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMap_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3280,7 +3397,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMUnmap_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3295,7 +3412,7 @@ static CL_API_ENTRY cl_sampler CL_API_CALL clCreateSamplerWithProperties_wrap(
     sampler_properties,
     errcode_ret);
   if (sampler)
-    CHECK_CREATION_ERRC(OCL_SAMPLER, sampler, errcode_ret, cl_sampler);
+    CHECK_CREATION_ERRC(OCL_SAMPLER, sampler, context, errcode_ret, cl_sampler);
   return sampler;
 }
 
@@ -3360,7 +3477,7 @@ static CL_API_ENTRY cl_kernel CL_API_CALL clCloneKernel_wrap(
     source_kernel,
     errcode_ret);
   if (kernel)
-    CHECK_CREATION_ERRC(OCL_KERNEL, kernel, errcode_ret, cl_kernel);
+    CHECK_CREATION_ERRC(OCL_KERNEL, kernel, get_parent(source_kernel), errcode_ret, cl_kernel);
   return kernel;
 }
 
@@ -3377,7 +3494,7 @@ static CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithIL_wrap(
     length,
     errcode_ret);
   if (program)
-    CHECK_CREATION_ERRC(OCL_PROGRAM, program, errcode_ret, cl_program);
+    CHECK_CREATION_ERRC(OCL_PROGRAM, program, context, errcode_ret, cl_program);
   return program;
 }
 
@@ -3403,7 +3520,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMigrateMem_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3512,7 +3629,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateBufferWithProperties_wrap(
     host_ptr,
     errcode_ret);
   if (buffer)
-    CHECK_CREATION_ERRC(OCL_BUFFER, buffer, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_BUFFER, buffer, context, errcode_ret, cl_mem);
   return buffer;
 }
 
@@ -3536,8 +3653,10 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateImageWithProperties_wrap(
     image_desc,
     host_ptr,
     errcode_ret);
-  if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, errcode_ret, cl_mem);
+  if (image) {
+    void* parent = image_desc->mem_object != NULL ? (void*)image_desc->mem_object : (void*)context;
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, parent, errcode_ret, cl_mem);
+  }
   return image;
 }
 
