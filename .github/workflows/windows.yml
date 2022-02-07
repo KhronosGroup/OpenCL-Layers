@@ -4,7 +4,6 @@ on: [push, pull_request]
 
 jobs:
   msvc:
-    if: false
     runs-on: windows-2022
     container: streamhpc/opencl-sdk-intelcpu:windows-servercore2019-20220202
     strategy:
