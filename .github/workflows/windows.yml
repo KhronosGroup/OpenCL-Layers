@@ -97,9 +97,9 @@ jobs:
         Get-ChildItem C:\Tools\Intel\oneapi-tbb\redist\intel64\vc14\*.dll | ForEach-Object { New-Item -Type SymbolicLink -Path C:\Tools\Intel\oclcpuexp\tbb -Name $_.Name -Value $_.FullName | Out-Null }
         [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp;C:\Tools\Intel\oclcpuexp\tbb', [EnvironmentVariableTarget]::User)
         [Environment]::SetEnvironmentVariable('OCL_ICD_FILENAMES', 'C:\Tools\Intel\oclcpuexp\intelocl64.dll', [EnvironmentVariableTarget]::User)
-      #  [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp\tbb', [EnvironmentVariableTarget]::Machine)
-      #  New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Force | Out-Null
-      #  Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Name C:\Tools\Intel\oclcpuexp\intelocl64.dll -Type DWord -Value 0
+        [Environment]::SetEnvironmentVariable('Path', ${env:Path} + ';C:\Tools\Intel\oclcpuexp\tbb', [EnvironmentVariableTarget]::Machine)
+        New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Force | Out-Null
+        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Name C:\Tools\Intel\oclcpuexp\intelocl64.dll -Type DWord -Value 0
 
     - name: Create Build Environment
       shell: pwsh
