@@ -286,10 +286,12 @@ jobs:
 
     - name: Test
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
-      shell: cmd
+      shell: pwsh
       run: |
-        reg ADD HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Layers /v %GITHUB_WORKSPACE%/build/bin/Release/PrintLayer.dll /t REG_DWORD /d 0
-        %CTEST_EXE% -C Release --output-on-failure --parallel %NUMBER_OF_PROCESSORS%
-        reg DELETE HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Layers /v %GITHUB_WORKSPACE%/build/bin/Release/PrintLayer.dll /f
-        reg ADD HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Layers /v %GITHUB_WORKSPACE%/build/bin/Debug/PrintLayer.dll /t REG_DWORD /d 0
-        %CTEST_EXE% -C Debug --output-on-failure --parallel %NUMBER_OF_PROCESSORS%
+        New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Force | Out-Null
+        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${GITHUB_WORKSPACE}/build/bin/Release/PrintLayer.dll" -Type DWord -Value 0
+        & ${env:CTEST_EXE} -C Release --output-on-failure --parallel ${NUMBER_OF_PROCESSORS}
+        Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${GITHUB_WORKSPACE}/build/bin/Release/PrintLayer.dll"
+        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${GITHUB_WORKSPACE}/build/bin/Debug/PrintLayer.dll" -Type DWord -Value 0
+        & ${env:CTEST_EXE} -C Debug --output-on-failure --parallel ${NUMBER_OF_PROCESSORS}
+        Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${GITHUB_WORKSPACE}/build/bin/Debug/PrintLayer.dll"
