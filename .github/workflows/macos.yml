@@ -7,10 +7,10 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        VER: [9] #, 11
-        EXT: [ON] #, OFF
-        GEN: [Xcode] #, Ninja Multi-Config
-        STD: [14] #11, 
+        VER: [9, 11]
+        EXT: [ON, OFF]
+        GEN: [Xcode, Ninja Multi-Config]
+        STD: [14, 17]
 
     steps:
     - name: Checkout OpenCL-Layers
@@ -61,9 +61,6 @@ jobs:
     - name: Build & install OpenCL-ICD-Loader
       shell: bash
       run: |
-        sed  's/#if 0/#if 1/g' $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h | tee $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
-        echo Searching for 1
-        grep "#if 1" $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
         cmake \
           -G "${{matrix.GEN}}" \
           -D BUILD_TESTING=OFF \
@@ -81,9 +78,6 @@ jobs:
           --parallel `sysctl -n hw.logicalcpu`
 
     - name: Configure CMake
-      # no -Werror during configuration because:
-      # warning: ISO C forbids assignment between function pointer and ‘void *’ [-Wpedantic]
-      # warning: unused parameter [-Wunused-parameter]
       shell: bash
       run: cmake
         -G "${{matrix.GEN}}"
