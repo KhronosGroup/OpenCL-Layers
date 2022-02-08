@@ -277,7 +277,7 @@ jobs:
       shell: pwsh
       run: |
         & ${env:CMAKE_EXE} --build "${env:GITHUB_WORKSPACE}\build" --config Release -- /verbosity:minimal /maxCpuCount /noLogo
-        & ${env:CMAKE_EXE} --build "${env:GITHUB_WORKSPACE}\build" --config Debug -- /verbosity:minimal /maxCpuCount /noLogo
+        & ${env:CMAKE_EXE} --build "${env:GITHUB_WORKSPACE}\build" --config Debug   -- /verbosity:minimal /maxCpuCount /noLogo
 
     - name: Build (Ninja)
       if: matrix.GEN == 'Ninja Multi-Config'
@@ -291,7 +291,7 @@ jobs:
         Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
         Enter-VsDevShell -VsInstallPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' -SkipAutomaticLocation -DevCmdArguments "-host_arch=x64 -arch=${{matrix.BIN}} -vcvars_ver=${VER}"
         & ${env:CMAKE_EXE} --build "${env:GITHUB_WORKSPACE}\build" --config Release -- -j ${env:NUMBER_OF_PROCESSORS}
-        & ${env:CMAKE_EXE} --build "${env:GITHUB_WORKSPACE}\build" --config Debug -- -j ${env:NUMBER_OF_PROCESSORS}
+        & ${env:CMAKE_EXE} --build "${env:GITHUB_WORKSPACE}\build" --config Debug   -- -j ${env:NUMBER_OF_PROCESSORS}
 
     - name: Test
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
