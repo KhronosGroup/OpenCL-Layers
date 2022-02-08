@@ -121,11 +121,11 @@ jobs:
           -T ${{matrix.VER}} `
           -D CMAKE_C_FLAGS="$C_FLAGS" `
           -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} `
-          -D CMAKE_INSTALL_PREFIX="${GITHUB_WORKSPACE}\external\OpenCL-Headers\install" `
-          -S ${GITHUB_WORKSPACE}\external\OpenCL-Headers `
-          -B ${GITHUB_WORKSPACE}\external\OpenCL-Headers\build
+          -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install" `
+          -S ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers `
+          -B ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build
         & ${env:CMAKE_EXE} `
-          --build ${GITHUB_WORKSPACE}/external/OpenCL-Headers/build `
+          --build ${env:GITHUB_WORKSPACE}/external/OpenCL-Headers/build `
           --target install `
           --config Release `
           -- `
