@@ -12,7 +12,7 @@ jobs:
         GEN: [Visual Studio 17 2022, Ninja Multi-Config]
         BIN: [x64, x86]
         CMAKE: [3.22.0]
-    if: ! ${{ matrix.GEN == 'Ninja Multi-Config' && matrix.VER != 'v143' }}
+    if: ${{ matrix.GEN == 'Ninja Multi-Config' && matrix.VER != 'v143' }}
     env:
       NINJA_URL: https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip
       NINJA_EXE: C:\Tools\Ninja\ninja.exe
