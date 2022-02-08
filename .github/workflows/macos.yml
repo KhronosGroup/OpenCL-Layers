@@ -65,6 +65,7 @@ jobs:
         grep "#if 1" $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
         cmake \
           -G "${{matrix.GEN}}" \
+          -D BUILD_SHARED_LIBS=OFF \
           -D BUILD_TESTING=OFF \
           -D CMAKE_C_FLAGS="-w -m64" \
           -D CMAKE_C_COMPILER=/usr/local/bin/gcc-${{matrix.VER}} \
