@@ -126,7 +126,7 @@ jobs:
           -S ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers `
           -B ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build
         & ${env:CMAKE_EXE} `
-          --build ${env:GITHUB_WORKSPACE}/external/OpenCL-Headers/build `
+          --build ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build `
           --target install `
           --config Release `
           -- `
@@ -161,28 +161,31 @@ jobs:
 
     - name: Build & install OpenCL-ICD-Loader (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
-      shell: cmd
+      shell: pwsh
       run: |
-        set C_FLAGS="/w"
-        if /I "${{matrix.BIN}}"=="x86" (set BIN=Win32) else (set BIN=x64)
-        %CMAKE_EXE% ^
-          -G "${{matrix.GEN}}" ^
-          -A %BIN% ^
-          -T ${{matrix.VER}} ^
-          -D BUILD_TESTING=OFF ^
-          -D CMAKE_C_FLAGS=%C_FLAGS% ^
-          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
-          -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install ^
-          -D CMAKE_PREFIX_PATH=%GITHUB_WORKSPACE%\external\OpenCL-Headers\install ^
-          -S %GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader ^
-          -B %GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\build
-        %CMAKE_EXE% ^
-          --build %GITHUB_WORKSPACE%/external/OpenCL-ICD-Loader/build ^
-          --target install ^
-          --config Release ^
-          -- ^
-          /verbosity:minimal ^
-          /maxCpuCount ^
+        (Get-Content "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\loader\icd.h") `
+          -replace '#if 0','#if 1' | `
+          Out-File "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\loader\icd.h"
+        $C_FLAGS = '/w'
+        $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
+        & ${env:CMAKE_EXE} `
+          -G '${{matrix.GEN}}' `
+          -A $BIN `
+          -T ${{matrix.VER}} `
+          -D BUILD_TESTING=OFF `
+          -D CMAKE_C_FLAGS="$C_FLAGS" `
+          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} `
+          -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install" `
+          -D CMAKE_PREFIX_PATH=%GITHUB_WORKSPACE%\external\OpenCL-Headers\install `
+          -S ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader `
+          -B ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build
+        & ${env:CMAKE_EXE} `
+          --build ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build `
+          --target install `
+          --config Release `
+          -- `
+          /verbosity:minimal `
+          /maxCpuCount `
           /noLogo
 
     - name: Build & install OpenCL-ICD-Loader (Ninja Multi-Config)
