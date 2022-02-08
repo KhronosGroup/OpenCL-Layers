@@ -162,7 +162,7 @@ jobs:
           --target install `
           --config Release `
           -- `
-          -j${env:NUMBER_OF_PROCESSORS}
+          -j ${env:NUMBER_OF_PROCESSORS}
 
     - name: Build & install OpenCL-ICD-Loader (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
