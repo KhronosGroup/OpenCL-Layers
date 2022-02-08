@@ -60,7 +60,7 @@ jobs:
     - name: Build & install OpenCL-ICD-Loader
       shell: bash
       run: |
-        sed -n 's/#if 0/#if 1/g' $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h | tee $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
+        sed  's/#if 0/#if 1/g' $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h | tee $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
         echo Searching for 1
         grep "#if 1" $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
         cmake \
