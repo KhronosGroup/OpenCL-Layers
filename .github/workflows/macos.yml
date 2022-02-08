@@ -94,7 +94,6 @@ jobs:
         -B $GITHUB_WORKSPACE/build
 
     - name: Build
-      if: matrix.GEN == 'Xcode'
       shell: bash
       run: |
         cmake --build $GITHUB_WORKSPACE/build --config Release --parallel `sysctl -n hw.logicalcpu` `if [[ "${{matrix.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
