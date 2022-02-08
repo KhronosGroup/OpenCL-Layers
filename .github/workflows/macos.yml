@@ -60,6 +60,10 @@ jobs:
       shell: bash
       run: |
         sed 's/#if 0/#if 1/g' $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h | tee $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
+        echo Searching for 0
+        grep "#if 0" $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
+        echo Searching for 1
+        grep "#if 1" $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
         cmake \
           -G "${{matrix.GEN}}" \
           -D BUILD_TESTING=OFF \
