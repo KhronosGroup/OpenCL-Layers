@@ -259,10 +259,10 @@ jobs:
           -D CMAKE_MAKE_PROGRAM="${env:NINJA_EXE}" `
           -D OPENCL_LAYERS_BUILD_TESTING=ON `
           -D BUILD_TESTING=ON `
-          -D CMAKE_C_FLAGS="${C_FLAGS}"" `
+          -D CMAKE_C_FLAGS="${C_FLAGS}" `
           -D CMAKE_C_EXTENSIONS='${{matrix.EXT}}' `
-          -D CMAKE_CXX_FLAGS="${CXX_FLAGS}"" `
-          -D CMAKE_CXX_EXTENSIONS='${{matrix.EXT}}'' `
+          -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" `
+          -D CMAKE_CXX_EXTENSIONS='${{matrix.EXT}}' `
           -D CMAKE_EXE_LINKER_FLAGS='/INCREMENTAL' `
           -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\install" `
           -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install;${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install" `
