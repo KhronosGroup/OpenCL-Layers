@@ -104,6 +104,8 @@ jobs:
     - name: Create Build Environment
       shell: pwsh
       run: |
+        # Parallelize MSBuild across projects
+        [Environment]::SetEnvironmentVariable('UseMultiToolTask', 'true', [EnvironmentVariableTarget]::User)
         Get-Item C:\Tools\Intel\oclcpuexp\intelocl64.dll | Select-Object -ExpandProperty VersionInfo
         Get-Item HKLM:\SOFTWARE\Khronos\OpenCL\Vendors
         & ${env:CMAKE_EXE} --version
@@ -113,8 +115,8 @@ jobs:
       if: matrix.GEN == 'Visual Studio 17 2022'
       shell: pwsh
       run: |
-        $C_FLAGS = '/w'
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
+        $C_FLAGS = '/w'
         & ${env:CMAKE_EXE} `
           -G '${{matrix.GEN}}' `
           -A $BIN `
@@ -136,28 +138,31 @@ jobs:
 
     - name: Build & install OpenCL-Headers (Ninja Multi-Config)
       if: matrix.GEN == 'Ninja Multi-Config'
-      shell: cmd
+      shell: pwsh
       run: |
-        set C_FLAGS="/w"
-        if /I "${{matrix.VER}}"=="v140" (set VER=14.0)
-        if /I "${{matrix.VER}}"=="v141" (set VER=14.1)
-        if /I "${{matrix.VER}}"=="v142" (set VER=14.2)
-        if /I "${{matrix.VER}}"=="v143" (set VER=14.3)
-        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{matrix.BIN}} /vcvars_ver=%VER%
-        %CMAKE_EXE% ^
-          -G "${{matrix.GEN}}" ^
-          -D BUILD_TESTING=OFF ^
-          -D CMAKE_MAKE_PROGRAM=%NINJA_EXE% ^
-          -D CMAKE_C_FLAGS=%C_FLAGS% ^
-          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
-          -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\external\OpenCL-Headers\install ^
-          -S %GITHUB_WORKSPACE%\external\OpenCL-Headers ^
-          -B %GITHUB_WORKSPACE%\external\OpenCL-Headers\build
-        %CMAKE_EXE% ^
-          --build %GITHUB_WORKSPACE%/external/OpenCL-Headers/build ^
-          --target install ^
-          -- ^
-          -j%NUMBER_OF_PROCESSORS%
+        $VER = switch ('${{matrix.VER}}') { `
+          'v140' {'14.0'} `
+          'v141' {'14.1'} `
+          'v142' {'14.2'} `
+          'v143' {'14.3'} }
+        Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
+        Enter-VsDevShell -VsInstallPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' -SkipAutomaticLocation -DevCmdArguments '-host_arch=x64 -arch=${{matrix.BIN}} -vcvars_ver=${VER}'
+        $C_FLAGS = '/w'
+        & ${env:CMAKE_EXE} `
+          -G '${{matrix.GEN}}' `
+          -D BUILD_TESTING=OFF `
+          -D CMAKE_MAKE_PROGRAM="${env:NINJA_EXE}" `
+          -D CMAKE_C_FLAGS="${C_FLAGS}" `
+          -D CMAKE_C_EXTENSIONS='${{matrix.EXT}}' `
+          -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install" `
+          -S ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers `
+          -B ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build
+        & ${env:CMAKE_EXE} `
+          --build ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build `
+          --target install `
+          --config Release `
+          -- `
+          -j${env:NUMBER_OF_PROCESSORS}
 
     - name: Build & install OpenCL-ICD-Loader (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
@@ -187,102 +192,103 @@ jobs:
 
     - name: Build & install OpenCL-ICD-Loader (Ninja Multi-Config)
       if: matrix.GEN == 'Ninja Multi-Config'
-      shell: cmd
+      shell: pwsh
       run: |
-        set C_FLAGS="/w"
-        if /I "${{matrix.VER}}"=="v140" (set VER=14.0)
-        if /I "${{matrix.VER}}"=="v141" (set VER=14.1)
-        if /I "${{matrix.VER}}"=="v142" (set VER=14.2)
-        if /I "${{matrix.VER}}"=="v143" (set VER=14.3)
-        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{matrix.BIN}} /vcvars_ver=%VER%
-        %CMAKE_EXE% ^
-          -G "${{matrix.GEN}}" ^
-          -D BUILD_TESTING=OFF ^
-          -D CMAKE_MAKE_PROGRAM=%NINJA_EXE% ^
-          -D CMAKE_C_FLAGS=%C_FLAGS% ^
-          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
-          -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install ^
-          -D CMAKE_PREFIX_PATH=%GITHUB_WORKSPACE%\external\OpenCL-Headers\install ^
-          -S %GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader ^
-          -B %GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\build
-        %CMAKE_EXE% ^
-          --build %GITHUB_WORKSPACE%/external/OpenCL-ICD-Loader/build ^
-          --target install ^
-          --config Release ^
-          -- ^
-          -j%NUMBER_OF_PROCESSORS%
+        $VER = switch ('${{matrix.VER}}') { `
+          'v140' {'14.0'} `
+          'v141' {'14.1'} `
+          'v142' {'14.2'} `
+          'v143' {'14.3'} }
+        Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
+        Enter-VsDevShell -VsInstallPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' -SkipAutomaticLocation -DevCmdArguments '-host_arch=x64 -arch=${{matrix.BIN}} -vcvars_ver=${VER}'
+        $C_FLAGS = '/w'
+        & ${env:CMAKE_EXE} `
+          -G '${{matrix.GEN}}' `
+          -D BUILD_TESTING=OFF `
+          -D CMAKE_MAKE_PROGRAM="${env:NINJA_EXE}" `
+          -D CMAKE_C_FLAGS="${C_FLAGS}" `
+          -D CMAKE_C_EXTENSIONS='${{matrix.EXT}}' `
+          -D CMAKE_EXE_LINKER_FLAGS='/INCREMENTAL' `
+          -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install" `
+          -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install" `
+          -S ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader `
+          -B ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build
+        & ${env:CMAKE_EXE} `
+          --build ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build `
+          --target install `
+          --config Release `
+          -- `
+          -j ${env:NUMBER_OF_PROCESSORS}
 
     - name: Configure (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
-      shell: cmd
-      # no /WX during configuration because:
-      # warning C4459: declaration of 'platform' hides global declaration
-      # warning C4100: 'input_headers': unreferenced formal parameter
+      shell: pwsh
       run: |
-        set C_FLAGS="/W4 /MP"
-        set CXX_FLAGS="/W4 /MP"
-        if /I "${{matrix.BIN}}"=="x86" (set BIN=Win32) else (set BIN=x64)
-        %CMAKE_EXE% ^
-          -G "${{matrix.GEN}}" ^
-          -A %BIN% ^
-          -T ${{matrix.VER}} ^
-          -D OPENCL_LAYERS_BUILD_TESTING=ON ^
-          -D BUILD_TESTING=ON ^
-          -D CMAKE_C_FLAGS=%C_FLAGS% ^
-          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
-          -D CMAKE_CXX_FLAGS=%CXX_FLAGS% ^
-          -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}} ^
-          -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\install ^
-          -D CMAKE_PREFIX_PATH="%GITHUB_WORKSPACE%\external\OpenCL-Headers\install;%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install" ^
-          -S %GITHUB_WORKSPACE% ^
-          -B %GITHUB_WORKSPACE%\build
+        $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
+        $C_FLAGS = '/W4'
+        $CXX_FLAGS = '/W4'
+        & ${env:CMAKE_EXE} `
+          -G '${{matrix.GEN}}' `
+          -A $BIN `
+          -T ${{matrix.VER}} `
+          -D OPENCL_LAYERS_BUILD_TESTING=ON `
+          -D BUILD_TESTING=ON `
+          -D CMAKE_C_FLAGS="${C_FLAGS}" `
+          -D CMAKE_C_EXTENSIONS='${{matrix.EXT}}' `
+          -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" `
+          -D CMAKE_CXX_EXTENSIONS='${{matrix.EXT}}' `
+          -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\install" `
+          -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install;${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install" `
+          -S "${env:GITHUB_WORKSPACE}" `
+          -B "${env:GITHUB_WORKSPACE}\build"
 
     - name: Configure (Ninja Multi-Config)
       if: matrix.GEN == 'Ninja Multi-Config'
-      shell: cmd
-      # no /WX during configuration because:
-      # warning C4459: declaration of 'platform' hides global declaration
-      # warning C4100: 'input_headers': unreferenced formal parameter
+      shell: pwsh
       run: |
-        set C_FLAGS="/W4"
-        if /I "${{matrix.VER}}"=="v140" (set VER=14.0)
-        if /I "${{matrix.VER}}"=="v141" (set VER=14.1)
-        if /I "${{matrix.VER}}"=="v142" (set VER=14.2)
-        if /I "${{matrix.VER}}"=="v143" (set VER=14.3)
-        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{matrix.BIN}} /vcvars_ver=%VER%
-        %CMAKE_EXE% ^
-          -G "${{matrix.GEN}}" ^
-          -D CMAKE_MAKE_PROGRAM=%NINJA_EXE% ^
-          -D OPENCL_LAYERS_BUILD_TESTING=ON ^
-          -D BUILD_TESTING=ON ^
-          -D CMAKE_C_FLAGS=%C_FLAGS% ^
-          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} ^
-          -D CMAKE_CXX_FLAGS=%CXX_FLAGS% ^
-          -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}} ^
-          -D CMAKE_EXE_LINKER_FLAGS=/INCREMENTAL ^
-          -D CMAKE_INSTALL_PREFIX=%GITHUB_WORKSPACE%\install ^
-          -D CMAKE_PREFIX_PATH="%GITHUB_WORKSPACE%\external\OpenCL-Headers\install;%GITHUB_WORKSPACE%\external\OpenCL-ICD-Loader\install" ^
-          -S %GITHUB_WORKSPACE% ^
-          -B %GITHUB_WORKSPACE%\build
+        $VER = switch ('${{matrix.VER}}') { `
+          'v140' {'14.0'} `
+          'v141' {'14.1'} `
+          'v142' {'14.2'} `
+          'v143' {'14.3'} }
+        Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
+        Enter-VsDevShell -VsInstallPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' -SkipAutomaticLocation -DevCmdArguments '-host_arch=x64 -arch=${{matrix.BIN}} -vcvars_ver=${VER}'
+        $C_FLAGS = '/w'
+        & ${env:CMAKE_EXE} `
+          -G '${{matrix.GEN}}' `
+          -D CMAKE_MAKE_PROGRAM="${env:NINJA_EXE}" `
+          -D OPENCL_LAYERS_BUILD_TESTING=ON `
+          -D BUILD_TESTING=ON `
+          -D CMAKE_C_FLAGS="${C_FLAGS}"" `
+          -D CMAKE_C_EXTENSIONS='${{matrix.EXT}}' `
+          -D CMAKE_CXX_FLAGS="${CXX_FLAGS}"" `
+          -D CMAKE_CXX_EXTENSIONS='${{matrix.EXT}}'' `
+          -D CMAKE_EXE_LINKER_FLAGS='/INCREMENTAL' `
+          -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\install" `
+          -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install;${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install" `
+          -S "${env:GITHUB_WORKSPACE}" `
+          -B "${env:GITHUB_WORKSPACE}\build"
 
     - name: Build (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
-      shell: cmd
+      shell: pwsh
       run: |
-        %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Release -- /verbosity:minimal /maxCpuCount /noLogo
-        %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Debug -- /verbosity:minimal /maxCpuCount /noLogo
+        & ${env:CMAKE_EXE} --build "${env:GITHUB_WORKSPACE}\build" --config Release -- /verbosity:minimal /maxCpuCount /noLogo
+        & ${env:CMAKE_EXE} --build "${env:GITHUB_WORKSPACE}\build" --config Debug -- /verbosity:minimal /maxCpuCount /noLogo
 
     - name: Build (Ninja)
       if: matrix.GEN == 'Ninja Multi-Config'
-      shell: cmd
+      shell: pwsh
       run: |
-        if /I "${{matrix.VER}}"=="v140" set VER=14.0
-        if /I "${{matrix.VER}}"=="v141" set VER=14.1
-        if /I "${{matrix.VER}}"=="v142" set VER=14.2
-        if /I "${{matrix.VER}}"=="v143" set VER=14.3
-        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" ${{matrix.BIN}} /vcvars_ver=%VER%
-        %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Release
-        %CMAKE_EXE% --build %GITHUB_WORKSPACE%\build --config Debug
+        $VER = switch ('${{matrix.VER}}') { `
+          'v140' {'14.0'} `
+          'v141' {'14.1'} `
+          'v142' {'14.2'} `
+          'v143' {'14.3'} }
+        Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
+        Enter-VsDevShell -VsInstallPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' -SkipAutomaticLocation -DevCmdArguments '-host_arch=x64 -arch=${{matrix.BIN}} -vcvars_ver=${VER}'
+        & ${env:CMAKE_EXE} --build "${env:GITHUB_WORKSPACE}\build" --config Release -- -j ${env:NUMBER_OF_PROCESSORS}
+        & ${env:CMAKE_EXE} --build "${env:GITHUB_WORKSPACE}\build" --config Debug -- -j ${env:NUMBER_OF_PROCESSORS}
 
     - name: Test
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
