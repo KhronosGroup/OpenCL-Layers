@@ -167,7 +167,7 @@ jobs:
         (Get-Content "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\loader\icd.h") `
           -replace '#if 0','#if 1' | `
           Out-File "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\loader\icd.h"
-        Select-String -Path "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\loader\icd.h" -Pattern '#if 0'
+        Select-String -Path "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\loader\icd.h" -Pattern '#if 1'
         $C_FLAGS = '/w'
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
         & ${env:CMAKE_EXE} `
