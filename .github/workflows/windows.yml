@@ -295,10 +295,12 @@ jobs:
       run: |
         New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Force | Out-Null
         Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Release\PrintLayer.dll" -Type DWord -Value 0
+        Copy-Item "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll" "${env:GITHUB_WORKSPACE}\build\bin\Release\"
         Test-Path "${env:GITHUB_WORKSPACE}\build\bin\Release\PrintLayer.dll"
         Get-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers
         & ${env:CTEST_EXE} -C Release --output-on-failure --parallel ${NUMBER_OF_PROCESSORS}
         Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Release\PrintLayer.dll"
         Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Debug\PrintLayer.dll" -Type DWord -Value 0
+        Copy-Item "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll" "${env:GITHUB_WORKSPACE}\build\bin\Debug\"
         & ${env:CTEST_EXE} -C Debug --output-on-failure --parallel ${NUMBER_OF_PROCESSORS}
         Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Debug\PrintLayer.dll"
