@@ -29,7 +29,11 @@ endif ()
 
 if(OPENCL_LAYERS_BUILD_TESTING)
     if (NOT TARGET OpenCL)
-        find_package (OpenCL REQUIRED)
+        if(APPLE) # Apple's own loader can't load layers. We have to avoid it.
+          find_package (OpenCLICDLoader REQUIRED)
+        else()
+          find_package (OpenCL REQUIRED)
+        endif()
     endif ()
 endif ()
 
