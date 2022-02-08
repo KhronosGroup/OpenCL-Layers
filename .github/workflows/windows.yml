@@ -299,6 +299,6 @@ jobs:
           Write-Host "Running CTest on ${Config}"
           Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\${Config}\PrintLayer.dll" -Type DWord -Value 0
           Copy-Item "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll" "${env:GITHUB_WORKSPACE}\build\bin\${Config}\"
-          & ${env:CTEST_EXE} -C ${Config} --output-on-failure --parallel ${NUMBER_OF_PROCESSORS}
+          & ${env:CTEST_EXE} -C ${Config} --output-on-failure --parallel ${env:NUMBER_OF_PROCESSORS}
           Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\${Config}\PrintLayer.dll"
         }
