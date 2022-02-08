@@ -292,9 +292,9 @@ jobs:
       shell: pwsh
       run: |
         New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Force | Out-Null
-        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${GITHUB_WORKSPACE}\build\bin\Release\PrintLayer.dll" -Type DWord -Value 0
+        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Release\PrintLayer.dll" -Type DWord -Value 0
         & ${env:CTEST_EXE} -C Release --output-on-failure --parallel ${NUMBER_OF_PROCESSORS}
-        Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${GITHUB_WORKSPACE}\build\bin\Release\PrintLayer.dll"
-        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${GITHUB_WORKSPACE}\build\bin\Debug\PrintLayer.dll" -Type DWord -Value 0
+        Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Release\PrintLayer.dll"
+        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Debug\PrintLayer.dll" -Type DWord -Value 0
         & ${env:CTEST_EXE} -C Debug --output-on-failure --parallel ${NUMBER_OF_PROCESSORS}
-        Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${GITHUB_WORKSPACE}\build\bin\Debug\PrintLayer.dll"
+        Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Debug\PrintLayer.dll"
