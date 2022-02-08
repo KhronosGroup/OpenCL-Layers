@@ -163,11 +163,6 @@ jobs:
       if: matrix.GEN == 'Visual Studio 17 2022'
       shell: pwsh
       run: |
-        Test-Path "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\loader\icd.h"
-        (Get-Content "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\loader\icd.h") `
-          -replace '#if 0','#if 1' | `
-          Out-File "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\loader\icd.h"
-        Select-String -Path "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\loader\icd.h" -Pattern '#if 1'
         $C_FLAGS = '/w'
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
         & ${env:CMAKE_EXE} `
@@ -294,13 +289,10 @@ jobs:
       shell: pwsh
       run: |
         New-Item -Type Directory HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Force | Out-Null
-        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Release\PrintLayer.dll" -Type DWord -Value 0
-        Copy-Item "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll" "${env:GITHUB_WORKSPACE}\build\bin\Release\"
-        Test-Path "${env:GITHUB_WORKSPACE}\build\bin\Release\PrintLayer.dll"
-        Get-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers
-        & ${env:CTEST_EXE} -C Release --output-on-failure --parallel ${NUMBER_OF_PROCESSORS}
-        Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Release\PrintLayer.dll"
-        Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Debug\PrintLayer.dll" -Type DWord -Value 0
-        Copy-Item "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll" "${env:GITHUB_WORKSPACE}\build\bin\Debug\"
-        & ${env:CTEST_EXE} -C Debug --output-on-failure --parallel ${NUMBER_OF_PROCESSORS}
-        Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\Debug\PrintLayer.dll"
+        foreach ($Config in 'Release','Debug') { `
+          Write-Host "Running CTest on ${Config}"
+          Set-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\${Config}\PrintLayer.dll" -Type DWord -Value 0
+          Copy-Item "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll" "${env:GITHUB_WORKSPACE}\build\bin\${Config}\"
+          & ${env:CTEST_EXE} -C ${Config} --output-on-failure --parallel ${NUMBER_OF_PROCESSORS}
+          Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name "${env:GITHUB_WORKSPACE}\build\bin\${Config}\PrintLayer.dll"
+        }
