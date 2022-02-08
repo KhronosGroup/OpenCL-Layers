@@ -98,8 +98,8 @@ jobs:
       if: matrix.GEN == 'Xcode'
       shell: bash
       run: |
-        cmake --build $GITHUB_WORKSPACE/build --config Release --parallel `sysctl -n hw.logicalcpu`
-        cmake --build $GITHUB_WORKSPACE/build --config Debug --parallel `sysctl -n hw.logicalcpu`
+        cmake --build $GITHUB_WORKSPACE/build --config Release --parallel `sysctl -n hw.logicalcpu` -- -quiet
+        cmake --build $GITHUB_WORKSPACE/build --config Debug --parallel `sysctl -n hw.logicalcpu` -- -quiet
 
     - name: Build (Ninja)
       if: matrix.GEN == 'Ninja Multi-Config'
@@ -113,5 +113,6 @@ jobs:
       shell: bash
       run: |
         export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install/lib
+        echo $LD_LIBRARY_PATH
         ctest -C Release --output-on-failure --parallel `sysctl -n hw.logicalcpu`
         ctest -C Debug --output-on-failure --parallel `sysctl -n hw.logicalcpu`
