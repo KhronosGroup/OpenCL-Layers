@@ -186,6 +186,7 @@ jobs:
         $CMAKE_EXE \
           -G "${{matrix.GEN}}" \
           `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}; fi;` \
+          -D BUILD_TESTING=OFF \
           -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}" \
           -D CMAKE_C_COMPILER=${{matrix.C_COMPILER}} \
           -D CMAKE_C_EXTENSIONS=OFF \
@@ -205,6 +206,7 @@ jobs:
         $CMAKE_EXE \
           -G "${{matrix.GEN}}" \
           `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}; fi;` \
+          -D BUILD_TESTING=OFF \
           -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}" \
           -D CMAKE_C_COMPILER=${{matrix.C_COMPILER}} \
           -D CMAKE_C_EXTENSIONS=OFF \
