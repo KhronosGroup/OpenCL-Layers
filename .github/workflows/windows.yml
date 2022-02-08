@@ -176,7 +176,7 @@ jobs:
           -D CMAKE_C_FLAGS="$C_FLAGS" `
           -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} `
           -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install" `
-          -D CMAKE_PREFIX_PATH=%GITHUB_WORKSPACE%\external\OpenCL-Headers\install `
+          -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install" `
           -S ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader `
           -B ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build
         & ${env:CMAKE_EXE} `
