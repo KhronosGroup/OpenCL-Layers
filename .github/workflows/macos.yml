@@ -66,7 +66,6 @@ jobs:
         grep "#if 1" $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
         cmake \
           -G "${{matrix.GEN}}" \
-          -D BUILD_SHARED_LIBS=OFF \
           -D BUILD_TESTING=OFF \
           -D CMAKE_C_FLAGS="-w -m64" \
           -D CMAKE_C_COMPILER=/usr/local/bin/gcc-${{matrix.VER}} \
@@ -111,7 +110,5 @@ jobs:
       working-directory: ${{runner.workspace}}/OpenCL-Layers/build
       shell: bash
       run: |
-        export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install/lib
-        echo $LD_LIBRARY_PATH
         ctest -C Release --output-on-failure --parallel `sysctl -n hw.logicalcpu`
         ctest -C Debug --output-on-failure --parallel `sysctl -n hw.logicalcpu`
