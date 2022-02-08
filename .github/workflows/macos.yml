@@ -95,6 +95,7 @@ jobs:
         -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install"
+        -D CMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
         -S $GITHUB_WORKSPACE
         -B $GITHUB_WORKSPACE/build
 
