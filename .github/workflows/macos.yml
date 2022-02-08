@@ -54,7 +54,8 @@ jobs:
           --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build \
           --target install \
           --config Release \
-          --parallel `sysctl -n hw.logicalcpu`
+          --parallel `sysctl -n hw.logicalcpu` \
+          `if [[ "${{matrix.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
 
     - name: Build & install OpenCL-ICD-Loader
       shell: bash
