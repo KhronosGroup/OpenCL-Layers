@@ -59,7 +59,7 @@ jobs:
     - name: Build & install OpenCL-ICD-Loader
       shell: bash
       run: |
-        sed 's/#if 0/#if 1/g' $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
+        sed -i 's/#if 0/#if 1/g' $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/loader/icd.h
         cmake \
           -G "${{matrix.GEN}}" \
           -D BUILD_TESTING=OFF \
