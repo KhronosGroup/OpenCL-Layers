@@ -226,7 +226,6 @@ cl_int check_exists_no_lock<OCL_DEVICE>(const std::string& func, void *handle) {
     }
     // TODO: Warn object only kept alive only by its children
     // TODO: Devices can be kept alive by contexts, which is not yet tracked
-    // TODO: Sub device tracking is incomplete
   }
   return CL_SUCCESS;
 }
@@ -703,16 +702,16 @@ static cl_platform_id context_properties_get_platform(const cl_context_propertie
   return platform;
 }
 
-static inline object_type get_device_type(cl_device_id dev) {
+static inline cl_device_id get_parent_device(cl_device_id dev) {
   cl_device_id parent;
   cl_int res;
   res = tdispatch->clGetDeviceInfo(dev, CL_DEVICE_PARENT_DEVICE, sizeof(cl_device_id), &parent, NULL);
-  if (res == CL_SUCCESS && parent)
-    return OCL_SUB_DEVICE;
+  if (res == CL_SUCCESS)
+    return parent;
   res = tdispatch->clGetDeviceInfo(dev, CL_DEVICE_PARENT_DEVICE_EXT, sizeof(cl_device_id), &parent, NULL);
-  if (res == CL_SUCCESS && parent)
-    return OCL_SUB_DEVICE;
-  return OCL_DEVICE;
+  if (res == CL_SUCCESS)
+    return parent;
+  return NULL;
 }
 
 static void* get_parent(cl_mem mem) {
@@ -938,8 +937,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetContextInfo_wrap(
   if (param_name == CL_CONTEXT_DEVICES && param_value && result == CL_SUCCESS) {
     for (size_t i = 0; i < *param_value_size_ret/sizeof(cl_device_id); i++) {
       cl_device_id dev = ((cl_device_id *)param_value)[i];
-      if (get_device_type(dev) == OCL_SUB_DEVICE)
-        CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev, NULL);
+      cl_device_id parent = get_parent_device(dev);
+      if (parent != NULL)
+        CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev, parent);
       else
         CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev, NULL);
     }
@@ -997,8 +997,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetCommandQueueInfo_wrap(
   if (param_value && result == CL_SUCCESS) {
     if (param_name == CL_QUEUE_DEVICE) {
       cl_device_id dev = *(cl_device_id *)param_value;
-      if (get_device_type(dev) == OCL_SUB_DEVICE)
-        CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev, NULL);
+      cl_device_id parent = get_parent_device(dev);
+      if (parent != NULL)
+        CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev, parent);
       else
         CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev, NULL);
     } else if (param_name == CL_QUEUE_CONTEXT) {
@@ -1350,8 +1351,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfo_wrap(
     if (param_name == CL_PROGRAM_DEVICES) {
       for (size_t i = 0; i < *param_value_size_ret/sizeof(cl_device_id); i++) {
         cl_device_id dev = ((cl_device_id *)param_value)[i];
-        if (get_device_type(dev) == OCL_SUB_DEVICE)
-          CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev, NULL);
+        cl_device_id parent = get_parent_device(dev);
+        if (parent != NULL)
+          CHECK_ADD_OR_EXISTS(OCL_SUB_DEVICE, dev, parent);
         else
           CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev, NULL);
       }
