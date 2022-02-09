@@ -5,6 +5,8 @@ execute_process(
     OUTPUT_VARIABLE COMMAND_STDOUT
     RESULT_VARIABLE COMMAND_EXIT)
 
+message("${COMMAND_STDOUT}")
+
 if(NOT COMMAND_EXIT STREQUAL 0)
     message(FATAL_ERROR "${COMMAND} exited with: ${COMMAND_EXIT}")
 endif()
