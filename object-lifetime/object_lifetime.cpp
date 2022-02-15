@@ -6,6 +6,7 @@
 #include <map>
 #include <iostream>
 #include <list>
+#include <string_view>
 
 typedef enum object_type_e {
   OCL_PLATFORM,

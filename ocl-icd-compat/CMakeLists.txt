@@ -1,19 +1,30 @@
-set (OPENCL_OCL_ICD_COMPAT_LAYER_SOURCES
-    ocl_icd_compat.c)
+add_library (OclIcdCompatLayer SHARED
+    ocl_icd_compat.c
+    $<$<CXX_COMPILER_ID:MSVC>:ocl_icd_compat.def>
+    $<$<CXX_COMPILER_ID:GNU>:ocl_icd_compat.map>
+)
 
-if (WIN32)
-    list (APPEND OPENCL_OCL_ICD_COMPAT_LAYER_SOURCES ocl_icd_compat.def)
-else ()
-    if (NOT APPLE)
-        list (APPEND OPENCL_OCL_ICD_COMPAT_LAYER_SOURCES ocl_icd_compat.map)
-    endif ()
-endif ()
-
-add_library (OclIcdCompatLayer SHARED ${OPENCL_OCL_ICD_COMPAT_LAYER_SOURCES})
+target_link_libraries (OclIcdCompatLayer PRIVATE LayersCommon)
 
 if (NOT WIN32 AND NOT APPLE)
-  set_target_properties (OclIcdCompatLayer PROPERTIES LINK_FLAGS "-Wl,--version-script -Wl,${CMAKE_CURRENT_SOURCE_DIR}/ocl_icd_compat.map")
+    set_target_properties (OclIcdCompatLayer PROPERTIES LINK_FLAGS "-Wl,--version-script -Wl,${CMAKE_CURRENT_SOURCE_DIR}/ocl_icd_compat.map")
 endif ()
 
-install (TARGETS OclIcdCompatLayer
-	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+set (INSTALL_TARGETS OclIcdCompatLayer)
+set (BUILD_TARGETS ${INSTALL_TARGETS})
+
+set_target_properties (${BUILD_TARGETS}
+    PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
+        LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
+        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
+        PDB_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}"
+        INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
+        FOLDER "Layers"
+)
+install (
+    TARGETS ${INSTALL_TARGETS}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
