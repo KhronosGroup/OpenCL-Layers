@@ -12,7 +12,7 @@ if (NOT WIN32 AND NOT APPLE)
     set_target_properties (PrintLayer PROPERTIES LINK_FLAGS "-Wl,--version-script -Wl,${CMAKE_CURRENT_SOURCE_DIR}/icd_print_layer.map")
 endif ()
 
-if (OPENCL_LAYERS_BUILD_TESTING)
+if (LAYERS_BUILD_TESTS)
     add_executable (PrintLayerTest icd_print_layer_test.c)
 
     target_link_libraries (PrintLayerTest
@@ -35,7 +35,7 @@ endif ()
 
 set (INSTALL_TARGETS PrintLayer)
 set (BUILD_TARGETS ${INSTALL_TARGETS})
-if (OPENCL_LAYERS_BUILD_TESTING)
+if (LAYERS_BUILD_TESTS)
     list (APPEND BUILD_TARGETS PrintLayerTest)
 endif ()
 

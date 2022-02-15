@@ -27,16 +27,6 @@ else ()
     endif ()
 endif ()
 
-if(OPENCL_LAYERS_BUILD_TESTING)
-    if (NOT TARGET OpenCL)
-        if(APPLE) # Apple's own loader can't load layers. We have to avoid it.
-          find_package (OpenCLICDLoader REQUIRED)
-        else()
-          find_package (OpenCL REQUIRED)
-        endif()
-    endif ()
-endif ()
-
 # Common layer flags
 add_library (LayersCommon INTERFACE)
 
@@ -59,8 +49,21 @@ target_compile_definitions (LayersCommon
         CL_USE_DEPRECATED_OPENCL_2_2_APIS
 )
 
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR OPENCL_LAYERS_BUILD_TESTING)
-    include (CTest)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR OPENCL_LAYERS_BUILD_TESTING)
+    include(CTest)
+endif()
+if((CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR OPENCL_LAYERS_BUILD_TESTING) AND BUILD_TESTING)
+    set(LAYERS_BUILD_TESTS ON)
+endif()
+
+if (LAYERS_BUILD_TESTS)
+    if (NOT TARGET OpenCL)
+        if(APPLE) # Apple's own loader can't load layers. We have to avoid it.
+          find_package (OpenCLICDLoader REQUIRED)
+        else()
+          find_package (OpenCL REQUIRED)
+        endif()
+    endif ()
 endif ()
 
 include (GNUInstallDirs)
