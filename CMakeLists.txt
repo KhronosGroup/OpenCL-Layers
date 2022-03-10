@@ -90,6 +90,9 @@ if (LAYERS_BUILD_TESTS)
         endif()
     endif ()
 endif ()
+if ((CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR OPENCL_LAYERS_BUILD_TESTING) AND BUILD_TESTING)
+  set (LAYERS_BUILD_TESTS ON)
+endif ()
 
 include (GNUInstallDirs)
 

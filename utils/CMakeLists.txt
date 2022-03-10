@@ -5,7 +5,7 @@ add_library(LayersUtils STATIC
 target_include_directories(LayersUtils INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 set_target_properties(LayersUtils PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-if (OPENCL_LAYERS_BUILD_TESTING)
+if (LAYERS_BUILD_TESTS)
 add_executable(print_settings_location print_settings_location.cpp)
 target_link_libraries(print_settings_location PRIVATE LayersUtils LayersCommon)
 
