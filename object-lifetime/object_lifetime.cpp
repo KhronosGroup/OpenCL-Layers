@@ -2223,7 +2223,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromD3D10KHR_wrap(
     devices,
     num_devices);
   if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices);
+    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
   return result;
 }
 
@@ -2233,14 +2233,14 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10BufferKHR_wrap(
     ID3D10Buffer* resource,
     cl_int* errcode_ret)
 {
-  CHECK_EXISTS(OCL_CONTEXT, context);
+  CHECK_EXISTS_ERRC(OCL_CONTEXT, context, errcode_ret, cl_mem);
   cl_mem buffer = tdispatch->clCreateFromD3D10BufferKHR(
     context,
     flags,
     resource,
     errcode_ret);
   if (buffer)
-    CHECK_CREATION(OCL_BUFFER, buffer);
+    CHECK_CREATION_ERRC(OCL_BUFFER, buffer, NULL, errcode_ret, cl_mem);
   return buffer;
 }
 
@@ -2251,7 +2251,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10Texture2DKHR_wrap(
     UINT subresource,
     cl_int* errcode_ret)
 {
-  CHECK_EXISTS(OCL_CONTEXT, context);
+  CHECK_EXISTS_ERRC(OCL_CONTEXT, context, errcode_ret, cl_mem);
   cl_mem image = tdispatch->clCreateFromD3D10Texture2DKHR(
     context,
     flags,
@@ -2259,7 +2259,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10Texture2DKHR_wrap(
     subresource,
     errcode_ret);
   if (image)
-    CHECK_CREATION(OCL_IMAGE, image);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, NULL, errcode_ret, cl_mem);
   return image;
 }
 
@@ -2270,7 +2270,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10Texture3DKHR_wrap(
     UINT subresource,
     cl_int* errcode_ret)
 {
-  CHECK_EXISTS(OCL_CONTEXT, context);
+  CHECK_EXISTS_ERRC(OCL_CONTEXT, context, errcode_ret, cl_mem);
   cl_mem image = tdispatch->clCreateFromD3D10Texture3DKHR(
     context,
     flags,
@@ -2278,7 +2278,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10Texture3DKHR_wrap(
     subresource,
     errcode_ret);
   if (image)
-    CHECK_CREATION(OCL_IMAGE, image);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, NULL, errcode_ret, cl_mem);
   return image;
 }
 
@@ -2301,7 +2301,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireD3D10ObjectsKHR_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -2324,7 +2324,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseD3D10ObjectsKHR_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 #endif
@@ -2911,7 +2911,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromD3D11KHR_wrap(
     devices,
     num_devices);
   if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices);
+    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
   return result;
 }
 
@@ -2921,14 +2921,14 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D11BufferKHR_wrap(
     ID3D11Buffer* resource,
     cl_int* errcode_ret)
 {
-  CHECK_EXISTS(OCL_CONTEXT, context);
+  CHECK_EXISTS_ERRC(OCL_CONTEXT, context, errcode_ret, cl_mem);
   cl_mem buffer = tdispatch->clCreateFromD3D11BufferKHR(
     context,
     flags,
     resource,
     errcode_ret);
   if (buffer)
-    CHECK_CREATION(OCL_BUFFER, buffer);
+    CHECK_CREATION_ERRC(OCL_BUFFER, buffer, get_parent(buffer), errcode_ret, cl_mem);
   return buffer;
 }
 
@@ -2939,7 +2939,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D11Texture2DKHR_wrap(
     UINT subresource,
     cl_int* errcode_ret)
 {
-  CHECK_EXISTS(OCL_CONTEXT, context);
+  CHECK_EXISTS_ERRC(OCL_CONTEXT, context, errcode_ret, cl_mem);
   cl_mem image = tdispatch->clCreateFromD3D11Texture2DKHR(
     context,
     flags,
@@ -2947,7 +2947,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D11Texture2DKHR_wrap(
     subresource,
     errcode_ret);
   if (image)
-    CHECK_CREATION(OCL_IMAGE, image);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, get_parent(image), errcode_ret, cl_mem);
   return image;
 }
 
@@ -2958,7 +2958,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D11Texture3DKHR_wrap(
     UINT subresource,
     cl_int* errcode_ret)
 {
-  CHECK_EXISTS(OCL_CONTEXT, context);
+  CHECK_EXISTS_ERRC(OCL_CONTEXT, context, errcode_ret, cl_mem);
   cl_mem image = tdispatch->clCreateFromD3D11Texture3DKHR(
     context,
     flags,
@@ -2966,7 +2966,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D11Texture3DKHR_wrap(
     subresource,
     errcode_ret);
   if (image)
-    CHECK_CREATION(OCL_IMAGE, image);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, get_parent(image), errcode_ret, cl_mem);
   return image;
 }
 
@@ -2978,7 +2978,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromDX9MediaSurfaceKHR_wrap(
     cl_uint plane,
     cl_int* errcode_ret)
 {
-  CHECK_EXISTS(OCL_CONTEXT, context);
+  CHECK_EXISTS_ERRC(OCL_CONTEXT, context, errcode_ret, cl_mem);
   cl_mem image = tdispatch->clCreateFromDX9MediaSurfaceKHR(
     context,
     flags,
@@ -2987,7 +2987,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromDX9MediaSurfaceKHR_wrap(
     plane,
     errcode_ret);
   if (image)
-    CHECK_CREATION(OCL_IMAGE, image);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, get_parent(image), errcode_ret, cl_mem);
   return image;
 }
 
@@ -3010,7 +3010,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireD3D11ObjectsKHR_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3033,7 +3033,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseD3D11ObjectsKHR_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3063,7 +3063,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromDX9MediaAdapterKHR_wrap
     devices,
     num_devices);
   if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices);
+    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
   return result;
 }
 
@@ -3086,7 +3086,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueAcquireDX9MediaSurfacesKHR_wrap(
             event_wait_list,
             event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 
@@ -3109,7 +3109,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clEnqueueReleaseDX9MediaSurfacesKHR_wrap(
     event_wait_list,
     event);
   if (result == CL_SUCCESS && event)
-    CHECK_CREATION(OCL_EVENT, *event);
+    CHECK_CREATION(OCL_EVENT, *event, get_parent(*event));
   return result;
 }
 #endif
