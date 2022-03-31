@@ -9,9 +9,6 @@ if (LAYERS_BUILD_TESTS)
 add_executable(print_settings_location print_settings_location.cpp)
 target_link_libraries(print_settings_location PRIVATE LayersUtils LayersCommon)
 
-add_test(NAME test_settings_locations
-         COMMAND ${CMAKE_COMMAND}
-            -DBINARY_DIR=$<TARGET_FILE_DIR:print_settings_location>
-            -DTARGET_FILE=$<TARGET_FILE:print_settings_location>
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/test_settings_location.cmake)
+include(test_settings_location.cmake)
+
 endif()

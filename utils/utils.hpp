@@ -13,7 +13,9 @@ void parse_enumeration(const std::string &option,
 }
 
 std::string to_upper(std::string input);
-const char *get_environment(const char *variable);
+
+// This function returns a copy of the env var owned by the application
+bool get_environment(const std::string& variable, std::string& value);
 } // namespace detail
 
 std::string find_settings();
@@ -38,9 +40,11 @@ struct settings_parser {
       detail::parse_enumeration(settings_->at(full_option_name), values_map,
                                 out);
     }
-    const std::string env_option = detail::get_environment(
-        detail::to_upper("CL_" + prefix_ + "_" + option_name).c_str());
-    if (env_option != "") {
+    std::string env_option;
+    if (detail::get_environment(
+      detail::to_upper("CL_" + prefix_ + "_" + option_name),
+      env_option))
+    {
       detail::parse_enumeration(env_option, values_map, out);
     }
   }
