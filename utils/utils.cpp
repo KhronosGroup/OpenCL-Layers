@@ -81,7 +81,7 @@ bool get_environment(const std::string& variable, std::string& value) {
   }
   return err == 0;
 #else
-  const char *output = std::getenv(variable);
+  const char *output = std::getenv(variable.c_str());
   if (output != nullptr)
   {
     value = std::string(output);
@@ -137,14 +137,13 @@ std::string find_settings() {
   std::string found_location = "cl_layer_settings.txt";
 #ifdef __linux__
   {
-    std::string search_path = detail::get_environment("XDG_DATA_HOME");
-    if (search_path == "") {
-      search_path = detail::get_environment("HOME");
-      if (search_path != "") {
+    std::string search_path;
+    if (!detail::get_environment("XDG_DATA_HOME", search_path)) {
+      if (detail::get_environment("HOME", search_path)) {
         search_path += "/.local/share";
       }
     }
-    if (search_path != "") {
+    if (!search_path.empty()) {
       const std::string home_file =
           search_path + "/opencl/settings.d/cl_layer_settings.txt";
       if (stat(home_file.c_str(), &info) == 0 &&
