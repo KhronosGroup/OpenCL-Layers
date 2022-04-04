@@ -37,67 +37,62 @@ function(test_settings_location)
     endif()
   endif()
 
-  add_test(
-    NAME "${TSL_NAME}"
-    COMMAND
-      ${CMAKE_COMMAND} -E env ${XDG_DATA_HOME_ARG} ${HOME_ARG} ${SETTINGS_ENV_ARG}
-      $<TARGET_FILE:print_settings_location>)
-
-  if(WIN32)
-    # Get-Item HKCU:\SOFTWARE\Khronos\OpenCL\Settings | Select-Object -ExpandProperty Property | Out-File C:\Users\mate\Desktop\Settings.txt
-    # Get-Item HKCU:\SOFTWARE\Khronos\OpenCL\Settings | Select-Object -ExpandProperty Property | ForEach-Object { Remove-ItemProperty -Path HKCU:\SOFTWARE\Khronos\OpenCL\Settings -Name $_ }
-    # Get-Content C:\Users\mate\Desktop\Settings.txt | ForEach-Object { New-ItemProperty -Path HKCU:\SOFTWARE\Khronos\OpenCL\Settings -Name $_  -Value "0" | Out-Null }
+  if(NOT WIN32)
+    add_test(
+      NAME "${TSL_NAME}"
+      COMMAND
+        ${CMAKE_COMMAND} -E env ${XDG_DATA_HOME_ARG} ${HOME_ARG} ${SETTINGS_ENV_ARG} $<TARGET_FILE:print_settings_location>
+    )
+  else()
+    # Save Settings registry properties to file SETTINGS_REG_VALUE_CACHE
+    # Remove all existing Settings properties
+    # If user provided a reg entry, set it
+    # Run test
+    # Remove the user provided reg entry
+    # Restore previous registry contents
+    # Remove SETTINGS_REG_VALUE_CACHE file
     set(SETTINGS_REG_PATH "HKCU:/Software/Khronos/OpenCL/Settings")
     set(SETTINGS_REG_VALUE_CACHE "${CMAKE_CURRENT_BINARY_DIR}/UserRegistry.txt")
-    string(RANDOM LENGTH 4 FITXTURE_TAG)
     add_test(
-      NAME Backup-LayerSettings-${FITXTURE_TAG}
-      COMMAND powershell.exe -Command "& { if (Test-Path ${SETTINGS_REG_PATH}) { Get-Item ${SETTINGS_REG_PATH} | Select-Object -ExpandProperty Property | Out-File ${SETTINGS_REG_VALUE_CACHE} -Encoding ascii } }"
+      NAME "${TSL_NAME}"
+      COMMAND
+      powershell.exe -Command "& { \
+        if (Test-Path ${SETTINGS_REG_PATH}) \
+        { \
+          Get-Item ${SETTINGS_REG_PATH} | Select-Object -ExpandProperty Property | Out-File ${SETTINGS_REG_VALUE_CACHE} -Encoding ascii \
+        }; \
+        if (Test-Path ${SETTINGS_REG_PATH}) \
+        { \
+          Get-Item ${SETTINGS_REG_PATH} | Select-Object -ExpandProperty Property | ForEach-Object { Remove-ItemProperty -Path ${SETTINGS_REG_PATH} -Name $_  } \
+        } else \
+        { \
+          New-Item ${SETTINGS_REG_PATH} -Force | Out-Null \
+        }; \
+        if ('${TSL_SETTINGS_REG}'.Length -ne 0) \
+        { \
+          New-ItemProperty -Type DWORD -Path ${SETTINGS_REG_PATH} -Name '${TSL_SETTINGS_REG}'.replace('`n','').replace('`r','') -Value 0 | Out-Null; \
+        } \
+        ${CMAKE_COMMAND} -E env ${XDG_DATA_HOME_ARG} ${HOME_ARG} ${SETTINGS_ENV_ARG} $<TARGET_FILE:print_settings_location> ;\
+        if (Test-Path ${SETTINGS_REG_VALUE_CACHE}) \
+        { \
+          Remove-ItemProperty -Path ${SETTINGS_REG_PATH} -Name '${TSL_SETTINGS_REG}'.replace('`n','').replace('`r',''); \
+          Get-Content ${SETTINGS_REG_VALUE_CACHE} | ForEach-Object { New-ItemProperty -Path ${SETTINGS_REG_PATH} -Name $_.replace('`n','').replace('`r','') -Value 0 | Out-Null } \
+          Remove-Item ${SETTINGS_REG_VALUE_CACHE};
+        } else \
+        { \
+          Remove-Item ${SETTINGS_REG_PATH} \
+        };
+      }"
     )
-    set_tests_properties(Backup-LayerSettings-${FITXTURE_TAG}
-      PROPERTIES
-        FIXTURES_SETUP Fixture-${FITXTURE_TAG}
-        RESOURCE_LOCK Registry
-    )
-    add_test(
-      NAME Initialize-LayerSettings-${FITXTURE_TAG}
-      COMMAND powershell.exe -Command "& { if (Test-Path ${SETTINGS_REG_PATH}) { Get-Item ${SETTINGS_REG_PATH} | Select-Object -ExpandProperty Property | ForEach-Object { Remove-ItemProperty -Path ${SETTINGS_REG_PATH} -Name $_  } } else { New-Item ${SETTINGS_REG_PATH} -Force | Out-Null } }"
-    )
-    set_tests_properties(Initialize-LayerSettings-${FITXTURE_TAG}
-      PROPERTIES
-        FIXTURES_SETUP Fixture-${FITXTURE_TAG}
-        RESOURCE_LOCK Registry
-        DEPENDS Backup-LayerSettings-${FITXTURE_TAG}
-    )
-    if(TSL_SETTINGS_REG)
-      add_test(
-        NAME Register-LayerSettings-${FITXTURE_TAG}
-        COMMAND powershell.exe -Command "& { New-ItemProperty -Type DWORD -Path ${SETTINGS_REG_PATH} -Name '${TSL_SETTINGS_REG}'.replace('`n','').replace('`r','') -Value 0 }"
-      )
-      set_tests_properties(Register-LayerSettings-${FITXTURE_TAG}
-        PROPERTIES
-          FIXTURES_SETUP Fixture-${FITXTURE_TAG}
-          RESOURCE_LOCK Registry
-          DEPENDS Initialize-LayerSettings-${FITXTURE_TAG}
-      )
-    endif()
-    add_test(
-      NAME Restore-LayerSettings-${FITXTURE_TAG}
-      COMMAND powershell.exe -Command "& { if (Test-Path ${SETTINGS_REG_VALUE_CACHE}) { Get-Content ${SETTINGS_REG_VALUE_CACHE} | ForEach-Object { New-ItemProperty -Path ${SETTINGS_REG_PATH} -Name $_.replace('`n','').replace('`r','') -Value 0 | Out-Null } } else { Remove-Item ${SETTINGS_REG_PATH} } }"
-    )
-    set_tests_properties(Restore-LayerSettings-${FITXTURE_TAG}
-      PROPERTIES
-        FIXTURES_CLEANUP Fixture-${FITXTURE_TAG}
-        RESOURCE_LOCK Registry
-    )
-
     set_tests_properties("${TSL_NAME}"
       PROPERTIES
-        FIXTURES_REQUIRED Fixture-${FITXTURE_TAG}
         RESOURCE_LOCK Registry
-        PASS_REGULAR_EXPRESSION "${TSL_EXPECTED}"
     )
   endif()
+  set_tests_properties("${TSL_NAME}"
+      PROPERTIES
+        PASS_REGULAR_EXPRESSION "${TSL_EXPECTED}"
+    )
 endfunction()
 
 # When no relevant environment variables or registry values are set, layers
