@@ -84,6 +84,7 @@ bool get_environment(const std::string& variable, std::string& value) {
   const char *output = std::getenv(variable.c_str());
   if (output != nullptr)
   {
+    value.assign(output);
     value = std::string(output);
     return true;
   }
@@ -135,44 +136,34 @@ void parse_bool(const std::string &option, bool &out) {
 std::string find_settings() {
   struct stat info;
   std::string found_location = "cl_layer_settings.txt";
+  auto use_file_if_exists = [&](const std::string& path)
+  {
+    bool stat_success = stat(path.c_str(), &info) == 0;
+    bool is_regular_file = (info.st_mode & S_IFMT) == S_IFREG;
+    if (stat_success && is_regular_file)
+    {
+      found_location = path;
+      return true;
+    }
+    else return false;
+  };
 #ifdef __linux__
   {
     std::string search_path;
-    if (!detail::get_environment("XDG_DATA_HOME", search_path)) {
-      if (detail::get_environment("HOME", search_path)) {
-        search_path += "/.local/share";
-      }
+    if (detail::get_environment("XDG_DATA_HOME", search_path) && !search_path.empty())
+    {
+      use_file_if_exists(search_path += "/settings.d/opencl/cl_layer_settings.txt");
     }
-    if (!search_path.empty()) {
-      const std::string home_file =
-          search_path + "/opencl/settings.d/cl_layer_settings.txt";
-      if (stat(home_file.c_str(), &info) == 0 &&
-          (info.st_mode & S_IFREG) > 0) {
-        found_location = home_file;
-      }
-    }
+    else if (detail::get_environment("HOME", search_path))
+        use_file_if_exists(search_path += "/.local/share/cl_layer_settings.txt");
   }
 #elif defined(_WIN32)
   {
     for(HKEY hive : detail::hives_to_check())
     {
-      //std::cout << "Trying hive" << std::endl;
       HKEY key;
-      //if (hive == HKEY_LOCAL_MACHINE)
-      //{
-      //  std::cout << "hive: " << hive << "\tHKEY_LOCAL_MACHINE: " << HKEY_LOCAL_MACHINE << std::endl;
-      //  std::system("powershell.exe -Command \"& { Get-ChildItem HKLM:\\Software\\Khronos\\OpenCL -ErrorAction SilentlyContinue | Out-File -Encoding ascii -Force HKLM.txt }\"");
-      //  std::cout << std::ifstream("HKLM.txt").rdbuf() << std::endl;
-      //}
-      //else
-      //{
-      //  std::cout << "hive: " << hive << "\tHKEY_CURRENT_USER: " << HKEY_CURRENT_USER << std::endl;
-      //  std::system("powershell.exe -Command \"& { Get-ChildItem HKCU:\\Software\\Khronos\\OpenCL -ErrorAction SilentlyContinue | Out-File -Encoding ascii -Force HKCU.txt }\"");
-      //  std::cout << std::ifstream("HKCU.txt").rdbuf() << std::endl;
-      //}
       if (ERROR_SUCCESS == RegOpenKeyEx(hive, "Software\\Khronos\\OpenCL\\Settings", 0, KEY_READ, &key))
       {
-        //std::cout << "Checking hive" << std::endl;
         // NOTE 1: Should be std::string, but std::string::data() returns const char*.
         //         It returns a char* starting from C++17, needed for RegEnumValue
         //
@@ -180,23 +171,9 @@ std::string find_settings() {
         //         We alloc pessimistically for registry name max size as documented.
         std::vector<char> name(32'767);
         DWORD name_size = static_cast<DWORD>(name.capacity()), value, value_size = sizeof(value_size), type;
-        //LSTATUS err = RegEnumValue(key, 0, name.data(), &name_size, nullptr, &type, nullptr, &value_size);
-        //std::cout << "err: " << err << std::endl;
-        //std::cout << "name_size: " << name_size << std::endl;
-        //std::cout << "value_size: " << value_size << std::endl;
-        //std::cout << "type: " << type << std::endl;
-
-        //value_size = 0; name_size = 32'767;
-        //err = RegEnumValue(key, 1, name.data(), &name_size, nullptr, &type, nullptr, &value_size);
-        //std::cout << "err: " << err << std::endl;
-        //std::cout << "name_size: " << name_size << std::endl;
-        //std::cout << "value_size: " << value_size << std::endl;
-        //std::cout << "type: " << type << std::endl;
-
         LSTATUS err;
         for (DWORD i = 0 ; ERROR_NO_MORE_ITEMS != (err = RegEnumValue(key, i, name.data(), &name_size, nullptr, &type, nullptr, &value_size)); ++i, value_size = sizeof(value_size), name_size = static_cast<DWORD>(name.capacity()))
         {
-          //std::cout << "Hive entry" << std::endl;
           // Check if the registry entry is a dword
           if (type != REG_DWORD) continue;
 
@@ -206,35 +183,19 @@ std::string find_settings() {
 
           name.resize(name_size); // ++because subsequent call will write a null-terminator as well
 
-          //std::cout << "name: " << std::string(name.data(), name.size()) << std::endl;
-
           // Check if the registry entry has value of zero
           if (value != 0) continue;
 
-          // If path exists, use that location and report as being found
-          auto use_file_if_exists = [&](const std::string& path)
-          {
-            bool stat_success = stat(path.c_str(), &info) == 0;
-            bool is_regular_file = (info.st_mode & S_IFMT) == S_IFREG;
-            if (stat_success && is_regular_file)
-            {
-              found_location = path;
-              return true;
-            }
-            else return false;
-          };
           if (stat(name.data(), &info) == 0)
           {
             if ((info.st_mode & S_IFDIR) > 0)
             {
-              //std::cout << "Reg entry is dir" << std::endl;
               std::string config_path(name.data(), name.size());
               config_path += "/cl_layer_settings.txt";
               if (use_file_if_exists(config_path)) break;
             }
             else
             {
-              //std::cout << "Reg entry is not dir" << std::endl;
               if (use_file_if_exists(std::string(name.data(), name.size()))) break;
             }
           }
@@ -248,7 +209,6 @@ std::string find_settings() {
   if (detail::get_environment("OPENCL_LAYERS_SETTINGS_PATH", config_path))
     if (stat(config_path.c_str(), &info) == 0) {
       if ((info.st_mode & S_IFDIR) > 0) {
-        std::cout << "Env var is dir" << std::endl;
         config_path += "/cl_layer_settings.txt";
       }
       found_location = config_path;
