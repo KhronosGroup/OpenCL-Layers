@@ -666,7 +666,7 @@ void init_output_stream() {
     std::cerr << "object_lifetime failed to open specified output stream: "
               << settings.log_filename << ". Falling back to stderr." << '\n';
   }
-}; // namespace
+} // namespace
 
 static void _init_dispatch(void);
 
