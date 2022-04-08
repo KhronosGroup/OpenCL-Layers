@@ -21,10 +21,10 @@ execute_process(COMMAND
 string(STRIP "${HIGH_INTEGRITY_CHECK_OUTPUT}" HIGH_INTEGRITY_CHECK_OUTPUT)
 
 if(HIGH_INTEGRITY_CHECK_OUTPUT)
-  message(STATUS "Configuring using high-integrity")
+  #message(STATUS "Configuring using high-integrity")
   set(HIVE HKLM)
 else()
-  message(STATUS "Configuring using regular integrity")
+  #message(STATUS "Configuring using regular integrity")
   set(HIVE HKCU)
 endif()
 
@@ -93,7 +93,7 @@ function(test_settings_location)
         }; \
         if ('${TSL_SETTINGS_REG}'.Length -ne 0) \
         { \
-          New-ItemProperty -Type DWORD -Path ${SETTINGS_REG_PATH} -Name '${TSL_SETTINGS_REG}'.replace('`n','').replace('`r','') -Value 0; \
+          New-ItemProperty -Type DWORD -Path ${SETTINGS_REG_PATH} -Name '${TSL_SETTINGS_REG}'.replace('`n','').replace('`r','') -Value 0 | Out-Null; \
         } \
         ${CMAKE_COMMAND} -E env ${XDG_DATA_HOME_ARG} ${HOME_ARG} ${SETTINGS_ENV_ARG} $<TARGET_FILE:print_settings_location> ;\
         if (Test-Path ${SETTINGS_REG_VALUE_CACHE}) \
