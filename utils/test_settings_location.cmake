@@ -21,8 +21,10 @@ execute_process(COMMAND
 string(STRIP "${HIGH_INTEGRITY_CHECK_OUTPUT}" HIGH_INTEGRITY_CHECK_OUTPUT)
 
 if(HIGH_INTEGRITY_CHECK_OUTPUT)
+  message(STATUS "Configuring using high-integrity")
   set(HIVE HKLM)
 else()
+  message(STATUS "Configuring using regular integrity")
   set(HIVE HKCU)
 endif()
 
