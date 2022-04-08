@@ -93,7 +93,7 @@ function(test_settings_location)
         }; \
         if ('${TSL_SETTINGS_REG}'.Length -ne 0) \
         { \
-          New-ItemProperty -Type DWORD -Path ${SETTINGS_REG_PATH} -Name '${TSL_SETTINGS_REG}'.replace('`n','').replace('`r','') -Value 0 ; \
+          New-ItemProperty -Type DWORD -Path ${SETTINGS_REG_PATH} -Name '${TSL_SETTINGS_REG}'.replace('`n','').replace('`r','') -Value 0 | Out-Null; \
           Get-ChildItem ${SETTINGS_REG_PATH}; \
         } \
         ${CMAKE_COMMAND} -E env ${XDG_DATA_HOME_ARG} ${HOME_ARG} ${SETTINGS_ENV_ARG} $<TARGET_FILE:print_settings_location> ;\
