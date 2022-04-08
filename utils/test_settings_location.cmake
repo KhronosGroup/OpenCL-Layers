@@ -13,6 +13,18 @@ set(HOME_DIR_WITH_EXISTING_FILE          "${CMAKE_CURRENT_BINARY_DIR}/home_with"
 set(HOME_DIR_WITH_MISSING_FILE           "${CMAKE_CURRENT_BINARY_DIR}/home_without")
 set(HOME_PATH_TO_EXISTING_FILE           "${HOME_DIR_WITH_EXISTING_FILE}/.local/share/cl_layer_settings.txt")
 
+execute_process(COMMAND
+  powershell.exe "-Command" "& {(new-object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator).ToString().ToUpper()}"
+  OUTPUT_VARIABLE HIGH_INTEGRITY_CHECK_OUTPUT
+  RESULT_VARIABLE HIGH_INTEGRITY_CHECK_RESULT
+)
+string(STRIP "${HIGH_INTEGRITY_CHECK_OUTPUT}" HIGH_INTEGRITY_CHECK_OUTPUT)
+
+if(HIGH_INTEGRITY_CHECK_OUTPUT)
+  set(HIVE HKLM)
+else()
+  set(HIVE HKCU)
+endif()
 
 file(WRITE "${PATH_TO_EXISTING_DEFAULT_NAME_FILE1}" " ")
 file(WRITE "${PATH_TO_EXISTING_DEFAULT_NAME_FILE2}" " ")
@@ -60,7 +72,7 @@ function(test_settings_location)
     # Remove the user provided reg entry
     # Restore previous registry contents
     # Remove SETTINGS_REG_VALUE_CACHE file
-    set(SETTINGS_REG_PATH "HKCU:/Software/Khronos/OpenCL/Settings")
+    set(SETTINGS_REG_PATH "${HIVE}:/Software/Khronos/OpenCL/Settings")
     set(SETTINGS_REG_VALUE_CACHE "${CMAKE_CURRENT_BINARY_DIR}/UserRegistry.txt")
     add_test(
       NAME "${TSL_NAME}"
