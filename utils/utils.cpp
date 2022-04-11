@@ -138,12 +138,12 @@ std::string find_settings() {
   std::string found_location = "cl_layer_settings.txt";
   auto use_file_if_exists = [&](const std::string& path)
   {
-    //std::cout << "Checking " << path << std::endl;
+    std::cout << "Checking " << path << std::endl;
     bool stat_success = stat(path.c_str(), &info) == 0;
     bool is_regular_file = (info.st_mode & S_IFMT) == S_IFREG;
     if (stat_success && is_regular_file)
     {
-      //std::cout << "Found and using " << path << std::endl;
+      std::cout << "Found and using " << path << std::endl;
       found_location = path;
       return true;
     }
@@ -163,11 +163,11 @@ std::string find_settings() {
   {
     for(HKEY hive : detail::hives_to_check())
     {
-      //std::cout << "Trying to read " << (hive == HKEY_LOCAL_MACHINE ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER") << std::endl;
+      std::cout << "Trying to read " << (hive == HKEY_LOCAL_MACHINE ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER") << std::endl;
       HKEY key;
       if (ERROR_SUCCESS == RegOpenKeyEx(hive, "Software\\Khronos\\OpenCL\\Settings", 0, KEY_READ, &key))
       {
-        //std::cout << "Reading " << (hive == HKEY_LOCAL_MACHINE ? "HKLM:\\" : "HKCU:\\") << "Software\\Khronos\\OpenCL\\Settings" << std::endl;
+        std::cout << "Reading " << (hive == HKEY_LOCAL_MACHINE ? "HKLM:\\" : "HKCU:\\") << "Software\\Khronos\\OpenCL\\Settings" << std::endl;
         // NOTE 1: Should be std::string, but std::string::data() returns const char*.
         //         It returns a char* starting from C++17, needed for RegEnumValue
         //
