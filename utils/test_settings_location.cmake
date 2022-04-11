@@ -28,6 +28,14 @@ else()
   set(HIVE HKCU)
 endif()
 
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  message(STATUS "Using 64-bit PowerShell")
+  set(POWERSHELL_BIN "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
+else()
+  message(STATUS "Using 32-bit PowerShell")
+  set(POWERSHELL_BIN "C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe")
+endif()
+
 file(WRITE "${PATH_TO_EXISTING_DEFAULT_NAME_FILE1}" " ")
 file(WRITE "${PATH_TO_EXISTING_DEFAULT_NAME_FILE2}" " ")
 file(WRITE "${PATH_TO_EXISTING_CUSTOM_NAME_FILE1}" " ")
@@ -79,7 +87,7 @@ function(test_settings_location)
     add_test(
       NAME "${TSL_NAME}"
       COMMAND
-      powershell.exe -Command "& { \
+      ${POWERSHELL_BIN} -Command "& { \
         if (Test-Path ${SETTINGS_REG_PATH}) \
         { \
           Get-Item ${SETTINGS_REG_PATH} | Select-Object -ExpandProperty Property | Out-File ${SETTINGS_REG_VALUE_CACHE} -Encoding ascii \
