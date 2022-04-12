@@ -13,34 +13,42 @@ set(HOME_DIR_WITH_EXISTING_FILE          "${CMAKE_CURRENT_BINARY_DIR}/home_with"
 set(HOME_DIR_WITH_MISSING_FILE           "${CMAKE_CURRENT_BINARY_DIR}/home_without")
 set(HOME_PATH_TO_EXISTING_FILE           "${HOME_DIR_WITH_EXISTING_FILE}/.local/share/cl_layer_settings.txt")
 
-execute_process(COMMAND
-  powershell.exe "-Command" "& {(new-object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator).ToString().ToUpper()}"
-  OUTPUT_VARIABLE HIGH_INTEGRITY_CHECK_OUTPUT
-  RESULT_VARIABLE HIGH_INTEGRITY_CHECK_RESULT
-)
-string(STRIP "${HIGH_INTEGRITY_CHECK_OUTPUT}" HIGH_INTEGRITY_CHECK_OUTPUT)
-
-if(HIGH_INTEGRITY_CHECK_OUTPUT)
-  #message(STATUS "Configuring using high-integrity")
-  set(HIVE HKLM)
-else()
-  #message(STATUS "Configuring using regular integrity")
-  set(HIVE HKCU)
-endif()
-
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-  message(STATUS "Using 64-bit PowerShell")
-  set(POWERSHELL_BIN "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
-else()
-  message(STATUS "Using 32-bit PowerShell")
-  set(POWERSHELL_BIN "C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe")
-endif()
-
 file(WRITE "${PATH_TO_EXISTING_DEFAULT_NAME_FILE1}" " ")
 file(WRITE "${PATH_TO_EXISTING_DEFAULT_NAME_FILE2}" " ")
 file(WRITE "${PATH_TO_EXISTING_CUSTOM_NAME_FILE1}" " ")
 file(WRITE "${XDG_PATH_TO_EXISTING_FILE}" " ")
 file(WRITE "${HOME_PATH_TO_EXISTING_FILE}" " ")
+
+if(WIN32)
+  # NOTE: The ICD loader will only inspect user registry (and environment variables) when
+  #       running as normal user. It is decided at configuration time whether tests will
+  #       write to system registry Hive Key Local Machine (admin, aka. high-integrity) or to
+  #       Hive Key Current User. Configuring as user but running tests as admin won't work.
+  execute_process(COMMAND
+    powershell.exe "-Command" "& {(new-object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator).ToString().ToUpper()}"
+    OUTPUT_VARIABLE HIGH_INTEGRITY_CHECK_OUTPUT
+    RESULT_VARIABLE HIGH_INTEGRITY_CHECK_RESULT
+  )
+  if(NOT ${HIGH_INTEGRITY_CHECK_RESULT} EQUAL 0)
+    message(FATAL_ERROR "Failed to detect presence of admin priviliges.")
+  endif()
+  string(STRIP "${HIGH_INTEGRITY_CHECK_OUTPUT}" HIGH_INTEGRITY_CHECK_OUTPUT) # Strip newline
+  if(HIGH_INTEGRITY_CHECK_OUTPUT) # PowerShell "True"/"False" output coincides with CMake boolean
+    set(HIVE HKLM)
+  else()
+    set(HIVE HKCU)
+  endif()
+
+  # NOTE: This neutralizes a footgun in Windows, namely how SysWOW64 and the registry works.
+  #       When a 64-bit process (powershell) write a DWORD to the registry it becomes
+  #       invisible to 32-bit processes. This will likely come as a surprise. When compiling
+  #       32-bit executables, we must make sure to use a 32-bit powershell.exe
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(POWERSHELL_BIN "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
+  else()
+    set(POWERSHELL_BIN "C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe")
+  endif()
+endif()
 
 function(test_settings_location)
   set(FLAGS SETTINGS_HOME)
