@@ -10,7 +10,20 @@ if (NOT WIN32 AND NOT APPLE)
     set_target_properties (CLObjectLifetimeLayer PROPERTIES LINK_FLAGS "-Wl,--version-script -Wl,${CMAKE_CURRENT_SOURCE_DIR}/object_lifetime.map")
 endif ()
 
-if (OPENCL_LAYERS_BUILD_TESTING AND OFF) # Temporarily disable tests
+if (LAYERS_BUILD_TESTS)
+    add_library (CLObjectLifetimeICD SHARED
+        object_lifetime_test_icd.hpp
+        object_lifetime_test_icd.cpp
+        $<$<CXX_COMPILER_ID:MSVC>:object_lifetime_test_icd.def>
+        $<$<CXX_COMPILER_ID:GNU>:object_lifetime_test_icd.map>
+    )
+    target_link_libraries(CLObjectLifetimeICD
+        PRIVATE
+            LayersCommon
+            LayersUtils
+            OpenCL::Headers
+    )
+
     add_executable (CLObjectLifetimeLayerTest object_lifetime_test.c)
 
     target_link_libraries (CLObjectLifetimeLayerTest
