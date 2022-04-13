@@ -14,6 +14,7 @@ if (LAYERS_BUILD_TESTS)
     add_library (CLObjectLifetimeICD SHARED
         object_lifetime_test_icd.hpp
         object_lifetime_test_icd.cpp
+        object_lifetime_test_icd_surface.cpp
         $<$<CXX_COMPILER_ID:MSVC>:object_lifetime_test_icd.def>
         $<$<CXX_COMPILER_ID:GNU>:object_lifetime_test_icd.map>
     )
