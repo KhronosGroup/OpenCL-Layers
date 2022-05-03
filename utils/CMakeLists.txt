@@ -10,5 +10,6 @@ add_executable(print_settings_location print_settings_location.cpp)
 target_link_libraries(print_settings_location PRIVATE LayersUtils LayersCommon)
 
 include(test_settings_location.cmake)
+include(test_settings.cmake)
 
 endif()
