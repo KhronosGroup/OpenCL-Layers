@@ -237,26 +237,15 @@ std::map<std::string, std::string> load_settings() {
 }
 
 void settings_parser::get_bool(const char *option_name, bool &out) const {
-  if (settings_->find(prefix_ + "." + option_name) != settings_->end()) {
-    detail::parse_bool(settings_->at(prefix_ + "." + option_name), out);
-  }
-  std::string option_value;
-  if (detail::get_environment(detail::to_upper("CL_" + prefix_ + "_" + option_name), option_value))
-    detail::parse_bool(
-      option_value,
-      out);
+  get_option(option_name, [&out](const std::string &value) {
+    detail::parse_bool(value, out);
+  });
 }
 
-void settings_parser::get_filename(const char *option_name,
-                                   std::string &out) const {
-  const auto full_option_name = prefix_ + "." + option_name;
-  if (settings_->find(full_option_name) != settings_->end() &&
-      settings_->at(full_option_name) != "") {
-    out = settings_->at(full_option_name);
-  }
-  std::string env_option;
-  if (detail::get_environment(detail::to_upper("CL_" + prefix_ + "_" + option_name), env_option))
-    out = std::move(env_option);
+void settings_parser::get_filename(const char *option_name, std::string &out) const {
+  get_option(option_name, [&out](const std::string &value) {
+    out = value;
+  });
 }
 
 } // namespace ocl_layer_utils
