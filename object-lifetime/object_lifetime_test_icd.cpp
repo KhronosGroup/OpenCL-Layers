@@ -42,14 +42,36 @@ namespace lifetime
   cl_int ref_counted_object<Object>::release()
   {
     if (ref_count > 0)
-  {
-    --ref_count;
-    if (ref_count == 0 && implicit_ref_count == 0)
-      parents.notify();
-    return CL_SUCCESS;
+    {
+      --ref_count;
+      if (ref_count == 0 && implicit_ref_count == 0)
+        parents.notify();
+      return CL_SUCCESS;
+    }
+    else
+      return CL_INVALID<Object>;
   }
-  else
-    return CL_INVALID<Object>;
+
+  template <typename Object>
+  cl_uint ref_counted_object<Object>::CL_OBJECT_REFERENCE_COUNT()
+  {
+    if (_platform.report_implicit_ref_count_to_user)
+      return ref_count + implicit_ref_count;
+    else
+      return ref_count;
+  }
+
+  template <typename Object>
+  ref_counted_object<Object>::operator bool()
+  {
+    if (ref_count > 0)
+      return true;
+    else if (implicit_ref_count > 0 && _platform.allow_using_inaccessible_objects)
+      return true;
+    else if (_platform.allow_using_released_objects)
+      return true;
+    else
+      return false;
   }
 
   template <typename Object>
@@ -68,42 +90,6 @@ namespace lifetime
     : scoped_dispatch{ std::make_unique<cl_icd_dispatch>() }
     , dispatch{ scoped_dispatch.get() }
   {}
-}
-
-CL_API_ENTRY void * CL_API_CALL clGetExtensionFunctionAddress(
-  const char *name)
-{
-  using namespace lifetime;
-
-  auto it = _extensions.find(name);
-  if (it != _extensions.end())
-    return it->second;
-  else
-    return nullptr;
-}
-
-CL_API_ENTRY cl_int CL_API_CALL
-clIcdGetPlatformIDsKHR(cl_uint         num_entries,
-                       cl_platform_id* platforms,
-                       cl_uint*        num_platforms)
-{
-  using namespace lifetime;
-  static constexpr cl_uint plat_count = 1;
-
-  if (num_platforms)
-    *num_platforms = plat_count;
-
-  if ((platforms && num_entries > plat_count) ||
-      (platforms && num_entries <= 0) ||
-      (!platforms && num_entries >= 1))
-  {
-    return CL_INVALID_VALUE;
-  }
-
-  if (platforms && num_entries == plat_count)
-    platforms[0] = &_platform;
-
-  return CL_SUCCESS;
 }
 
 #include <utils.hpp>
@@ -188,19 +174,11 @@ cl_int _cl_device_id::clGetDeviceInfo(
     }
     case CL_DEVICE_REFERENCE_COUNT:
     {
-      if (lifetime::_platform.numeric_version != CL_MAKE_VERSION(2, 0, 0))
-        std::copy(
-          reinterpret_cast<char*>(&ref_count),
-          reinterpret_cast<char*>(&ref_count) + sizeof(ref_count),
-          std::back_inserter(result));
-        else
-        {
-          cl_uint tmp = ref_count + implicit_ref_count;
-          std::copy(
-            reinterpret_cast<char*>(&tmp),
-            reinterpret_cast<char*>(&tmp) + sizeof(tmp),
-            std::back_inserter(result));
-        }
+      cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
       break;
     }
     default:
@@ -279,36 +257,29 @@ cl_int _cl_device_id::clRetainDevice()
 {
   if(kind == device_kind::root)
     return CL_SUCCESS;
-  else if (ref_count > 0)
-  {
-    ++ref_count;
-    return CL_SUCCESS;
-  }
   else
-    return CL_INVALID_DEVICE;
+    return retain();
 }
 
 cl_int _cl_device_id::clReleaseDevice()
 {
   if(kind == device_kind::root)
     return CL_SUCCESS;
-  else if (ref_count > 0)
-  {
-    --ref_count;
-    return CL_SUCCESS;
-  }
   else
-    return CL_INVALID_DEVICE;
+    return release();
 }
 
 _cl_platform_id::_cl_platform_id()
-  : numeric_version{}
+  : numeric_version{ CL_MAKE_VERSION(3, 0, 0) }
   , version{}
   , vendor{ "Khronos" }
   , profile{ "FULL_PROFILE" }
   , name{ "Object Lifetime Layer Test ICD" }
   , extensions{ "cl_khr_icd" }
   , suffix{ "khronos" }
+  , report_implicit_ref_count_to_user{ false }
+  , allow_using_released_objects{ false }
+  , allow_using_inaccessible_objects{ false }
 {
   scoped_dispatch = std::make_unique<cl_icd_dispatch>();
   dispatch = scoped_dispatch.get();
@@ -324,14 +295,34 @@ _cl_platform_id::_cl_platform_id()
       icd_version % 10
     );
   }
-  else
-    numeric_version = CL_MAKE_VERSION(1, 2, 0);
 
   version = std::string{"OpenCL "} +
     std::to_string(CL_VERSION_MAJOR(numeric_version)) +
     "." +
     std::to_string(CL_VERSION_MINOR(numeric_version)) +
     " Mock";
+
+  std::string REPORT_IMPLICIT_REF_COUNT_TO_USER;
+  if (ocl_layer_utils::detail::get_environment("REPORT_IMPLICIT_REF_COUNT_TO_USER", REPORT_IMPLICIT_REF_COUNT_TO_USER))
+  {
+    if (CL_VERSION_MAJOR(numeric_version) == 1)
+      std::exit(-1); // conflating implicit ref counts with regular ones is 2.0+ behavior
+    report_implicit_ref_count_to_user = std::atoi(REPORT_IMPLICIT_REF_COUNT_TO_USER.c_str());
+  }
+
+  std::string ALLOW_USING_RELEASED_OBJECTS;
+  if (ocl_layer_utils::detail::get_environment("ALLOW_USING_RELEASED_OBJECTS", ALLOW_USING_RELEASED_OBJECTS))
+  {
+    allow_using_released_objects = std::atoi(ALLOW_USING_RELEASED_OBJECTS.c_str());
+  }
+
+  std::string ALLOW_USING_INACCESSIBLE_OBJECTS;
+  if (ocl_layer_utils::detail::get_environment("ALLOW_USING_INACCESSIBLE_OBJECTS", ALLOW_USING_INACCESSIBLE_OBJECTS))
+  {
+    if (CL_VERSION_MAJOR(numeric_version) != 3)
+      std::exit(-1); // the definition of inaccessible objects only exists in 3.0+
+    allow_using_inaccessible_objects = std::atoi(ALLOW_USING_INACCESSIBLE_OBJECTS.c_str());
+  }
 
   lifetime::_devices.insert(std::make_shared<_cl_device_id>(_cl_device_id::device_kind::root));
 }

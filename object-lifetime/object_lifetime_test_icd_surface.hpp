@@ -35,3 +35,14 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainDevice_wrap(
 
 CL_API_ENTRY cl_int CL_API_CALL clReleaseDevice_wrap(
   cl_device_id device);
+
+// Loader hooks
+
+CL_API_ENTRY void* CL_API_CALL clGetExtensionFunctionAddress(
+  const char* name);
+
+CL_API_ENTRY cl_int CL_API_CALL
+clIcdGetPlatformIDsKHR(
+  cl_uint         num_entries,
+  cl_platform_id* platforms,
+  cl_uint*        num_platforms);

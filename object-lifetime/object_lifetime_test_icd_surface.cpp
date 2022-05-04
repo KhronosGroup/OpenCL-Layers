@@ -18,7 +18,10 @@ cl_int invoke_if_valid(T cl_object, F&& f)
   );
 
   if (it != _objects<T>.cend())
-    return f();
+    if (*it)
+      return f();
+    else
+      CL_INVALID<T>;
   else
     return CL_INVALID<T>;
 }
@@ -122,4 +125,43 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseDevice_wrap(
   {
     return device->clReleaseDevice();
   });
+}
+
+// Loader hooks
+
+CL_API_ENTRY void* CL_API_CALL clGetExtensionFunctionAddress(
+  const char* name)
+{
+  using namespace lifetime;
+
+  auto it = _extensions.find(name);
+  if (it != _extensions.end())
+    return it->second;
+  else
+    return nullptr;
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clIcdGetPlatformIDsKHR(
+  cl_uint         num_entries,
+  cl_platform_id* platforms,
+  cl_uint*        num_platforms)
+{
+  using namespace lifetime;
+  static constexpr cl_uint plat_count = 1;
+
+  if (num_platforms)
+    *num_platforms = plat_count;
+
+  if ((platforms && num_entries > plat_count) ||
+      (platforms && num_entries <= 0) ||
+      (!platforms && num_entries >= 1))
+  {
+    return CL_INVALID_VALUE;
+  }
+
+  if (platforms && num_entries == plat_count)
+    platforms[0] = &_platform;
+
+  return CL_SUCCESS;
 }

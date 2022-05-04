@@ -52,6 +52,10 @@ namespace lifetime
     cl_int retain();
     cl_int release();
 
+    cl_uint CL_OBJECT_REFERENCE_COUNT();
+
+    operator bool();
+
     void reference();
     void unreference();
   };
@@ -129,12 +133,16 @@ struct _cl_platform_id
   : public lifetime::icd_compatible
 {
   cl_version numeric_version;
-  std::string profile;
-  std::string version;
-  std::string name;
-  std::string vendor;
-  std::string extensions;
-  std::string suffix;
+  std::string profile,
+              version,
+              name,
+              vendor,
+              extensions,
+              suffix;
+
+  bool report_implicit_ref_count_to_user,
+       allow_using_released_objects,
+       allow_using_inaccessible_objects;
 
   _cl_platform_id();
   _cl_platform_id(const _cl_platform_id&) = delete;
