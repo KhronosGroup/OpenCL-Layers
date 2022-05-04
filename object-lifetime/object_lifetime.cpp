@@ -2631,8 +2631,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateImage_wrap(
     host_ptr,
     errcode_ret);
   if (image) {
-    void* parent = image_desc->mem_object != NULL ? (void*)image_desc->mem_object : (void*)context;
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, parent, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, get_parent(image), errcode_ret, cl_mem);
   }
   return image;
 }
@@ -2880,7 +2879,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromGLTexture_wrap(
     texture,
     errcode_ret);
   if (image)
-    CHECK_EXISTS_ERRC(OCL_IMAGE, image, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, get_parent(image), errcode_ret, cl_mem);
   return image;
 }
 
