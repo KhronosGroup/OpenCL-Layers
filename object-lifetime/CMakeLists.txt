@@ -28,7 +28,7 @@ if (LAYERS_BUILD_TESTS)
             OpenCL::Headers
     )
 
-    add_executable (CLObjectLifetimeLayerTest object_lifetime_test.c)
+    add_executable (CLObjectLifetimeLayerTest object_lifetime_test.cpp)
 
     target_link_libraries (CLObjectLifetimeLayerTest
         PRIVATE
