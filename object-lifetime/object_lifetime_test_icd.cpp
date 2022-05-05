@@ -3,6 +3,10 @@
 
 namespace lifetime
 {
+  bool report_implicit_ref_count_to_user,
+       allow_using_released_objects,
+       allow_using_inaccessible_objects;
+
   void object_parents<cl_device_id>::notify()
   {
     parent->unreference();
@@ -19,73 +23,6 @@ namespace lifetime
     parent_context->unreference();
   }
 
-  template <typename Object>
-  ref_counted_object<Object>::ref_counted_object(object_parents<Object> parents)
-    : ref_count{ 1 }
-    , implicit_ref_count{ 0 }
-    , parents{ parents }
-  {}
-
-  template <typename Object>
-  cl_int ref_counted_object<Object>::retain()
-  {
-    if (ref_count > 0)
-    {
-      ++ref_count;
-      return CL_SUCCESS;
-    }
-    else
-      return CL_INVALID<Object>;
-  }
-
-  template <typename Object>
-  cl_int ref_counted_object<Object>::release()
-  {
-    if (ref_count > 0)
-    {
-      --ref_count;
-      if (ref_count == 0 && implicit_ref_count == 0)
-        parents.notify();
-      return CL_SUCCESS;
-    }
-    else
-      return CL_INVALID<Object>;
-  }
-
-  template <typename Object>
-  cl_uint ref_counted_object<Object>::CL_OBJECT_REFERENCE_COUNT()
-  {
-    if (_platform.report_implicit_ref_count_to_user)
-      return ref_count + implicit_ref_count;
-    else
-      return ref_count;
-  }
-
-  template <typename Object>
-  ref_counted_object<Object>::operator bool()
-  {
-    if (ref_count > 0)
-      return true;
-    else if (implicit_ref_count > 0 && _platform.allow_using_inaccessible_objects)
-      return true;
-    else if (_platform.allow_using_released_objects)
-      return true;
-    else
-      return false;
-  }
-
-  template <typename Object>
-  void ref_counted_object<Object>::reference()
-  {
-    ++implicit_ref_count;
-  }
-
-  template <typename Object>
-  void ref_counted_object<Object>::unreference()
-  {
-    --implicit_ref_count;
-  }
-
   icd_compatible::icd_compatible()
     : scoped_dispatch{ std::make_unique<cl_icd_dispatch>() }
     , dispatch{ scoped_dispatch.get() }
@@ -98,12 +35,12 @@ namespace lifetime
 #include <algorithm>
 #include <iterator>
 
-_cl_device_id::_cl_device_id(device_kind kind, cl_uint num_cu)
+_cl_device_id::_cl_device_id(device_kind kind, cl_device_id parent, cl_uint num_cu)
   : icd_compatible{}
-  , ref_counted_object{ lifetime::object_parents<cl_device_id>{
-    kind == device_kind::root ? nullptr : this} }
+  , ref_counted_object<cl_device_id>{ lifetime::object_parents<cl_device_id>{ parent } }
   , kind{ kind }
   , profile{ "FULL_PROFILE" }
+  , version { lifetime::_platform.version }
   , name{ "Test Device" }
   , vendor{ "The Khronos Group" }
   , extensions{ "" }
@@ -153,6 +90,10 @@ cl_int _cl_device_id::clGetDeviceInfo(
       std::copy(profile.begin(), profile.end(), std::back_inserter(result));
       result.push_back('\0');
       break;
+    case CL_DEVICE_VERSION:
+      std::copy(version.begin(), version.end(), std::back_inserter(result));
+      result.push_back('\0');
+      break;
     case CL_DEVICE_MAX_COMPUTE_UNITS:
       std::copy(
         reinterpret_cast<char*>(&cu_count),
@@ -181,6 +122,12 @@ cl_int _cl_device_id::clGetDeviceInfo(
         std::back_inserter(result));
       break;
     }
+    case CL_DEVICE_NUMERIC_VERSION:
+      std::copy(
+        reinterpret_cast<char*>(&numeric_version),
+        reinterpret_cast<char*>(&numeric_version) + sizeof(numeric_version),
+        std::back_inserter(result));
+      break;
     default:
       return CL_INVALID_VALUE;
   }
@@ -225,10 +172,11 @@ cl_int _cl_device_id::clCreateSubDevices(
         num_devices,
         std::make_shared<_cl_device_id>(
           _cl_device_id::device_kind::sub,
+          this,
           n
         )
       );
-      implicit_ref_count += num_devices;
+      reference(num_devices);
 
       if (num_devices_ret)
         *num_devices_ret = static_cast<cl_uint>(result.size());
@@ -245,7 +193,7 @@ cl_int _cl_device_id::clCreateSubDevices(
           [](const std::shared_ptr<_cl_device_id>& dev){ return dev.get(); }
         );
       }
-
+      return CL_SUCCESS;
       break;
     }
     default:
@@ -275,11 +223,8 @@ _cl_platform_id::_cl_platform_id()
   , vendor{ "Khronos" }
   , profile{ "FULL_PROFILE" }
   , name{ "Object Lifetime Layer Test ICD" }
-  , extensions{ "cl_khr_icd" }
+  , extensions{ "cl_khr_icd cl_khr_extended_versioning" }
   , suffix{ "khronos" }
-  , report_implicit_ref_count_to_user{ false }
-  , allow_using_released_objects{ false }
-  , allow_using_inaccessible_objects{ false }
 {
   scoped_dispatch = std::make_unique<cl_icd_dispatch>();
   dispatch = scoped_dispatch.get();
@@ -302,27 +247,33 @@ _cl_platform_id::_cl_platform_id()
     std::to_string(CL_VERSION_MINOR(numeric_version)) +
     " Mock";
 
+  using namespace lifetime;
+
   std::string REPORT_IMPLICIT_REF_COUNT_TO_USER;
   if (ocl_layer_utils::detail::get_environment("REPORT_IMPLICIT_REF_COUNT_TO_USER", REPORT_IMPLICIT_REF_COUNT_TO_USER))
   {
     if (CL_VERSION_MAJOR(numeric_version) == 1)
       std::exit(-1); // conflating implicit ref counts with regular ones is 2.0+ behavior
-    report_implicit_ref_count_to_user = std::atoi(REPORT_IMPLICIT_REF_COUNT_TO_USER.c_str());
+    report_implicit_ref_count_to_user = true;
   }
+  else
+    report_implicit_ref_count_to_user = false;
 
   std::string ALLOW_USING_RELEASED_OBJECTS;
   if (ocl_layer_utils::detail::get_environment("ALLOW_USING_RELEASED_OBJECTS", ALLOW_USING_RELEASED_OBJECTS))
   {
-    allow_using_released_objects = std::atoi(ALLOW_USING_RELEASED_OBJECTS.c_str());
+    allow_using_released_objects = true;
   }
+  else
+    allow_using_released_objects = false;
 
   std::string ALLOW_USING_INACCESSIBLE_OBJECTS;
   if (ocl_layer_utils::detail::get_environment("ALLOW_USING_INACCESSIBLE_OBJECTS", ALLOW_USING_INACCESSIBLE_OBJECTS))
   {
-    if (CL_VERSION_MAJOR(numeric_version) != 3)
-      std::exit(-1); // the definition of inaccessible objects only exists in 3.0+
-    allow_using_inaccessible_objects = std::atoi(ALLOW_USING_INACCESSIBLE_OBJECTS.c_str());
+    allow_using_inaccessible_objects = true;
   }
+  else
+    allow_using_inaccessible_objects = false;
 
   lifetime::_devices.insert(std::make_shared<_cl_device_id>(_cl_device_id::device_kind::root));
 }
@@ -361,6 +312,12 @@ cl_int _cl_platform_id::clGetPlatformInfo(
       break;
     case CL_PLATFORM_ICD_SUFFIX_KHR:
       result = suffix;
+      break;
+    case CL_PLATFORM_NUMERIC_VERSION:
+      std::copy(
+        reinterpret_cast<char*>(&numeric_version),
+        reinterpret_cast<char*>(&numeric_version) + sizeof(numeric_version),
+        std::back_inserter(result));
       break;
     default:
       return CL_INVALID_VALUE;

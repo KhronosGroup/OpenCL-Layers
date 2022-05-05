@@ -4,7 +4,7 @@
 #include <type_traits>  // std::remove_pointer_t
 
 template <typename T, typename F>
-cl_int invoke_if_valid(T cl_object, F&& f)
+cl_int invoke_if_valid(T cl_object, F&& f, bool retain = false)
 {
   using namespace lifetime;
 
@@ -18,10 +18,10 @@ cl_int invoke_if_valid(T cl_object, F&& f)
   );
 
   if (it != _objects<T>.cend())
-    if (*it)
+    if ((*it)->is_valid(retain))
       return f();
     else
-      CL_INVALID<T>;
+      return CL_INVALID<T>;
   else
     return CL_INVALID<T>;
 }
@@ -115,7 +115,9 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainDevice_wrap(
   return invoke_if_valid(device, [&]()
   {
     return device->clRetainDevice();
-  });
+  },
+    true
+  );
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clReleaseDevice_wrap(

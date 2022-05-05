@@ -15,6 +15,15 @@
 
 namespace lifetime
 {
+  extern bool report_implicit_ref_count_to_user,
+              allow_using_released_objects,
+              allow_using_inaccessible_objects;
+
+  template <typename T> cl_int CL_INVALID;
+  template <> cl_int CL_INVALID<cl_platform_id> = CL_INVALID_PLATFORM;
+  template <> cl_int CL_INVALID<cl_device_id> = CL_INVALID_DEVICE;
+  template <> cl_int CL_INVALID<cl_context> = CL_INVALID_CONTEXT;
+
   template <typename Object> struct object_parents;
 
   template <> struct object_parents<cl_device_id>
@@ -54,11 +63,78 @@ namespace lifetime
 
     cl_uint CL_OBJECT_REFERENCE_COUNT();
 
-    operator bool();
+    bool is_valid(bool retain);
 
-    void reference();
+    void reference(int count = 1);
     void unreference();
   };
+
+  template <typename Object>
+  ref_counted_object<Object>::ref_counted_object(object_parents<Object> parents)
+    : ref_count{ 1 }
+    , implicit_ref_count{ 0 }
+    , parents{ parents }
+  {}
+
+  template <typename Object>
+  cl_int ref_counted_object<Object>::retain()
+  {
+    if (ref_count > 0)
+    {
+      ++ref_count;
+      return CL_SUCCESS;
+    }
+    else
+      return CL_INVALID<Object>;
+  }
+
+  template <typename Object>
+  cl_int ref_counted_object<Object>::release()
+  {
+    if (ref_count > 0)
+    {
+      --ref_count;
+      if (ref_count == 0 && implicit_ref_count == 0)
+        parents.notify();
+      return CL_SUCCESS;
+    }
+    else
+      return CL_INVALID<Object>;
+  }
+
+  template <typename Object>
+  cl_uint ref_counted_object<Object>::CL_OBJECT_REFERENCE_COUNT()
+  {
+    if (report_implicit_ref_count_to_user)
+      return ref_count + implicit_ref_count;
+    else
+      return ref_count;
+  }
+
+  template <typename Object>
+  bool ref_counted_object<Object>::is_valid(bool retain)
+  {
+    if (ref_count > 0)
+      return true; // More retains than releases
+    else if (implicit_ref_count > 0 && (allow_using_inaccessible_objects || retain))
+      return true; // User-visible ref_count may still be non-zero via implicit_ref_count
+    else if (allow_using_released_objects)
+      return true; // Runtimes releasing objects in a deferred fashion
+    else
+      return false;
+  }
+
+  template <typename Object>
+  void ref_counted_object<Object>::reference(int count)
+  {
+    implicit_ref_count += count;
+  }
+
+  template <typename Object>
+  void ref_counted_object<Object>::unreference()
+  {
+    --implicit_ref_count;
+  }
 
   struct icd_compatible
   {
@@ -84,14 +160,16 @@ struct _cl_device_id
     sub
   };
   device_kind kind;
-  std::string profile;
-  std::string name;
-  std::string vendor;
-  std::string extensions;
+  cl_version numeric_version;
+  std::string profile,
+              version,
+              name,
+              vendor,
+              extensions;
   cl_uint cu_count;
 
   _cl_device_id() = default;
-  _cl_device_id(device_kind kind, cl_uint num_cu = 64);
+  _cl_device_id(device_kind kind, cl_device_id parent = nullptr, cl_uint num_cu = 64);
   _cl_device_id(const _cl_device_id&) = delete;
   _cl_device_id(_cl_device_id&&) = delete;
   ~_cl_device_id() = default;
@@ -140,10 +218,6 @@ struct _cl_platform_id
               extensions,
               suffix;
 
-  bool report_implicit_ref_count_to_user,
-       allow_using_released_objects,
-       allow_using_inaccessible_objects;
-
   _cl_platform_id();
   _cl_platform_id(const _cl_platform_id&) = delete;
   _cl_platform_id(_cl_platform_id&&) = delete;
@@ -172,11 +246,6 @@ namespace lifetime
   extern _cl_platform_id _platform;
   extern std::set<std::shared_ptr<_cl_device_id>> _devices;
   extern std::set<std::shared_ptr<_cl_context>> _contexts;
-
-  template <typename T> cl_int CL_INVALID;
-  template <> cl_int CL_INVALID<cl_platform_id> = CL_INVALID_PLATFORM;
-  template <> cl_int CL_INVALID<cl_device_id> = CL_INVALID_DEVICE;
-  template <> cl_int CL_INVALID<cl_context> = CL_INVALID_CONTEXT;
 
   template <typename T> T& _objects;
   template <> std::set<std::shared_ptr<_cl_device_id>>& _objects<cl_device_id> = _devices;
