@@ -9,21 +9,21 @@ cl_int invoke_if_valid(T cl_object, F&& f, bool retain = false)
   using namespace lifetime;
 
   auto it = std::find_if(
-    _objects<T>.cbegin(),
-    _objects<T>.cend(),
-    [=](const std::shared_ptr<std::remove_pointer_t<T>>& obj)
+    get_objects<T>().cbegin(),
+    get_objects<T>().cend(),
+    [&](const std::shared_ptr<std::remove_pointer_t<T>>& obj)
     {
       return cl_object == obj.get();
     }
   );
 
-  if (it != _objects<T>.cend())
+  if (it != get_objects<T>().cend())
     if ((*it)->is_valid(retain))
       return f();
     else
-      return CL_INVALID<T>;
+      return CL_INVALID<T>();
   else
-    return CL_INVALID<T>;
+    return CL_INVALID<T>();
 }
 
 template<typename F>
@@ -34,7 +34,7 @@ cl_int invoke_if_valid(cl_platform_id platform, F&& f)
   if (platform == &_platform)
     return f();
   else
-    return CL_INVALID<cl_platform_id>;
+    return CL_INVALID<cl_platform_id>();
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clGetPlatformInfo_wrap(

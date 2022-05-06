@@ -19,10 +19,10 @@ namespace lifetime
               allow_using_released_objects,
               allow_using_inaccessible_objects;
 
-  template <typename T> cl_int CL_INVALID;
-  template <> cl_int CL_INVALID<cl_platform_id> = CL_INVALID_PLATFORM;
-  template <> cl_int CL_INVALID<cl_device_id> = CL_INVALID_DEVICE;
-  template <> cl_int CL_INVALID<cl_context> = CL_INVALID_CONTEXT;
+  template <typename T> cl_int CL_INVALID();
+  template <> inline cl_int CL_INVALID<cl_platform_id>() { return CL_INVALID_PLATFORM; }
+  template <> inline cl_int CL_INVALID<cl_device_id>() { return CL_INVALID_DEVICE; }
+  template <> inline cl_int CL_INVALID<cl_context>() { return CL_INVALID_CONTEXT; }
 
   template <typename Object> struct object_parents;
 
@@ -85,7 +85,7 @@ namespace lifetime
       return CL_SUCCESS;
     }
     else
-      return CL_INVALID<Object>;
+      return CL_INVALID<Object>();
   }
 
   template <typename Object>
@@ -99,7 +99,7 @@ namespace lifetime
       return CL_SUCCESS;
     }
     else
-      return CL_INVALID<Object>;
+      return CL_INVALID<Object>();
   }
 
   template <typename Object>
@@ -168,7 +168,7 @@ struct _cl_device_id
               extensions;
   cl_uint cu_count;
 
-  _cl_device_id() = default;
+  _cl_device_id() = delete;
   _cl_device_id(device_kind kind, cl_device_id parent = nullptr, cl_uint num_cu = 64);
   _cl_device_id(const _cl_device_id&) = delete;
   _cl_device_id(_cl_device_id&&) = delete;
@@ -247,7 +247,7 @@ namespace lifetime
   extern std::set<std::shared_ptr<_cl_device_id>> _devices;
   extern std::set<std::shared_ptr<_cl_context>> _contexts;
 
-  template <typename T> std::nullptr_t _objects;
-  template <> std::set<std::shared_ptr<_cl_device_id>>& _objects<cl_device_id> = _devices;
-  template <> std::set<std::shared_ptr<_cl_context>>& _objects<cl_context> = _contexts;
+  template <typename T> std::set<std::shared_ptr<std::remove_pointer_t<T>>>& get_objects();
+  template <> inline std::set<std::shared_ptr<_cl_device_id>>& get_objects<cl_device_id>() { return _devices; }
+  template <> inline std::set<std::shared_ptr<_cl_context>>& get_objects<cl_context>() { return _contexts; }
 }
