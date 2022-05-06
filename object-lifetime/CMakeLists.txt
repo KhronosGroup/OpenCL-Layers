@@ -10,6 +10,9 @@ if (NOT WIN32 AND NOT APPLE)
     set_target_properties (CLObjectLifetimeLayer PROPERTIES LINK_FLAGS "-Wl,--version-script -Wl,${CMAKE_CURRENT_SOURCE_DIR}/object_lifetime.map")
 endif ()
 
+set (INSTALL_TARGETS CLObjectLifetimeLayer)
+set (BUILD_TARGETS ${INSTALL_TARGETS})
+
 if (LAYERS_BUILD_TESTS)
     add_library (CLObjectLifetimeICD SHARED
         object_lifetime_test_icd.hpp
@@ -52,8 +55,10 @@ if (LAYERS_BUILD_TESTS)
     )
 endif ()
 
-set (INSTALL_TARGETS CLObjectLifetimeLayer)
-set (BUILD_TARGETS ${INSTALL_TARGETS})
+list (APPEND BUILD_TARGETS
+    CLObjectLifetimeICD
+    CLObjectLifetimeLayerTest
+)
 
 set_target_properties (${BUILD_TARGETS}
     PROPERTIES
