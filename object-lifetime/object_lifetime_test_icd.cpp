@@ -295,25 +295,31 @@ cl_int _cl_platform_id::clGetPlatformInfo(
   if (param_value_size == 0 && param_value != NULL)
     return CL_INVALID_VALUE;
 
-  std::string result;
+  std::vector<char> result;
   switch(param_name) {
     case CL_PLATFORM_PROFILE:
-      result = profile;
+      std::copy(profile.begin(), profile.end(), std::back_inserter(result));
+      result.push_back('\0');
       break;
     case CL_PLATFORM_VERSION:
-      result = version;
+      std::copy(version.begin(), version.end(), std::back_inserter(result));
+      result.push_back('\0');
       break;
     case CL_PLATFORM_NAME:
-      result = name;
+      std::copy(name.begin(), name.end(), std::back_inserter(result));
+      result.push_back('\0');
       break;
     case CL_PLATFORM_VENDOR:
-      result = vendor;
+      std::copy(vendor.begin(), vendor.end(), std::back_inserter(result));
+      result.push_back('\0');
       break;
     case CL_PLATFORM_EXTENSIONS:
-      result = extensions;
+      std::copy(extensions.begin(), extensions.end(), std::back_inserter(result));
+      result.push_back('\0');
       break;
     case CL_PLATFORM_ICD_SUFFIX_KHR:
-      result = suffix;
+      std::copy(suffix.begin(), suffix.end(), std::back_inserter(result));
+      result.push_back('\0');
       break;
     case CL_PLATFORM_NUMERIC_VERSION:
       std::copy(
@@ -326,15 +332,14 @@ cl_int _cl_platform_id::clGetPlatformInfo(
   }
 
   if (param_value_size_ret)
-    *param_value_size_ret = result.length()+1;
+    *param_value_size_ret = result.size();
 
-  if (param_value_size && param_value_size < result.length()+1)
+  if (param_value_size && param_value_size < result.size())
     return CL_INVALID_VALUE;
 
   if (param_value)
   {
     std::copy(result.begin(), result.end(), static_cast<char*>(param_value));
-    static_cast<char*>(param_value)[result.length()] = '\0';
   }
 
   return CL_SUCCESS;
