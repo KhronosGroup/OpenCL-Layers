@@ -2,6 +2,7 @@
 #include "object_lifetime_test_icd.hpp"
 
 #include <type_traits>  // std::remove_pointer_t
+#include <algorithm>    // std::find_if
 
 template <typename T, typename F>
 cl_int invoke_if_valid(T cl_object, F&& f, bool retain = false)
