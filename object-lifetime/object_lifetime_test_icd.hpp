@@ -247,7 +247,7 @@ namespace lifetime
   extern std::set<std::shared_ptr<_cl_device_id>> _devices;
   extern std::set<std::shared_ptr<_cl_context>> _contexts;
 
-  template <typename T> T& _objects;
+  template <typename T> std::nullptr_t _objects;
   template <> std::set<std::shared_ptr<_cl_device_id>>& _objects<cl_device_id> = _devices;
   template <> std::set<std::shared_ptr<_cl_context>>& _objects<cl_context> = _contexts;
 }
