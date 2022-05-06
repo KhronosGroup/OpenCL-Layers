@@ -165,6 +165,24 @@ test_settings(
 )
 
 test_settings(
+  NAME Settings-Config-Whitespace-2
+  SETTING_TYPE bool
+  SETTINGS "test_layer.test_setting = false"
+  SETTING test_layer.test_setting
+  DEFAULT true
+  EXPECTED false
+)
+
+test_settings(
+  NAME Settings-Config-Trailing-Comment
+  SETTING_TYPE filename
+  SETTINGS "test_layer.test_setting = test_value # comment"
+  SETTING test_layer.test_setting
+  DEFAULT default
+  EXPECTED test_value
+)
+
+test_settings(
   NAME Settings-Config-Multi
   SETTING_TYPE filename
   SETTINGS "test_layer.first_setting=first_value\ntest_layer.second_setting=second_value"
