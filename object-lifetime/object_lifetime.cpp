@@ -66,8 +66,19 @@ static cl_int object_errors[] = {
   CL_INVALID_SAMPLER,
 };
 
-static inline std::string rtrim(const std::string& s) {
-  return s.substr(0, s.size() - 5);
+struct trimmed__func__
+{
+  const char* str;
+  size_t length;
+};
+
+std::ostream& operator<<(std::ostream& lhs, const trimmed__func__& rhs)
+{
+  return lhs.write(rhs.str, rhs.length);
+}
+
+static inline trimmed__func__ rtrim(const char* s) {
+  return trimmed__func__{s, std::strlen(s) - 5};
 }
 
 #define RTRIM_FUNC rtrim(__func__)
@@ -125,7 +136,7 @@ layer_settings layer_settings::load() {
 layer_settings settings;
 }
 
-static cl_int error_already_exist(const std::string& func, void *handle, object_type t, cl_long ref_count) {
+static cl_int error_already_exist(const trimmed__func__& func, void *handle, object_type t, cl_long ref_count) {
   *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -134,7 +145,7 @@ static cl_int error_already_exist(const std::string& func, void *handle, object_
   return settings.transparent ? CL_SUCCESS : object_errors[t];
 }
 
-static cl_int error_ref_count(const std::string& func, void *handle, object_type t, cl_long ref_count) {
+static cl_int error_ref_count(const trimmed__func__& func, void *handle, object_type t, cl_long ref_count) {
   *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -143,7 +154,7 @@ static cl_int error_ref_count(const std::string& func, void *handle, object_type
   return settings.transparent ? CL_SUCCESS : object_errors[t];
 }
 
-static cl_int error_invalid_type(const std::string& func, void *handle, object_type t, object_type expect) {
+static cl_int error_invalid_type(const trimmed__func__& func, void *handle, object_type t, object_type expect) {
   *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -153,7 +164,7 @@ static cl_int error_invalid_type(const std::string& func, void *handle, object_t
   return settings.transparent ? CL_SUCCESS : object_errors[t];
 }
 
-static cl_int error_does_not_exist(const std::string& func, void *handle, object_type t) {
+static cl_int error_does_not_exist(const trimmed__func__& func, void *handle, object_type t) {
   *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -169,7 +180,7 @@ static cl_int error_does_not_exist(const std::string& func, void *handle, object
   return settings.transparent ? CL_SUCCESS : object_errors[t];
 }
 
-static cl_int error_invalid_release(const std::string& func, void *handle, object_type t) {
+static cl_int error_invalid_release(const trimmed__func__& func, void *handle, object_type t) {
   *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
@@ -179,7 +190,7 @@ static cl_int error_invalid_release(const std::string& func, void *handle, objec
 }
 
 template<object_type T>
-static inline cl_int check_exists_no_lock(const std::string& func, void *handle) {
+static inline cl_int check_exists_no_lock(const trimmed__func__& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, T);
@@ -195,13 +206,13 @@ static inline cl_int check_exists_no_lock(const std::string& func, void *handle)
 }
 
 template<object_type T>
-static cl_int check_exists(const std::string& func, void *handle) {
+static cl_int check_exists(const trimmed__func__& func, void *handle) {
   std::lock_guard<std::mutex> g{objects_mutex};
   return check_exists_no_lock<T>(func, handle);
 }
 
 template<>
-cl_int check_exists_no_lock<OCL_PLATFORM>(const std::string& func, void *handle) {
+cl_int check_exists_no_lock<OCL_PLATFORM>(const trimmed__func__& func, void *handle) {
   if(!handle)
     return CL_SUCCESS;
   auto it = objects.find(handle);
@@ -214,7 +225,7 @@ cl_int check_exists_no_lock<OCL_PLATFORM>(const std::string& func, void *handle)
 }
 
 template<>
-cl_int check_exists_no_lock<OCL_DEVICE>(const std::string& func, void *handle) {
+cl_int check_exists_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_DEVICE);
@@ -231,7 +242,7 @@ cl_int check_exists_no_lock<OCL_DEVICE>(const std::string& func, void *handle) {
 }
 
 template<>
-cl_int check_exists_no_lock<OCL_MEM>(const std::string& func, void *handle) {
+cl_int check_exists_no_lock<OCL_MEM>(const trimmed__func__& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_MEM);
@@ -280,7 +291,7 @@ cl_int check_exists_no_lock<OCL_MEM>(const std::string& func, void *handle) {
   } while (false)
 
 template<object_type T>
-static cl_int check_exist_list(const std::string& func, cl_uint num_handles, void **handles) {
+static cl_int check_exist_list(const trimmed__func__& func, cl_uint num_handles, void **handles) {
   if (!handles)
     return CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
@@ -311,7 +322,7 @@ static cl_int check_exist_list(const std::string& func, cl_uint num_handles, voi
   } while (false)
 
 template<object_type T>
-static inline cl_int check_creation_no_lock(const std::string& func, void *handle, void* parent = nullptr) {
+static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *handle, void* parent = nullptr) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end()) {
@@ -328,7 +339,7 @@ static inline cl_int check_creation_no_lock(const std::string& func, void *handl
 }
 
 template<>
-cl_int check_creation_no_lock<OCL_DEVICE>(const std::string& func, void *handle, void*) {
+cl_int check_creation_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handle, void*) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end() && it->second.type != OCL_DEVICE) {
@@ -340,7 +351,7 @@ cl_int check_creation_no_lock<OCL_DEVICE>(const std::string& func, void *handle,
 }
 
 template<>
-cl_int check_creation_no_lock<OCL_PLATFORM>(const std::string& func, void *handle, void*) {
+cl_int check_creation_no_lock<OCL_PLATFORM>(const trimmed__func__& func, void *handle, void*) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end() && it->second.type != OCL_PLATFORM) {
@@ -352,7 +363,7 @@ cl_int check_creation_no_lock<OCL_PLATFORM>(const std::string& func, void *handl
 }
 
 template<object_type T>
-static cl_int check_creation(const std::string& func, void *handle, void* parent) {
+static cl_int check_creation(const trimmed__func__& func, void *handle, void* parent) {
   std::lock_guard<std::mutex> g{objects_mutex};
   return check_creation_no_lock<T>(func, handle, parent);
 }
@@ -374,7 +385,7 @@ static cl_int check_creation(const std::string& func, void *handle, void* parent
   } while (false)
 
 template <object_type T>
-static cl_int check_creation_list(const std::string &func, cl_uint num_handles,
+static cl_int check_creation_list(const trimmed__func__& func, cl_uint num_handles,
                                   void **handles, void *parent = nullptr) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
@@ -397,7 +408,7 @@ static cl_int check_creation_list(const std::string &func, cl_uint num_handles,
   } while (false)
 
 template <object_type T>
-static cl_int check_add_or_exists(const std::string &func, void *handle,
+static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
                                   void *parent = nullptr) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
@@ -427,7 +438,7 @@ static cl_int check_add_or_exists(const std::string &func, void *handle,
     }                                                                          \
   } while (false)
 
-static void notify_child_released(const std::string &func, void *parent) {
+static void notify_child_released(const trimmed__func__& func, void *parent) {
   // "Recursively" notify all parents if the refcount and the number of children becomes zero.
   // This signals that the object is no longer kept alive by any of its children.
   while (parent != nullptr) {
@@ -450,7 +461,7 @@ static void notify_child_released(const std::string &func, void *parent) {
 }
 
 template<object_type T>
-static cl_int check_release(const std::string& func, void *handle) {
+static cl_int check_release(const trimmed__func__& func, void *handle) {
   std::lock_guard<std::mutex> g{objects_mutex};
   auto it = objects.find(handle);
   if (it == objects.end()) {
@@ -473,7 +484,7 @@ static cl_int check_release(const std::string& func, void *handle) {
 }
 
 template<>
-cl_int check_release<OCL_DEVICE>(const std::string& func, void *handle) {
+cl_int check_release<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
   std::lock_guard<std::mutex> g{objects_mutex};
   auto it = objects.find(handle);
   if (it == objects.end()) {
@@ -498,7 +509,7 @@ cl_int check_release<OCL_DEVICE>(const std::string& func, void *handle) {
 }
 
 template<>
-cl_int check_release<OCL_MEM>(const std::string& func, void *handle) {
+cl_int check_release<OCL_MEM>(const trimmed__func__& func, void *handle) {
   std::lock_guard<std::mutex> g{objects_mutex};
   auto it = objects.find(handle);
   if (it == objects.end()) {
@@ -536,7 +547,7 @@ cl_int check_release<OCL_MEM>(const std::string& func, void *handle) {
   } while (false)
 
 template<object_type T>
-static cl_int check_retain(const std::string& func, void *handle) {
+static cl_int check_retain(const trimmed__func__& func, void *handle) {
   std::lock_guard<std::mutex> g{objects_mutex};
   auto it = objects.find(handle);
   if (it == objects.end()) {
@@ -553,7 +564,7 @@ static cl_int check_retain(const std::string& func, void *handle) {
 }
 
 template<>
-cl_int check_retain<OCL_DEVICE>(const std::string& func, void *handle) {
+cl_int check_retain<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
   std::lock_guard<std::mutex> g{objects_mutex};
   auto it = objects.find(handle);
   if (it == objects.end()) {
@@ -574,7 +585,7 @@ cl_int check_retain<OCL_DEVICE>(const std::string& func, void *handle) {
 }
 
 template<>
-cl_int check_retain<OCL_MEM>(const std::string& func, void *handle) {
+cl_int check_retain<OCL_MEM>(const trimmed__func__& func, void *handle) {
   std::lock_guard<std::mutex> g{objects_mutex};
   auto it = objects.find(handle);
   if (it == objects.end()) {
