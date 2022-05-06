@@ -1,7 +1,7 @@
 #include "utils.hpp"
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 #include <CL/cl_layer.h>
 #include <mutex>
 #include <tuple>
