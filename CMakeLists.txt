@@ -1,4 +1,5 @@
-cmake_minimum_required (VERSION 3.8) # cxx_std_17
+cmake_minimum_required (VERSION 3.3)
+cmake_policy(VERSION 3.3...3.22)
 
 # Include guard for including this project multiple times
 if (TARGET PrintLayer)
@@ -27,16 +28,40 @@ else ()
     endif ()
 endif ()
 
+if(OPENCL_LAYERS_BUILD_TESTING)
+    if (NOT TARGET OpenCL)
+        if(APPLE) # Apple's own loader can't load layers. We have to avoid it.
+          find_package (OpenCLICDLoader REQUIRED)
+        else()
+          find_package (OpenCL REQUIRED)
+        endif()
+    endif ()
+endif ()
+
+if(CMAKE_VERSION VERSION_LESS 3.7)
+    add_library(OpenCL_lib INTERFACE)
+    target_include_directories(OpenCL_lib INTERFACE ${OpenCL_INCLUDE_DIRS})
+    target_link_libraries(OpenCL_lib INTERFACE ${OpenCL_LIBRARIES})
+    add_library(OpenCL::OpenCL ALIAS OpenCL_lib)
+endif()
+
+set(CMAKE_C_EXTENSIONS OFF)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # Common layer flags
 add_library (LayersCommon INTERFACE)
 
-target_link_libraries (LayersCommon INTERFACE OpenCL::Headers)
+# C and C++ standard, 
+if (CMAKE_VERSION VERSION_LESS 3.8)
+    set(CMAKE_C_STANDARD 11)
+    set(CMAKE_C_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_STANDARD 14)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+else()
+    target_compile_features(LayersCommon INTERFACE c_std_11 cxx_std_14)
+endif()
 
-target_compile_features (LayersCommon
-    INTERFACE
-        c_std_11
-        cxx_std_17
-)
+target_link_libraries (LayersCommon INTERFACE OpenCL::Headers)
 
 target_compile_definitions (LayersCommon
     INTERFACE
@@ -65,9 +90,16 @@ if (LAYERS_BUILD_TESTS)
         endif()
     endif ()
 endif ()
+if ((CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR OPENCL_LAYERS_BUILD_TESTING) AND BUILD_TESTING)
+  set (LAYERS_BUILD_TESTS ON)
+endif ()
+if ((CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR OPENCL_LAYERS_BUILD_TESTING) AND BUILD_TESTING)
+  set (LAYERS_BUILD_TESTS ON)
+endif ()
 
 include (GNUInstallDirs)
 
 add_subdirectory (simple-print)
 add_subdirectory (ocl-icd-compat)
 add_subdirectory (object-lifetime)
+add_subdirectory (utils)
