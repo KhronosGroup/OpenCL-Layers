@@ -394,7 +394,7 @@ namespace lifetime
   std::map<std::string, void*> _extensions{
     std::make_pair("clIcdGetPlatformIDsKHR", reinterpret_cast<void*>(clIcdGetPlatformIDsKHR))
   };
-  _cl_platform_id _platform;
-  std::set<std::shared_ptr<_cl_device_id>> _devices;
   std::set<std::shared_ptr<_cl_context>> _contexts;
+  std::set<std::shared_ptr<_cl_device_id>> _devices;
+  _cl_platform_id _platform;
 }
