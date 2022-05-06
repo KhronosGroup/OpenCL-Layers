@@ -24,8 +24,8 @@ namespace lifetime
   }
 
   icd_compatible::icd_compatible()
-    : scoped_dispatch{ std::make_unique<cl_icd_dispatch>() }
-    , dispatch{ scoped_dispatch.get() }
+    : dispatch{ new cl_icd_dispatch{} }
+    , scoped_dispatch{ dispatch }
   {}
 }
 
@@ -219,10 +219,10 @@ cl_int _cl_device_id::clReleaseDevice()
 
 _cl_platform_id::_cl_platform_id()
   : numeric_version{ CL_MAKE_VERSION(3, 0, 0) }
-  , version{}
-  , vendor{ "Khronos" }
   , profile{ "FULL_PROFILE" }
+  , version{}
   , name{ "Object Lifetime Layer Test ICD" }
+  , vendor{ "Khronos" }
   , extensions{ "cl_khr_icd cl_khr_extended_versioning" }
   , suffix{ "khronos" }
 {
