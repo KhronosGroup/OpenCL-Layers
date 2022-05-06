@@ -225,6 +225,8 @@ _cl_platform_id::_cl_platform_id()
   , vendor{ "Khronos" }
   , extensions{ "cl_khr_icd cl_khr_extended_versioning" }
   , suffix{ "khronos" }
+  , _contexts{}
+  , _devices{}
 {
   scoped_dispatch = std::make_unique<cl_icd_dispatch>();
   dispatch = scoped_dispatch.get();
@@ -275,7 +277,7 @@ _cl_platform_id::_cl_platform_id()
   else
     allow_using_inaccessible_objects = false;
 
-  lifetime::_devices.insert(std::make_shared<_cl_device_id>(_cl_device_id::device_kind::root));
+  _devices.insert(std::make_shared<_cl_device_id>(_cl_device_id::device_kind::root));
 }
 
 void _cl_platform_id::init_dispatch()
@@ -394,7 +396,5 @@ namespace lifetime
   std::map<std::string, void*> _extensions{
     std::make_pair("clIcdGetPlatformIDsKHR", reinterpret_cast<void*>(clIcdGetPlatformIDsKHR))
   };
-  std::set<std::shared_ptr<_cl_context>> _contexts;
-  std::set<std::shared_ptr<_cl_device_id>> _devices;
   _cl_platform_id _platform;
 }

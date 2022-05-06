@@ -218,6 +218,9 @@ struct _cl_platform_id
               extensions,
               suffix;
 
+  std::set<std::shared_ptr<_cl_device_id>> _devices;
+  std::set<std::shared_ptr<_cl_context>> _contexts;
+
   _cl_platform_id();
   _cl_platform_id(const _cl_platform_id&) = delete;
   _cl_platform_id(_cl_platform_id&&) = delete;
@@ -244,10 +247,8 @@ namespace lifetime
 {
   extern std::map<std::string, void*> _extensions;
   extern _cl_platform_id _platform;
-  extern std::set<std::shared_ptr<_cl_device_id>> _devices;
-  extern std::set<std::shared_ptr<_cl_context>> _contexts;
 
   template <typename T> std::set<std::shared_ptr<std::remove_pointer_t<T>>>& get_objects();
-  template <> inline std::set<std::shared_ptr<_cl_device_id>>& get_objects<cl_device_id>() { return _devices; }
-  template <> inline std::set<std::shared_ptr<_cl_context>>& get_objects<cl_context>() { return _contexts; }
+  template <> inline std::set<std::shared_ptr<_cl_device_id>>& get_objects<cl_device_id>() { return _platform._devices; }
+  template <> inline std::set<std::shared_ptr<_cl_context>>& get_objects<cl_context>() { return _platform._contexts; }
 }
