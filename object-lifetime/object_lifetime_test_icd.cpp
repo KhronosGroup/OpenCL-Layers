@@ -113,6 +113,12 @@ cl_int _cl_device_id::clGetDeviceInfo(
         std::back_inserter(result));
       break;
     }
+    case CL_DEVICE_PARENT_DEVICE:
+      std::copy(
+        reinterpret_cast<char*>(&parents.parent),
+        reinterpret_cast<char*>(&parents.parent) + sizeof(parents.parent),
+        std::back_inserter(result));
+      break;
     case CL_DEVICE_REFERENCE_COUNT:
     {
       cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
