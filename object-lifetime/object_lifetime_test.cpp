@@ -220,6 +220,213 @@ void expectRefCount(const char* file,
 
 #define EXPECT_DESTROYED(handle) EXPECT_REF_COUNT(handle, 0, 0)
 
+cl_context createContext(cl_platform_id platform, cl_device_id device) {
+  cl_int status;
+  cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platform), 0};
+  cl_context context = clCreateContext(properties, 1, &device, nullptr, nullptr, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(context, 1, 0);
+
+  return context;
+}
+
+void testBasicCounting(cl_platform_id platform, cl_device_id device) {
+  cl_int status;
+  cl_context context = createContext(platform, device);
+
+  // Create some buffers to test with
+  cl_mem buffer_a = clCreateBuffer(context, CL_MEM_READ_WRITE, 1, nullptr, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(buffer_a, 1, 0);
+  EXPECT_REF_COUNT(context, 1, 1);
+
+  cl_mem buffer_b = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 1, nullptr, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(buffer_a, 1, 0);
+  EXPECT_REF_COUNT(context, 1, 2);
+
+  EXPECT_SUCCESS(clRetainContext(context));
+  EXPECT_REF_COUNT(buffer_a, 1, 0);
+  EXPECT_REF_COUNT(buffer_b, 1, 0);
+  EXPECT_REF_COUNT(context, 2, 2);
+
+  EXPECT_SUCCESS(clRetainMemObject(buffer_a));
+  EXPECT_REF_COUNT(buffer_a, 2, 0);
+  EXPECT_REF_COUNT(buffer_b, 1, 0);
+  EXPECT_REF_COUNT(context, 2, 2);
+
+  EXPECT_SUCCESS(clRetainMemObject(buffer_b));
+  EXPECT_REF_COUNT(buffer_a, 2, 0);
+  EXPECT_REF_COUNT(buffer_b, 2, 0);
+  EXPECT_REF_COUNT(context, 2, 2);
+
+  EXPECT_SUCCESS(clRetainContext(context));
+  EXPECT_REF_COUNT(context, 3, 2);
+
+  EXPECT_SUCCESS(clReleaseMemObject(buffer_b));
+  EXPECT_REF_COUNT(buffer_a, 2, 0);
+  EXPECT_REF_COUNT(buffer_b, 1, 0);
+  EXPECT_REF_COUNT(context, 2, 2);
+
+  EXPECT_SUCCESS(clReleaseMemObject(buffer_b));
+  EXPECT_REF_COUNT(buffer_a, 2, 0);
+  EXPECT_DESTROYED(buffer_b);
+  EXPECT_REF_COUNT(context, 2, 1);
+
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_REF_COUNT(context, 1, 1);
+  EXPECT_REF_COUNT(buffer_a, 2, 0);
+
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_REF_COUNT(context, 0, 1);
+  EXPECT_REF_COUNT(buffer_a, 2, 0);
+
+  EXPECT_SUCCESS(clReleaseMemObject(buffer_a));
+  EXPECT_REF_COUNT(buffer_a, 1, 0);
+  EXPECT_REF_COUNT(context, 0, 1);
+
+  EXPECT_SUCCESS(clReleaseMemObject(buffer_a));
+  EXPECT_DESTROYED(buffer_a);
+  EXPECT_DESTROYED(context);
+}
+
+void testLifetimeEdgeCases(cl_platform_id platform, cl_device_id device) {
+  cl_int status;
+  cl_context context = createContext(platform, device);
+
+  cl_image_format format = { CL_RGBA, CL_UNORM_INT8 };
+  cl_mem image = clCreateImage2D(context, CL_MEM_READ_ONLY, &format, 1, 1, 1, nullptr, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(image, 1, 0);
+  EXPECT_REF_COUNT(context, 1, 1);
+
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_REF_COUNT(context, 0, 1);
+
+  if (TEST_CONFIG.use_inaccessible_objects) {
+    // Try to 'resurrect' the context
+    EXPECT_SUCCESS(clRetainContext(context));
+    EXPECT_REF_COUNT(context, 1, 1);
+    EXPECT_SUCCESS(clReleaseContext(context));
+    EXPECT_REF_COUNT(context, 0, 1);
+  }
+
+  // Try to free the context, which is now only implicitly retained.
+  EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT);
+  // That should not influence the implicit ref count
+  EXPECT_REF_COUNT(context, 0, 1);
+
+  EXPECT_SUCCESS(clReleaseMemObject(image));
+  EXPECT_DESTROYED(context);
+
+  // Double free should fail.
+  EXPECT_ERROR(clReleaseMemObject(image), CL_INVALID_MEM_OBJECT);
+  EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT);
+}
+
+void testSubObjects(cl_platform_id platform, cl_device_id device) {
+  cl_int status;
+  cl_context context = createContext(platform, device);
+
+  cl_mem buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, 10, nullptr, &status);
+  EXPECT_SUCCESS(status);
+
+  cl_buffer_region sub_region = {0, 5};
+  cl_mem sub_buffer = clCreateSubBuffer(buffer,
+                                        CL_MEM_READ_WRITE,
+                                        CL_BUFFER_CREATE_TYPE_REGION,
+                                        static_cast<const void*>(&sub_region),
+                                        &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(buffer, 1, 1);
+  EXPECT_REF_COUNT(sub_buffer, 1, 0);
+
+  // Release buffer, the child should keep it alive
+  EXPECT_SUCCESS(clReleaseMemObject(buffer));
+  EXPECT_REF_COUNT(buffer, 0, 1);
+  EXPECT_REF_COUNT(sub_buffer, 1, 0);
+
+  cl_buffer_region sub_sub_region = {1, 2};
+  cl_mem sub_sub_buffer = clCreateSubBuffer(buffer,
+                                            CL_MEM_READ_ONLY,
+                                            CL_BUFFER_CREATE_TYPE_REGION,
+                                            static_cast<const void*>(&sub_sub_region),
+                                            &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(sub_sub_buffer, 1, 0);
+  EXPECT_REF_COUNT(sub_buffer, 1, 4);
+
+  // Release sub_buffer, but sub_sub_buffer should keep both its parent alive.
+  EXPECT_SUCCESS(clReleaseMemObject(sub_buffer));
+  EXPECT_REF_COUNT(sub_buffer, 0, 1);
+  EXPECT_REF_COUNT(buffer, 0, 1);
+
+  cl_image_desc desc = {
+    CL_MEM_OBJECT_IMAGE2D, // image_type
+    2, // image_width
+    2, // image_height
+    1, // image_depth
+    1, // image_array size
+    0, // image_row_pitch
+    0, // image_slice_pitch
+    0, // num_mip_levels
+    0, // num_samples
+    sub_sub_buffer // mem_object
+  };
+  cl_image_format format = {CL_R, CL_UNORM_INT8};
+  cl_mem image = clCreateImage(context,
+                               CL_MEM_READ_ONLY,
+                               &format,
+                               &desc,
+                               nullptr,
+                               &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(image, 1, 0);
+
+  // Release sub_sub_buffer, the image should keep the chain alive
+  EXPECT_SUCCESS(clReleaseMemObject(sub_sub_buffer));
+  EXPECT_REF_COUNT(image, 1, 0);
+  EXPECT_REF_COUNT(sub_sub_buffer, 0, 1);
+  EXPECT_REF_COUNT(sub_buffer, 0, 1);
+  EXPECT_REF_COUNT(buffer, 0, 1);
+
+  cl_image_desc sub_desc = {
+    CL_MEM_OBJECT_IMAGE2D, // image_type
+    1, // image_width
+    1, // image_height
+    1, // image_depth
+    1, // image_array size
+    0, // image_row_pitch
+    0, // image_slice_pitch
+    0, // num_mip_levels
+    0, // num_samples
+    image // mem_object
+  };
+  cl_mem sub_image = clCreateImage(context,
+                                   CL_MEM_READ_ONLY,
+                                   &format,
+                                   &desc,
+                                   nullptr,
+                                   &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(image, 1, 0);
+
+  // Release image, the sub_image should keep the chain alive
+  EXPECT_SUCCESS(clReleaseMemObject(image));
+  EXPECT_REF_COUNT(sub_image, 0, 1);
+  EXPECT_REF_COUNT(image, 1, 0);
+  EXPECT_REF_COUNT(sub_sub_buffer, 0, 1);
+  EXPECT_REF_COUNT(sub_buffer, 0, 1);
+  EXPECT_REF_COUNT(buffer, 0, 1);
+
+  // Release the entire chain by releasing sub_image.
+  EXPECT_SUCCESS(clReleaseMemObject(sub_image));
+  EXPECT_DESTROYED(image);
+  EXPECT_DESTROYED(sub_sub_buffer);
+  EXPECT_DESTROYED(sub_buffer);
+  EXPECT_DESTROYED(buffer);
+}
+
 int main(int argc, char *argv[]) {
   parseArgs(TEST_CONFIG, argc, argv);
 
@@ -253,8 +460,7 @@ int main(int argc, char *argv[]) {
     exit(-1);
   }
 
-  EXPECT_SUCCESS(clGetPlatformInfo(platform, CL_PLATFORM_NUMERIC_VERSION, sizeof(cl_version), &TEST_CONFIG.version, nullptr));
-
+  // Get a device
   cl_device_id device;
   cl_uint      numDevices;
   EXPECT_SUCCESS(clGetDeviceIDs(platform, CL_DEVICE_TYPE_DEFAULT, 1, &device, &numDevices));
@@ -263,29 +469,11 @@ int main(int argc, char *argv[]) {
     exit(-1);
   }
 
-  cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platform), 0};
+  EXPECT_SUCCESS(clGetPlatformInfo(platform, CL_PLATFORM_NUMERIC_VERSION, sizeof(cl_version), &TEST_CONFIG.version, nullptr));
 
-  cl_context context = clCreateContext(properties, 1, &device, nullptr, nullptr, &status);
-  EXPECT_SUCCESS(status);
-
-  // Create a buffer from the context
-  cl_mem buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, 1, NULL, &status);
-  EXPECT_SUCCESS(status);
-
-  // Release the context, but the buffer should keep it alive
-  status = clReleaseContext(context);
-  EXPECT_SUCCESS(status);
-  EXPECT_REF_COUNT(context, 0, 1);
-
-  // Release the buffer, this should also release the context
-  status = clReleaseMemObject(buffer);
-  EXPECT_SUCCESS(status);
-  EXPECT_DESTROYED(buffer);
-  EXPECT_DESTROYED(context);
-
-  // Try to release the context again
-  status = clReleaseContext(context);
-  EXPECT_ERROR(status, CL_INVALID_CONTEXT);
+  testBasicCounting(platform, device);
+  testLifetimeEdgeCases(platform, device);
+  testSubObjects(platform, device);
 
   return 0;
 }
