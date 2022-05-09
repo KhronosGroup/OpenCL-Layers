@@ -443,7 +443,7 @@ void testSubDevice(cl_platform_id platform, cl_device_id device) {
   cl_uint num_cus;
   EXPECT_SUCCESS(clGetDeviceInfo(device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(cl_uint), &num_cus, nullptr));
 
-  constexpr const cl_uint num_sub_devices = 3;
+  constexpr const cl_uint num_sub_devices = 5;
   constexpr const cl_uint num_sub_cus = 2;
   constexpr const cl_uint min_cus = num_sub_devices * num_sub_cus;
 
@@ -483,55 +483,76 @@ void testSubDevice(cl_platform_id platform, cl_device_id device) {
     EXPECT_REF_COUNT(sub_devices[i], 0, 1);
   }
 
-  // Releasing the root device should do nothing, and it should not influence its reference count.
   {
-    cl_uint old_root_ref_count;
-    EXPECT_SUCCESS(ocl_utils::getRefCount(device, old_root_ref_count));
+    // Root devices should always have a ref count of 1, which is unaffected by retains and releases
+    EXPECT_REF_COUNT(device, 1, 0);
 
     EXPECT_SUCCESS(clReleaseDevice(device));
-    cl_uint new_root_ref_count;
-    EXPECT_SUCCESS(ocl_utils::getRefCount(device, new_root_ref_count));
-    if (old_root_ref_count != new_root_ref_count) {
-      REPORT_ERROR() << "clReleaseDevice with root device influenced its reference count" << std::endl;
-      exit(-1);
-    }
+    EXPECT_REF_COUNT(device, 1, 0);
 
     EXPECT_SUCCESS(clRetainDevice(device));
-    EXPECT_SUCCESS(ocl_utils::getRefCount(device, new_root_ref_count));
-    if (old_root_ref_count != new_root_ref_count) {
-      REPORT_ERROR() << "clRetainDevice with root device influenced its reference count" << std::endl;
-      exit(-1);
+    EXPECT_REF_COUNT(device, 1, 0);
+  }
+
+  {
+    // Release the first and check if the rest is okay.
+    EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[0]));
+    EXPECT_DESTROYED(sub_sub_devices[0]);
+    EXPECT_DESTROYED(sub_devices[0]);
+
+    for (cl_uint i = 1; i < num_sub_devices; ++i) {
+      EXPECT_REF_COUNT(sub_sub_devices[i], 1, 0);
+      EXPECT_REF_COUNT(sub_devices[i], 1, 1);
     }
   }
 
-  // Release the first and check if the rest is okay.
-  EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[0]));
-  EXPECT_DESTROYED(sub_sub_devices[0]);
-  EXPECT_DESTROYED(sub_devices[0]);
+  {
+    // Check that device dependencies keep the device alive.
+    cl_context context = createContext(platform, sub_sub_devices[1]);
+    EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[1]));
+    EXPECT_REF_COUNT(sub_sub_devices[1], 0, 1);
+    EXPECT_REF_COUNT(sub_devices[1], 0, 1);
 
-  for (size_t i = 1; i < num_sub_devices; ++i) {
-    EXPECT_REF_COUNT(sub_sub_devices[i], 1, 0);
-    EXPECT_REF_COUNT(sub_devices[i], 1, 1);
+    EXPECT_SUCCESS(clReleaseContext(context));
+    EXPECT_DESTROYED(context);
+    EXPECT_DESTROYED(sub_sub_devices[1]);
+    EXPECT_DESTROYED(sub_devices[1]);
+
+    for (cl_uint i = 2; i < num_sub_devices; ++i) {
+      EXPECT_REF_COUNT(sub_sub_devices[i], 1, 0);
+      EXPECT_REF_COUNT(sub_devices[i], 1, 1);
+    }
   }
 
-  // Check that device dependencies keep the device alive.
-  cl_context context = createContext(platform, sub_sub_devices[1]);
-  EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[1]));
-  EXPECT_REF_COUNT(sub_sub_devices[1], 0, 1);
-  EXPECT_REF_COUNT(sub_devices[1], 0, 1);
+  {
+    constexpr const cl_uint first_sub_sub_device = 2;
+    constexpr const cl_uint num_sub_sub_devices = 2;
+    cl_int status;
+    // Create a context with 2 devices, check that the context keeps them alive.
+    cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platform), 0};
+    cl_context context = clCreateContext(properties,
+                                         num_sub_sub_devices,
+                                         &sub_sub_devices[first_sub_sub_device],
+                                         nullptr,
+                                         nullptr,
+                                         &status);
+    EXPECT_SUCCESS(status);
+    EXPECT_REF_COUNT(context, 1, 0);
+    for (cl_uint i = 0; i < num_sub_sub_devices; ++i) {
+      EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[first_sub_sub_device + i]));
+      EXPECT_REF_COUNT(sub_sub_devices[first_sub_sub_device + i], 0, 1);
+      EXPECT_REF_COUNT(sub_devices[first_sub_sub_device + i], 0, 1);
+    }
+    EXPECT_SUCCESS(clReleaseContext(context));
 
-  EXPECT_SUCCESS(clReleaseContext(context));
-  EXPECT_DESTROYED(context);
-  EXPECT_DESTROYED(sub_sub_devices[1]);
-  EXPECT_DESTROYED(sub_devices[1]);
-
-  for (size_t i = 2; i < num_sub_devices; ++i) {
-    EXPECT_REF_COUNT(sub_sub_devices[i], 1, 0);
-    EXPECT_REF_COUNT(sub_devices[i], 1, 1);
+    for (cl_uint i = 0; i < num_sub_sub_devices; ++i) {
+      EXPECT_DESTROYED(sub_sub_devices[first_sub_sub_device + i]);
+      EXPECT_DESTROYED(sub_devices[first_sub_sub_device + i]);
+    }
   }
 
-  // Just release the other sub-sub-devices as normal
-  for (size_t i = 2; i < num_sub_devices; ++i) {
+  // Just release the other sub-sub-devices
+  for (cl_uint i = 4; i < num_sub_devices; ++i) {
     EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[i]));
     EXPECT_DESTROYED(sub_sub_devices[i]);
     EXPECT_DESTROYED(sub_devices[i]);
