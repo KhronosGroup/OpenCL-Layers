@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdlib>
 #include <cstdint>
+#include <cstddef>
 #include <cstring>
 
 struct TestConfig {
@@ -374,15 +375,15 @@ void testSubObjects(cl_platform_id platform, cl_device_id device) {
 
   cl_image_desc desc = {
     CL_MEM_OBJECT_IMAGE2D, // image_type
-    2, // image_width
-    2, // image_height
-    1, // image_depth
-    1, // image_array size
-    0, // image_row_pitch
-    0, // image_slice_pitch
-    0, // num_mip_levels
-    0, // num_samples
-    sub_sub_buffer // mem_object
+    2,                     // image_width
+    2,                     // image_height
+    1,                     // image_depth
+    1,                     // image_array size
+    0,                     // image_row_pitch
+    0,                     // image_slice_pitch
+    0,                     // num_mip_levels
+    0,                     // num_samples
+    sub_sub_buffer         // mem_object
   };
   cl_image_format format = {CL_R, CL_UNORM_INT8};
   cl_mem image = clCreateImage(context,
@@ -403,15 +404,15 @@ void testSubObjects(cl_platform_id platform, cl_device_id device) {
 
   cl_image_desc sub_desc = {
     CL_MEM_OBJECT_IMAGE2D, // image_type
-    1, // image_width
-    1, // image_height
-    1, // image_depth
-    1, // image_array size
-    0, // image_row_pitch
-    0, // image_slice_pitch
-    0, // num_mip_levels
-    0, // num_samples
-    image // mem_object
+    1,                     // image_width
+    1,                     // image_height
+    1,                     // image_depth
+    1,                     // image_array size
+    0,                     // image_row_pitch
+    0,                     // image_slice_pitch
+    0,                     // num_mip_levels
+    0,                     // num_samples
+    image                  // mem_object
   };
   cl_mem sub_image = clCreateImage(context,
                                    CL_MEM_READ_ONLY,
@@ -537,6 +538,81 @@ void testSubDevice(cl_platform_id platform, cl_device_id device) {
   }
 }
 
+void testPipeline(cl_platform_id platform, cl_device_id device) {
+  cl_int status;
+  cl_context context = createContext(platform, device);
+
+  cl_command_queue queue = clCreateCommandQueue(context, device, 0, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(context, 1, 1);
+  EXPECT_REF_COUNT(queue, 1, 0);
+
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_REF_COUNT(context, 0, 1);
+
+  const char* source = "kernel void test_kernel() {}";
+  size_t length = strlen(source);
+  cl_program program = clCreateProgramWithSource(context,
+                                                 1,
+                                                 &source,
+                                                 &length,
+                                                 &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(program, 1, 0);
+  EXPECT_REF_COUNT(context, 0, 2);
+
+  cl_kernel kernel = clCreateKernel(program, "test_kernel", &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(kernel, 1, 0);
+  EXPECT_SUCCESS(clReleaseProgram(program));
+  EXPECT_DESTROYED(program);
+
+  cl_event top_of_pipe = clCreateUserEvent(context, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(top_of_pipe, 1, 0);
+  EXPECT_REF_COUNT(context, 0, 3);
+
+  size_t global_work_size = 2;
+  size_t local_work_size = 1;
+  cl_event bottom_of_pipe;
+  EXPECT_SUCCESS(clEnqueueNDRangeKernel(queue,
+                                        kernel,
+                                        1,
+                                        nullptr,
+                                        &global_work_size,
+                                        &local_work_size,
+                                        1,
+                                        &top_of_pipe,
+                                        &bottom_of_pipe));
+  EXPECT_REF_COUNT(bottom_of_pipe, 1, 0);
+  EXPECT_SUCCESS(clSetUserEventStatus(top_of_pipe, CL_COMPLETE));
+  EXPECT_SUCCESS(clWaitForEvents(1, &bottom_of_pipe));
+
+  EXPECT_SUCCESS(clRetainKernel(kernel));
+  EXPECT_REF_COUNT(kernel, 2, 0);
+
+  // Cloning a kernel should not affect the refcount of the original kernel.
+  cl_kernel clone = clCloneKernel(kernel, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(kernel, 2, 0);
+  EXPECT_REF_COUNT(clone, 1, 0);
+  EXPECT_SUCCESS(clReleaseKernel(kernel));
+  EXPECT_SUCCESS(clReleaseKernel(kernel));
+  EXPECT_DESTROYED(kernel);
+  EXPECT_REF_COUNT(clone, 1, 0);
+
+  EXPECT_SUCCESS(clReleaseKernel(clone));
+  EXPECT_DESTROYED(clone);
+
+  EXPECT_SUCCESS(clReleaseCommandQueue(queue));
+  EXPECT_DESTROYED(queue);
+  EXPECT_SUCCESS(clReleaseEvent(top_of_pipe));
+  EXPECT_DESTROYED(top_of_pipe);
+  EXPECT_SUCCESS(clReleaseEvent(bottom_of_pipe));
+  EXPECT_DESTROYED(bottom_of_pipe);
+  EXPECT_DESTROYED(context);
+}
+
 int main(int argc, char *argv[]) {
   parseArgs(TEST_CONFIG, argc, argv);
 
@@ -585,6 +661,7 @@ int main(int argc, char *argv[]) {
   testLifetimeEdgeCases(platform, device);
   testSubObjects(platform, device);
   testSubDevice(platform, device);
+  testPipeline(platform, device);
 
   return 0;
 }
