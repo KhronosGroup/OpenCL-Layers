@@ -8,10 +8,37 @@
 #include <string>
 #include <memory>
 #include <array>
+#include <tuple>
 #include <cstdlib>
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
+
+// Returns:
+// -1 if lhs <  rhs
+//  0 if lhs == rhs
+//  1 if lhs >  rhs
+int compareVersions(cl_version lhs, cl_version rhs) {
+  if (CL_VERSION_MAJOR(lhs) < CL_VERSION_MAJOR(rhs)) {
+    return -1;
+  } else if (CL_VERSION_MAJOR(lhs) > CL_VERSION_MAJOR(rhs)) {
+    return 1;
+  }
+
+  if (CL_VERSION_MINOR(lhs) < CL_VERSION_MINOR(rhs)) {
+    return -1;
+  } else if (CL_VERSION_MINOR(lhs) > CL_VERSION_MINOR(rhs)) {
+    return 1;
+  }
+
+  if (CL_VERSION_PATCH(lhs) < CL_VERSION_PATCH(rhs)) {
+    return -1;
+  } else if (CL_VERSION_PATCH(lhs) > CL_VERSION_PATCH(rhs)) {
+    return 1;
+  }
+
+  return 0;
+}
 
 struct TestConfig {
   // The version to base testing off.
@@ -22,6 +49,14 @@ struct TestConfig {
   bool use_released_objects;
   // Whether inaccessible objects that are still implicitly referenced can be used.
   bool use_inaccessible_objects;
+
+  bool isInVersionRange(cl_version minimum, cl_version maximum) const {
+    return compareVersions(this->version, minimum) >= 0 && compareVersions(this->version, maximum) <= 0;
+  }
+
+  int compareVersion(cl_version version) const {
+    return compareVersions(this->version, version);
+  }
 };
 
 TestConfig TEST_CONFIG = { 0, false, false, false };
@@ -182,13 +217,13 @@ void expectRefCount(const char* file,
     // - Otherwise if implicit reference count is nonzero and use_inaccessible_objects is true, we expect CL_SUCCESS.
     // - Otherwise we expect CL_INVALID.
 
-    if (CL_VERSION_MAJOR(TEST_CONFIG.version) == 1) {
+    if (TEST_CONFIG.isInVersionRange(CL_MAKE_VERSION(1, 1, 0), CL_MAKE_VERSION(1, 2, 0))) {
       if (TEST_CONFIG.use_released_objects) {
         expect_not_destroyed(0);
       } else {
         expect_destroyed();
       }
-    } else if (CL_VERSION_MAJOR(TEST_CONFIG.version) == 2 && CL_VERSION_MINOR(TEST_CONFIG.version) == 0) {
+    } else if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(2, 0, 0)) == 0) {
       if (expected_implicit_count != 0) {
         expect_not_destroyed(expected_implicit_count);
       } else if (TEST_CONFIG.use_released_objects) {
@@ -196,7 +231,7 @@ void expectRefCount(const char* file,
       } else {
         expect_destroyed();
       }
-    } else /* 2.1, 2.2 and 3.0 */ {
+    } else if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(2, 1, 0))) {
       if (expected_implicit_count == 0 && TEST_CONFIG.use_released_objects) {
         expect_not_destroyed(0);
       } else if (expected_implicit_count != 0 && TEST_CONFIG.use_inaccessible_objects) {
@@ -310,14 +345,6 @@ void testLifetimeEdgeCases(cl_platform_id platform, cl_device_id device) {
   EXPECT_SUCCESS(clReleaseContext(context));
   EXPECT_REF_COUNT(context, 0, 2);
 
-  if (TEST_CONFIG.use_inaccessible_objects) {
-    // Try to 'resurrect' the context
-    EXPECT_SUCCESS(clRetainContext(context));
-    EXPECT_REF_COUNT(context, 1, 2);
-    EXPECT_SUCCESS(clReleaseContext(context));
-    EXPECT_REF_COUNT(context, 0, 2);
-  }
-
   // Try to free the context, which is now only implicitly retained.
   EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT);
   // That should not influence the implicit ref count
@@ -336,7 +363,7 @@ void testLifetimeEdgeCases(cl_platform_id platform, cl_device_id device) {
   EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT);
 }
 
-void testSubObjects(cl_platform_id platform, cl_device_id device) {
+void testSubBuffer(cl_platform_id platform, cl_device_id device) {
   cl_int status;
   cl_context context = createContext(platform, device);
 
@@ -373,7 +400,20 @@ void testSubObjects(cl_platform_id platform, cl_device_id device) {
   EXPECT_REF_COUNT(sub_buffer, 0, 1);
   EXPECT_REF_COUNT(buffer, 0, 1);
 
-  cl_image_desc desc = {
+   // Release the entire chain by releasing sub_sub_buffer
+  EXPECT_DESTROYED(sub_sub_buffer);
+  EXPECT_DESTROYED(sub_buffer);
+  EXPECT_DESTROYED(buffer);
+
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_DESTROYED(context);
+}
+
+void testSubImage(cl_platform_id platform, cl_device_id device) {
+  cl_int status;
+  cl_context context = createContext(platform, device);
+
+ cl_image_desc desc = {
     CL_MEM_OBJECT_IMAGE2D, // image_type
     2,                     // image_width
     2,                     // image_height
@@ -383,7 +423,7 @@ void testSubObjects(cl_platform_id platform, cl_device_id device) {
     0,                     // image_slice_pitch
     0,                     // num_mip_levels
     0,                     // num_samples
-    sub_sub_buffer         // mem_object
+    nullptr                // mem_object
   };
   cl_image_format format = {CL_R, CL_UNORM_INT8};
   cl_mem image = clCreateImage(context,
@@ -394,13 +434,6 @@ void testSubObjects(cl_platform_id platform, cl_device_id device) {
                                &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(image, 1, 0);
-
-  // Release sub_sub_buffer, the image should keep the chain alive
-  EXPECT_SUCCESS(clReleaseMemObject(sub_sub_buffer));
-  EXPECT_REF_COUNT(image, 1, 0);
-  EXPECT_REF_COUNT(sub_sub_buffer, 0, 1);
-  EXPECT_REF_COUNT(sub_buffer, 0, 1);
-  EXPECT_REF_COUNT(buffer, 0, 1);
 
   cl_image_desc sub_desc = {
     CL_MEM_OBJECT_IMAGE2D, // image_type
@@ -427,16 +460,13 @@ void testSubObjects(cl_platform_id platform, cl_device_id device) {
   EXPECT_SUCCESS(clReleaseMemObject(image));
   EXPECT_REF_COUNT(sub_image, 0, 1);
   EXPECT_REF_COUNT(image, 1, 0);
-  EXPECT_REF_COUNT(sub_sub_buffer, 0, 1);
-  EXPECT_REF_COUNT(sub_buffer, 0, 1);
-  EXPECT_REF_COUNT(buffer, 0, 1);
 
-  // Release the entire chain by releasing sub_image.
   EXPECT_SUCCESS(clReleaseMemObject(sub_image));
+  EXPECT_DESTROYED(sub_image);
   EXPECT_DESTROYED(image);
-  EXPECT_DESTROYED(sub_sub_buffer);
-  EXPECT_DESTROYED(sub_buffer);
-  EXPECT_DESTROYED(buffer);
+
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_DESTROYED(context);
 }
 
 void testSubDevice(cl_platform_id platform, cl_device_id device) {
@@ -528,7 +558,7 @@ void testSubDevice(cl_platform_id platform, cl_device_id device) {
     constexpr const cl_uint first_sub_sub_device = 2;
     constexpr const cl_uint num_sub_sub_devices = 2;
     cl_int status;
-    // Create a context with 2 devices, check that the context keeps them alive.
+    // Create a context with 2 devices, check that the context keeps them both alive.
     cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platform), 0};
     cl_context context = clCreateContext(properties,
                                          num_sub_sub_devices,
@@ -579,7 +609,8 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
                                                  &length,
                                                  &status);
   EXPECT_SUCCESS(status);
-  EXPECT_REF_COUNT(program, 1, 0);
+  EXPECT_SUCCESS(clRetainProgram(program));
+  EXPECT_REF_COUNT(program, 2, 0);
   EXPECT_REF_COUNT(context, 0, 2);
 
   cl_sampler sampler = clCreateSampler(context,
@@ -594,12 +625,12 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
   cl_kernel kernel = clCreateKernel(program, "test_kernel", &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(kernel, 1, 0);
-  EXPECT_SUCCESS(clReleaseProgram(program));
-  EXPECT_DESTROYED(program);
+  EXPECT_REF_COUNT(program, 2, 1);
 
   cl_event top_of_pipe = clCreateUserEvent(context, &status);
   EXPECT_SUCCESS(status);
-  EXPECT_REF_COUNT(top_of_pipe, 1, 0);
+  EXPECT_SUCCESS(clRetainEvent(top_of_pipe));
+  EXPECT_REF_COUNT(top_of_pipe, 2, 0);
   EXPECT_REF_COUNT(context, 0, 4);
 
   // Setting kernel arguments should not affect reference counts.
@@ -623,29 +654,23 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
                                         &top_of_pipe,
                                         &bottom_of_pipe));
   EXPECT_REF_COUNT(bottom_of_pipe, 1, 0);
+  EXPECT_REF_COUNT(top_of_pipe, 2, 0);
   EXPECT_SUCCESS(clSetUserEventStatus(top_of_pipe, CL_COMPLETE));
   EXPECT_SUCCESS(clWaitForEvents(1, &bottom_of_pipe));
 
   EXPECT_SUCCESS(clRetainKernel(kernel));
   EXPECT_REF_COUNT(kernel, 2, 0);
-
-  // Cloning a kernel should not affect the refcount of the original kernel.
-  cl_kernel clone = clCloneKernel(kernel, &status);
-  EXPECT_SUCCESS(status);
-  EXPECT_REF_COUNT(kernel, 2, 0);
-  EXPECT_REF_COUNT(clone, 1, 0);
   EXPECT_SUCCESS(clReleaseKernel(kernel));
   EXPECT_SUCCESS(clReleaseKernel(kernel));
   EXPECT_DESTROYED(kernel);
-  EXPECT_REF_COUNT(clone, 1, 0);
 
-  EXPECT_SUCCESS(clReleaseKernel(clone));
-  EXPECT_DESTROYED(clone);
-
+  EXPECT_SUCCESS(clReleaseProgram(program));
+  EXPECT_DESTROYED(program);
   EXPECT_SUCCESS(clReleaseSampler(sampler));
   EXPECT_DESTROYED(sampler);
   EXPECT_SUCCESS(clReleaseCommandQueue(queue));
   EXPECT_DESTROYED(queue);
+  EXPECT_SUCCESS(clReleaseEvent(top_of_pipe));
   EXPECT_SUCCESS(clReleaseEvent(top_of_pipe));
   EXPECT_DESTROYED(top_of_pipe);
   EXPECT_SUCCESS(clReleaseEvent(bottom_of_pipe));
@@ -653,7 +678,7 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
   EXPECT_DESTROYED(context);
 }
 
-void testCommandQueueEdgeCase(cl_platform_id platform, cl_device_id device) {
+void testCL200Calls(cl_platform_id platform, cl_device_id device) {
   cl_int status;
   cl_context context = createContext(platform, device);
 
@@ -681,6 +706,126 @@ void testCommandQueueEdgeCase(cl_platform_id platform, cl_device_id device) {
   EXPECT_SUCCESS(clReleaseCommandQueue(queue_b));
   EXPECT_DESTROYED(queue_a);
   EXPECT_DESTROYED(queue_b);
+
+  cl_sampler sampler = clCreateSamplerWithProperties(context, nullptr, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(sampler, 1, 0);
+  EXPECT_SUCCESS(clReleaseSampler(sampler));
+  EXPECT_DESTROYED(sampler);
+
+  cl_mem pipe = clCreatePipe(context, CL_MEM_READ_WRITE, 8, 16, nullptr, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(pipe, 1, 0);
+  EXPECT_SUCCESS(clReleaseMemObject(pipe));
+  EXPECT_DESTROYED(pipe);
+}
+
+void testCloneKernel(cl_platform_id platform, cl_device_id device) {
+  cl_int status;
+  cl_context context = createContext(platform, device);
+
+  const char* source = "kernel void test_kernel(sampler_t sampler) {}";
+  size_t length = strlen(source);
+  cl_program program = clCreateProgramWithSource(context,
+                                                 1,
+                                                 &source,
+                                                 &length,
+                                                 &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(program, 1, 0);
+
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_REF_COUNT(context, 0, 1);
+
+  cl_kernel kernel = clCreateKernel(program, "test_kernel", &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(kernel, 1, 0);
+  EXPECT_SUCCESS(clReleaseProgram(program));
+  EXPECT_REF_COUNT(program, 0, 1);
+
+  cl_kernel clone = clCloneKernel(kernel, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(kernel, 2, 0);
+  EXPECT_REF_COUNT(clone, 1, 0);
+  EXPECT_REF_COUNT(program, 0, 2);
+
+  EXPECT_SUCCESS(clReleaseKernel(kernel));
+  EXPECT_SUCCESS(clReleaseKernel(kernel));
+  EXPECT_DESTROYED(kernel);
+  EXPECT_REF_COUNT(clone, 1, 0);
+  EXPECT_REF_COUNT(program, 0, 1);
+
+  EXPECT_SUCCESS(clReleaseKernel(clone));
+  EXPECT_DESTROYED(clone);
+  EXPECT_DESTROYED(program);
+  EXPECT_DESTROYED(context);
+}
+
+void testCL300Calls(cl_platform_id platform, cl_device_id device) {
+  cl_int status;
+  cl_context context = createContext(platform, device);
+
+  cl_mem buffer = clCreateBufferWithProperties(context,
+                                               nullptr,
+                                               CL_MEM_READ_WRITE,
+                                               16,
+                                               nullptr,
+                                               &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(context, 1, 1);
+  EXPECT_REF_COUNT(buffer, 1, 0);
+
+  cl_image_desc desc = {
+    CL_MEM_OBJECT_IMAGE2D, // image_type
+    2,                     // image_width
+    2,                     // image_height
+    1,                     // image_depth
+    1,                     // image_array size
+    0,                     // image_row_pitch
+    0,                     // image_slice_pitch
+    0,                     // num_mip_levels
+    0,                     // num_samples
+    buffer                 // mem_object
+  };
+  cl_image_format format = {CL_R, CL_UNORM_INT8};
+  cl_mem image = clCreateImageWithProperties(context,
+                                             nullptr,
+                                             CL_MEM_READ_WRITE,
+                                             &format,
+                                             &desc,
+                                             nullptr,
+                                             &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(image, 1, 0);
+  EXPECT_REF_COUNT(buffer, 1, 1);
+
+  EXPECT_SUCCESS(clReleaseMemObject(buffer));
+  EXPECT_REF_COUNT(buffer, 0, 1);
+  EXPECT_SUCCESS(clReleaseMemObject(image));
+  EXPECT_DESTROYED(image);
+  EXPECT_DESTROYED(buffer);
+}
+
+void testResurrect(cl_platform_id platform, cl_device_id device) {
+  cl_int status;
+  cl_context context = createContext(platform, device);
+
+  cl_mem buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, 32, nullptr, &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(buffer, 1, 0);
+
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_REF_COUNT(context, 0, 1);
+
+  // Try to 'resurrect' the context
+  EXPECT_SUCCESS(clRetainContext(context));
+  EXPECT_REF_COUNT(context, 1, 1);
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_REF_COUNT(context, 0, 0);
+
+  EXPECT_SUCCESS(clReleaseMemObject(buffer));
+  EXPECT_DESTROYED(buffer);
+  EXPECT_DESTROYED(context);
 }
 
 int main(int argc, char *argv[]) {
@@ -729,10 +874,25 @@ int main(int argc, char *argv[]) {
 
   testBasicCounting(platform, device);
   testLifetimeEdgeCases(platform, device);
-  testSubObjects(platform, device);
-  testSubDevice(platform, device);
+  testSubBuffer(platform, device);
   testPipeline(platform, device);
-  testCommandQueueEdgeCase(platform, device); // TODO: This test requires at least OpenCL 2.0
+
+  if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(1, 2, 0)) >= 0) {
+    testSubImage(platform, device);
+    testSubDevice(platform, device);
+  }
+  if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(2, 0, 0)) >= 0) {
+    testCL200Calls(platform, device);
+  }
+  if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(2, 1, 0)) >= 0) {
+    testCloneKernel(platform, device);
+  }
+  if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(3, 0, 0)) >= 0) {
+    testCL300Calls(platform, device);
+  }
+  if (TEST_CONFIG.use_inaccessible_objects) {
+    testResurrect(platform, device);
+  }
 
   return 0;
 }
