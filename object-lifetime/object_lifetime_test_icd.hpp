@@ -34,7 +34,7 @@ namespace lifetime
 
   template <> struct object_parents<cl_context>
   {
-    cl_device_id parent;
+    std::vector<cl_device_id> parents;
     void notify();
   };
 
@@ -154,6 +154,7 @@ struct _cl_device_id
   : public lifetime::icd_compatible
   , public lifetime::ref_counted_object<cl_device_id>
 {
+  cl_platform_id platform;
   enum class device_kind
   {
     root,
@@ -193,18 +194,37 @@ struct _cl_device_id
   cl_int clRetainDevice();
 
   cl_int clReleaseDevice();
+
+  cl_context clCreateContext(
+  const cl_context_properties* properties,
+  cl_uint num_devices,
+  const cl_device_id* devices,
+  void (CL_CALLBACK* pfn_notify)(const char* errinfo, const void* private_info, size_t cb, void* user_data),
+  void* user_data,
+  cl_int* errcode_ret);
 };
 
 struct _cl_context
   : public lifetime::icd_compatible
   , public lifetime::ref_counted_object<cl_context>
 {
-  _cl_context();
+  _cl_context() = delete;
+  _cl_context(std::initializer_list<cl_device_id> devices);
   _cl_context(const _cl_context&) = delete;
   _cl_context(_cl_context&&) = delete;
   ~_cl_context() = default;
   _cl_context &operator=(const _cl_context&) = delete;
   _cl_context &operator=(_cl_context&&) = delete;
+
+  cl_int clGetContextInfo(
+    cl_context_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret);
+
+  cl_int clRetainContext();
+
+  cl_int clReleaseContext();
 };
 
 struct _cl_platform_id

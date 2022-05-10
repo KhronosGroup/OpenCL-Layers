@@ -14,7 +14,8 @@ namespace lifetime
 
   void object_parents<cl_context>::notify()
   {
-    parent->unreference();
+    for (auto& parent : parents)
+      parent->unreference();
   }
 
   void object_parents<cl_command_queue>::notify()
@@ -38,6 +39,7 @@ namespace lifetime
 _cl_device_id::_cl_device_id(device_kind kind, cl_device_id parent, cl_uint num_cu)
   : icd_compatible{}
   , ref_counted_object<cl_device_id>{ lifetime::object_parents<cl_device_id>{ parent } }
+  , platform{ &lifetime::_platform }
   , kind{ kind }
   , profile{ "FULL_PROFILE" }
   , version { lifetime::_platform.version }
@@ -78,6 +80,12 @@ cl_int _cl_device_id::clGetDeviceInfo(
         std::back_inserter(result));
       break;
     }
+     case CL_DEVICE_PLATFORM:
+      std::copy(
+        reinterpret_cast<char*>(&platform),
+        reinterpret_cast<char*>(&platform) + sizeof(platform),
+        std::back_inserter(result));
+      break;
     case CL_DEVICE_NAME:
       std::copy(name.begin(), name.end(), std::back_inserter(result));
       result.push_back('\0');
@@ -199,6 +207,10 @@ cl_int _cl_device_id::clCreateSubDevices(
           [](const std::shared_ptr<_cl_device_id>& dev){ return dev.get(); }
         );
       }
+
+      for (const auto& dev : result)
+        lifetime::get_objects<cl_device_id>().insert(dev);
+
       return CL_SUCCESS;
       break;
     }
@@ -221,6 +233,130 @@ cl_int _cl_device_id::clReleaseDevice()
     return CL_SUCCESS;
   else
     return release();
+}
+
+cl_context _cl_device_id::clCreateContext(
+  const cl_context_properties*,
+  cl_uint num_devices,
+  const cl_device_id* devices,
+  void (CL_CALLBACK*)(const char* errinfo, const void* private_info, size_t cb, void* user_data),
+  void*,
+  cl_int* errcode_ret)
+{
+  bool all_devices_are_ours = std::all_of(
+    devices,
+    devices + num_devices,
+    [dev_plat = (cl_platform_id)nullptr](const cl_device_id& device) mutable
+    {
+      device->dispatch->clGetDeviceInfo(device, CL_DEVICE_PLATFORM, sizeof(cl_platform_id), &dev_plat, nullptr);
+      return dev_plat == &lifetime::_platform;
+    }
+  );
+
+  if (!all_devices_are_ours)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_INVALID_DEVICE;
+    return nullptr;
+  }
+
+  std::for_each(
+    devices,
+    devices + num_devices,
+    [](const cl_device_id& device)
+    {
+      device->reference();
+    }
+  );
+
+  auto result = lifetime::get_objects<cl_context>().insert(
+    std::make_shared<_cl_context>(
+      std::initializer_list<cl_device_id>(
+        devices,
+        devices + num_devices
+      )
+    )
+  );
+
+  if(result.second)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+_cl_context::_cl_context(std::initializer_list<cl_device_id> devices)
+  : icd_compatible{}
+  , ref_counted_object<cl_context>{ lifetime::object_parents<cl_context>{ devices } }
+{}
+
+cl_int _cl_context::clGetContextInfo(
+    cl_context_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret)
+{
+  if (param_value_size == 0 && param_value != NULL)
+    return CL_INVALID_VALUE;
+
+  std::vector<char> result;
+  switch(param_name)
+  {
+    case CL_CONTEXT_REFERENCE_COUNT:
+    {
+      cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_CONTEXT_NUM_DEVICES:
+    {
+      cl_uint tmp = static_cast<cl_uint>(parents.parents.size());
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_CONTEXT_DEVICES:
+      std::copy(
+        reinterpret_cast<char*>(&(*parents.parents.begin())),
+        reinterpret_cast<char*>(&(*parents.parents.end())),
+        std::back_inserter(result));
+      break;
+    default:
+      return CL_INVALID_VALUE;
+  }
+
+  if (param_value_size_ret)
+    *param_value_size_ret = result.size();
+
+  if (param_value_size && param_value_size < result.size())
+    return CL_INVALID_VALUE;
+
+  if (param_value)
+  {
+    std::copy(result.begin(), result.end(), static_cast<char*>(param_value));
+  }
+
+  return CL_SUCCESS;
+}
+
+cl_int _cl_context::clRetainContext()
+{
+  return retain();
+}
+
+cl_int _cl_context::clReleaseContext()
+{
+  return release();
 }
 
 _cl_platform_id::_cl_platform_id()
@@ -290,6 +426,7 @@ void _cl_platform_id::init_dispatch()
 {
   dispatch->clGetPlatformInfo = clGetPlatformInfo_wrap;
   dispatch->clGetDeviceIDs = clGetDeviceIDs_wrap;
+  dispatch->clCreateContext = clCreateContext_wrap;
 }
 
 cl_int _cl_platform_id::clGetPlatformInfo(
