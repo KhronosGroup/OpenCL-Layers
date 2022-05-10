@@ -9,6 +9,7 @@
 #include <memory>
 #include <array>
 #include <tuple>
+#include <algorithm>
 #include <sstream>
 #include <cstdlib>
 #include <cstdint>
@@ -53,10 +54,10 @@ struct TestContext {
   // The OpenCL platform to use.
   const char* platform = "Object Lifetime Layer Test ICD";
   // Keeps track number of failed assertions during this test.
-  size_t failed_tests = 0;
+  size_t failed_checks = 0;
 
   void fail() {
-    ++this->failed_tests;
+    ++this->failed_checks;
   }
 
   bool isInVersionRange(cl_version minimum, cl_version maximum) const {
@@ -68,7 +69,7 @@ struct TestContext {
   }
 };
 
-TestContext TEST_CONTEXT = { 0, false, false, false, 0 };
+TestContext TEST_CONTEXT;
 
 bool parseArgs(int argc, char* argv[]) {
   for (int i = 1; i < argc; ++i) {
@@ -246,7 +247,7 @@ void expectRefCount(const char* file,
       } else {
         expect_destroyed();
       }
-    } else if (TEST_CONTEXT.compareVersion(CL_MAKE_VERSION(2, 1, 0))) {
+    } else if (TEST_CONTEXT.compareVersion(CL_MAKE_VERSION(2, 1, 0)) >= 0) {
       if (expected_implicit_count == 0 && TEST_CONTEXT.use_released_objects) {
         expect_not_destroyed(0);
       } else if (expected_implicit_count != 0 && TEST_CONTEXT.use_inaccessible_objects) {
@@ -318,12 +319,16 @@ void testBasicCounting(cl_platform_id platform, cl_device_id device) {
   EXPECT_SUCCESS(clReleaseMemObject(buffer_b));
   EXPECT_REF_COUNT(buffer_a, 2, 0);
   EXPECT_REF_COUNT(buffer_b, 1, 0);
-  EXPECT_REF_COUNT(context, 2, 2);
+  EXPECT_REF_COUNT(context, 3, 2);
 
   EXPECT_SUCCESS(clReleaseMemObject(buffer_b));
   EXPECT_REF_COUNT(buffer_a, 2, 0);
   EXPECT_DESTROYED(buffer_b);
+  EXPECT_REF_COUNT(context, 3, 1);
+
+  EXPECT_SUCCESS(clReleaseContext(context));
   EXPECT_REF_COUNT(context, 2, 1);
+  EXPECT_REF_COUNT(buffer_a, 2, 0);
 
   EXPECT_SUCCESS(clReleaseContext(context));
   EXPECT_REF_COUNT(context, 1, 1);
@@ -347,12 +352,12 @@ void testLifetimeEdgeCases(cl_platform_id platform, cl_device_id device) {
   cl_context context = createContext(platform, device);
 
   cl_image_format format = { CL_RGBA, CL_UNORM_INT8 };
-  cl_mem image_2d = clCreateImage2D(context, CL_MEM_READ_ONLY, &format, 1, 1, 1, nullptr, &status);
+  cl_mem image_2d = clCreateImage2D(context, CL_MEM_READ_ONLY, &format, 1, 1, 0, nullptr, &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(image_2d, 1, 0);
   EXPECT_REF_COUNT(context, 1, 1);
 
-  cl_mem image_3d = clCreateImage3D(context, CL_MEM_READ_ONLY, &format, 1, 1, 1, 1, 1, nullptr, &status);
+  cl_mem image_3d = clCreateImage3D(context, CL_MEM_READ_ONLY, &format, 1, 1, 2, 0, 0, nullptr, &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(image_3d, 1, 0);
   EXPECT_REF_COUNT(context, 1, 2);
@@ -376,16 +381,34 @@ void testLifetimeEdgeCases(cl_platform_id platform, cl_device_id device) {
   // Double free should fail.
   EXPECT_ERROR(clReleaseMemObject(image_2d), CL_INVALID_MEM_OBJECT);
   EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT);
+
+  // Create a new context, which might re-use a previous context allocation.
+  cl_context new_context = createContext(platform, device);
+
+  EXPECT_DESTROYED(context);
+
+  EXPECT_SUCCESS(clRetainContext(new_context));
+  EXPECT_REF_COUNT(new_context, 2, 0);
+  EXPECT_DESTROYED(context);
+
+  EXPECT_SUCCESS(clReleaseContext(new_context));
+  EXPECT_REF_COUNT(new_context, 1, 0);
+  EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT);
+  EXPECT_REF_COUNT(new_context, 1, 0);
+  EXPECT_DESTROYED(context);
+
+  EXPECT_SUCCESS(clReleaseContext(new_context));
+  EXPECT_DESTROYED(new_context);
 }
 
 void testSubBuffer(cl_platform_id platform, cl_device_id device) {
   cl_int status;
   cl_context context = createContext(platform, device);
 
-  cl_mem buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, 10, nullptr, &status);
+  cl_mem buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, 64, nullptr, &status);
   EXPECT_SUCCESS(status);
 
-  cl_buffer_region sub_region = {0, 5};
+  cl_buffer_region sub_region = {0, 32};
   cl_mem sub_buffer = clCreateSubBuffer(buffer,
                                         CL_MEM_READ_WRITE,
                                         CL_BUFFER_CREATE_TYPE_REGION,
@@ -400,7 +423,7 @@ void testSubBuffer(cl_platform_id platform, cl_device_id device) {
   EXPECT_REF_COUNT(buffer, 0, 1);
   EXPECT_REF_COUNT(sub_buffer, 1, 0);
 
-  cl_buffer_region sub_sub_region = {1, 2};
+  cl_buffer_region sub_sub_region = {0, 16};
   cl_mem sub_sub_buffer = clCreateSubBuffer(buffer,
                                             CL_MEM_READ_ONLY,
                                             CL_BUFFER_CREATE_TYPE_REGION,
@@ -408,7 +431,7 @@ void testSubBuffer(cl_platform_id platform, cl_device_id device) {
                                             &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(sub_sub_buffer, 1, 0);
-  EXPECT_REF_COUNT(sub_buffer, 1, 4);
+  EXPECT_REF_COUNT(sub_buffer, 1, 0);
 
   // Release sub_buffer, but sub_sub_buffer should keep both its parent alive.
   EXPECT_SUCCESS(clReleaseMemObject(sub_buffer));
@@ -473,8 +496,8 @@ void testSubImage(cl_platform_id platform, cl_device_id device) {
 
   // Release image, the sub_image should keep the chain alive
   EXPECT_SUCCESS(clReleaseMemObject(image));
-  EXPECT_REF_COUNT(sub_image, 0, 1);
-  EXPECT_REF_COUNT(image, 1, 0);
+  EXPECT_REF_COUNT(sub_image, 1, 0);
+  EXPECT_REF_COUNT(image, 0, 1);
 
   EXPECT_SUCCESS(clReleaseMemObject(sub_image));
   EXPECT_DESTROYED(sub_image);
@@ -485,20 +508,34 @@ void testSubImage(cl_platform_id platform, cl_device_id device) {
 }
 
 void testSubDevice(cl_platform_id platform, cl_device_id device) {
+  constexpr const cl_uint num_sub_devices = 5;
+  constexpr const cl_uint min_num_sub_cus = 2;
+  constexpr const cl_uint min_cus = num_sub_devices * min_num_sub_cus;
+
+  {
+    size_t size;
+    EXPECT_SUCCESS(clGetDeviceInfo(device, CL_DEVICE_PARTITION_PROPERTIES, 0, nullptr, &size));
+    size_t len = size / sizeof(cl_device_partition_property);
+    auto properties = std::make_unique<cl_device_partition_property[]>(len);
+    EXPECT_SUCCESS(clGetDeviceInfo(device, CL_DEVICE_PARTITION_PROPERTIES, size, properties.get(), nullptr));
+
+    if (std::find(properties.get(), properties.get() + len, CL_DEVICE_PARTITION_EQUALLY) == properties.get() + len) {
+      REPORT_ERROR() << "test device does not support CL_DEVICE_PARTITION_EQUALLY" << std::endl;
+      TEST_CONTEXT.fail();
+      return;
+    }
+  }
+
   cl_uint num_cus;
   EXPECT_SUCCESS(clGetDeviceInfo(device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(cl_uint), &num_cus, nullptr));
-
-  constexpr const cl_uint num_sub_devices = 5;
-  constexpr const cl_uint num_sub_cus = 2;
-  constexpr const cl_uint min_cus = num_sub_devices * num_sub_cus;
-
   if (num_cus < min_cus) {
-    REPORT_ERROR() << "Test device does not have enough compute units" << std::endl;
+    REPORT_ERROR() << "test device does not have enough compute units" << std::endl;
     TEST_CONTEXT.fail();
     return;
   }
 
-  cl_device_partition_property props[] = {CL_DEVICE_PARTITION_EQUALLY, min_cus, 0};
+  cl_uint num_sub_cus = num_cus / num_sub_devices;
+  cl_device_partition_property props[] = {CL_DEVICE_PARTITION_EQUALLY, num_sub_cus, 0};
   std::array<cl_device_id, num_sub_devices> sub_devices;
   EXPECT_SUCCESS(clCreateSubDevices(device,
                                     props,
@@ -513,7 +550,7 @@ void testSubDevice(cl_platform_id platform, cl_device_id device) {
   // Create one sub-sub-device for each sub-device
   std::array<cl_device_id, num_sub_devices> sub_sub_devices;
   for (size_t i = 0; i < num_sub_devices; ++i) {
-    cl_device_partition_property sub_props[] = {CL_DEVICE_PARTITION_EQUALLY, 2, 0};
+    cl_device_partition_property sub_props[] = {CL_DEVICE_PARTITION_EQUALLY, num_sub_cus / num_sub_devices, 0};
     EXPECT_SUCCESS(clCreateSubDevices(sub_devices[i],
                                       sub_props,
                                       1,
@@ -638,6 +675,13 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
   EXPECT_REF_COUNT(sampler, 1, 0);
   EXPECT_REF_COUNT(context, 0, 3);
 
+  EXPECT_SUCCESS(clBuildProgram(program,
+                                1,
+                                &device,
+                                nullptr,
+                                nullptr,
+                                nullptr));
+
   cl_kernel kernel = clCreateKernel(program, "test_kernel", &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(kernel, 1, 0);
@@ -645,6 +689,8 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
 
   cl_event top_of_pipe = clCreateUserEvent(context, &status);
   EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(top_of_pipe, 1, 0);
+
   EXPECT_SUCCESS(clRetainEvent(top_of_pipe));
   EXPECT_REF_COUNT(top_of_pipe, 2, 0);
   EXPECT_REF_COUNT(context, 0, 4);
@@ -753,11 +799,21 @@ void testCloneKernel(cl_platform_id platform, cl_device_id device) {
   EXPECT_SUCCESS(clReleaseContext(context));
   EXPECT_REF_COUNT(context, 0, 1);
 
+  EXPECT_SUCCESS(clBuildProgram(program,
+                                1,
+                                &device,
+                                nullptr,
+                                nullptr,
+                                nullptr));
+
   cl_kernel kernel = clCreateKernel(program, "test_kernel", &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(kernel, 1, 0);
   EXPECT_SUCCESS(clReleaseProgram(program));
   EXPECT_REF_COUNT(program, 0, 1);
+
+  EXPECT_SUCCESS(clRetainKernel(kernel));
+  EXPECT_REF_COUNT(kernel, 2, 0);
 
   cl_kernel clone = clCloneKernel(kernel, &status);
   EXPECT_SUCCESS(status);
@@ -863,18 +919,19 @@ int main(int argc, char *argv[]) {
 
   // Select the mock icd.
   cl_platform_id platform;
-  bool           test_icd_platform_found = false;
+  bool           test_platform_found = false;
   for (cl_uint i = 0; i < num_platforms; ++i) {
     size_t name_size;
     EXPECT_SUCCESS(clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, 0, nullptr, &name_size));
     auto name = std::make_unique<char[]>(name_size);
     EXPECT_SUCCESS(clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, name_size, name.get(), nullptr));
+
     if (std::strcmp(name.get(), TEST_CONTEXT.platform) == 0) {
       platform = platforms[i];
-      test_icd_platform_found = true;
+      test_platform_found = true;
     }
   }
-  if (!test_icd_platform_found) {
+  if (!test_platform_found) {
     REPORT_ERROR() << "Platform '" << TEST_CONTEXT.platform << "' not found" << std::endl;
     exit(-1);
   }
@@ -909,6 +966,7 @@ int main(int argc, char *argv[]) {
     }
 
     TEST_CONTEXT.version = CL_MAKE_VERSION(major, minor, 0);
+    std::cout << "platform opencl version is " << major << "." << minor << std::endl;
   }
 
   testBasicCounting(platform, device);
@@ -933,8 +991,8 @@ int main(int argc, char *argv[]) {
     testResurrect(platform, device);
   }
 
-  if (TEST_CONTEXT.failed_tests != 0) {
-    std::cout << "failed " << TEST_CONTEXT.failed_tests << " assertions" << std::endl;
+  if (TEST_CONTEXT.failed_checks != 0) {
+    std::cout << "failed " << TEST_CONTEXT.failed_checks << " checks" << std::endl;
     return EXIT_FAILURE;
   }
 
