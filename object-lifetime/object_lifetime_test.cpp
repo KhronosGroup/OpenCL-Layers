@@ -571,7 +571,7 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
   EXPECT_SUCCESS(clReleaseContext(context));
   EXPECT_REF_COUNT(context, 0, 1);
 
-  const char* source = "kernel void test_kernel() {}";
+  const char* source = "kernel void test_kernel(sampler_t sampler) {}";
   size_t length = strlen(source);
   cl_program program = clCreateProgramWithSource(context,
                                                  1,
@@ -582,6 +582,15 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
   EXPECT_REF_COUNT(program, 1, 0);
   EXPECT_REF_COUNT(context, 0, 2);
 
+  cl_sampler sampler = clCreateSampler(context,
+                                       CL_TRUE,
+                                       CL_ADDRESS_REPEAT,
+                                       CL_FILTER_LINEAR,
+                                       &status);
+  EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(sampler, 1, 0);
+  EXPECT_REF_COUNT(context, 0, 3);
+
   cl_kernel kernel = clCreateKernel(program, "test_kernel", &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(kernel, 1, 0);
@@ -591,7 +600,15 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
   cl_event top_of_pipe = clCreateUserEvent(context, &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(top_of_pipe, 1, 0);
-  EXPECT_REF_COUNT(context, 0, 3);
+  EXPECT_REF_COUNT(context, 0, 4);
+
+  // Setting kernel arguments should not affect reference counts.
+  EXPECT_SUCCESS(clRetainSampler(sampler));
+  EXPECT_REF_COUNT(sampler, 2, 0);
+  EXPECT_SUCCESS(clSetKernelArg(kernel, 0, sizeof(cl_sampler), static_cast<const void*>(&sampler)));
+  EXPECT_REF_COUNT(sampler, 2, 0);
+  EXPECT_SUCCESS(clReleaseSampler(sampler));
+  EXPECT_REF_COUNT(sampler, 1, 0);
 
   size_t global_work_size = 2;
   size_t local_work_size = 1;
@@ -625,6 +642,8 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
   EXPECT_SUCCESS(clReleaseKernel(clone));
   EXPECT_DESTROYED(clone);
 
+  EXPECT_SUCCESS(clReleaseSampler(sampler));
+  EXPECT_DESTROYED(sampler);
   EXPECT_SUCCESS(clReleaseCommandQueue(queue));
   EXPECT_DESTROYED(queue);
   EXPECT_SUCCESS(clReleaseEvent(top_of_pipe));
