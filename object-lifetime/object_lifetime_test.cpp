@@ -9,6 +9,7 @@
 #include <memory>
 #include <array>
 #include <tuple>
+#include <sstream>
 #include <cstdlib>
 #include <cstdint>
 #include <cstddef>
@@ -40,15 +41,23 @@ int compareVersions(cl_version lhs, cl_version rhs) {
   return 0;
 }
 
-struct TestConfig {
+struct TestContext {
   // The version to base testing off.
-  cl_version version;
+  cl_version version = CL_MAKE_VERSION(1, 1, 0);
   // Whether CL_*_REFERENCE_COUNT reports implicit or explicit reference count.
-  bool ref_count_includes_implicit;
+  bool ref_count_includes_implicit = false;
   // Whether released objects can still be used.
-  bool use_released_objects;
+  bool use_released_objects = false;
   // Whether inaccessible objects that are still implicitly referenced can be used.
-  bool use_inaccessible_objects;
+  bool use_inaccessible_objects = false;
+  // The OpenCL platform to use.
+  const char* platform = "Object Lifetime Layer Test ICD";
+  // Keeps track number of failed assertions during this test.
+  size_t failed_tests = 0;
+
+  void fail() {
+    ++this->failed_tests;
+  }
 
   bool isInVersionRange(cl_version minimum, cl_version maximum) const {
     return compareVersions(this->version, minimum) >= 0 && compareVersions(this->version, maximum) <= 0;
@@ -59,19 +68,25 @@ struct TestConfig {
   }
 };
 
-TestConfig TEST_CONFIG = { 0, false, false, false };
+TestContext TEST_CONTEXT = { 0, false, false, false, 0 };
 
-bool parseArgs(TestConfig &cfg, int argc, char* argv[]) {
+bool parseArgs(int argc, char* argv[]) {
   for (int i = 1; i < argc; ++i) {
     const char* arg = argv[i];
     if (std::strcmp(arg, "--ref-count-includes-implicit") == 0) {
-      cfg.ref_count_includes_implicit = true;
+      TEST_CONTEXT.ref_count_includes_implicit = true;
     } else if (std::strcmp(arg, "--use-released-objects") == 0) {
-      cfg.use_released_objects = true;
+      TEST_CONTEXT.use_released_objects = true;
     } else if (std::strcmp(arg, "--use-inaccessible-objects") == 0) {
-      cfg.use_inaccessible_objects = true;
+      TEST_CONTEXT.use_inaccessible_objects = true;
+    } else if (std::strcmp(arg, "--platform") == 0) {
+      if (++i == argc) {
+        std::cerr << "ERROR: --platform expects argument <platform>" << std::endl;
+        return false;
+      }
+      TEST_CONTEXT.platform = argv[i];
     } else {
-      fprintf(stderr, "ERROR: invalid argument %s\n", arg);
+      std::cerr << "ERROR: invalid argument " << arg << std::endl;
       return false;
     }
   }
@@ -149,7 +164,7 @@ std::ostream& reportError(const char* file, int line) {
 void expectSuccess(const char* file, int line, cl_int status) {
   if (status != CL_SUCCESS) {
     reportError(file, line) << "expected success, got " << status << std::endl;
-    exit(-1);
+    TEST_CONTEXT.fail();
   }
 }
 
@@ -158,10 +173,10 @@ void expectSuccess(const char* file, int line, cl_int status) {
 void expectError(const char* file, int line, cl_int status, cl_int expected) {
   if (status == CL_SUCCESS) {
     reportError(file, line) << "expected error " << expected << ", got success" << std::endl;
-    exit(-1);
+    TEST_CONTEXT.fail();
   } else if (status != expected) {
     reportError(file, line) << "expected error " << expected << ", got " << status << std::endl;
-    exit(-1);
+    TEST_CONTEXT.fail();
   }
 }
 
@@ -180,23 +195,23 @@ void expectRefCount(const char* file,
   auto expect_not_destroyed = [&](cl_uint expected_ref_count) {
     if (status == ocl_utils::CL_INVALID<Handle>) {
       reportError(file, line) << "expected that object was not destroyed, but it was" << std::endl;
-      exit(-1);
+      TEST_CONTEXT.fail();
     } else if (status != CL_SUCCESS) {
       reportError(file, line) << "expected that object was not destroyed, got unexpected error " << status << std::endl;
-      exit(-1);
+      TEST_CONTEXT.fail();
     } else if (actual_ref_count != expected_ref_count) {
       reportError(file, line) << "expected ref count " << expected_ref_count << ", got " << actual_ref_count << std::endl;
-      exit(-1);
+      TEST_CONTEXT.fail();
     }
   };
 
   auto expect_destroyed = [&] {
     if (status == CL_SUCCESS) {
       reportError(file, line) << "expected that object was destroyed, but it is not" << std::endl;
-      exit(-1);
+      TEST_CONTEXT.fail();
     } else if (status != ocl_utils::CL_INVALID<Handle>) {
       reportError(file, line) << "expected that object was destroyed, got unexpect error " << status << std::endl;
-      exit(-1);
+      TEST_CONTEXT.fail();
     }
   };
 
@@ -217,24 +232,24 @@ void expectRefCount(const char* file,
     // - Otherwise if implicit reference count is nonzero and use_inaccessible_objects is true, we expect CL_SUCCESS.
     // - Otherwise we expect CL_INVALID.
 
-    if (TEST_CONFIG.isInVersionRange(CL_MAKE_VERSION(1, 1, 0), CL_MAKE_VERSION(1, 2, 0))) {
-      if (TEST_CONFIG.use_released_objects) {
+    if (TEST_CONTEXT.isInVersionRange(CL_MAKE_VERSION(1, 1, 0), CL_MAKE_VERSION(1, 2, 0))) {
+      if (TEST_CONTEXT.use_released_objects) {
         expect_not_destroyed(0);
       } else {
         expect_destroyed();
       }
-    } else if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(2, 0, 0)) == 0) {
+    } else if (TEST_CONTEXT.compareVersion(CL_MAKE_VERSION(2, 0, 0)) == 0) {
       if (expected_implicit_count != 0) {
         expect_not_destroyed(expected_implicit_count);
-      } else if (TEST_CONFIG.use_released_objects) {
+      } else if (TEST_CONTEXT.use_released_objects) {
         expect_not_destroyed(0);
       } else {
         expect_destroyed();
       }
-    } else if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(2, 1, 0))) {
-      if (expected_implicit_count == 0 && TEST_CONFIG.use_released_objects) {
+    } else if (TEST_CONTEXT.compareVersion(CL_MAKE_VERSION(2, 1, 0))) {
+      if (expected_implicit_count == 0 && TEST_CONTEXT.use_released_objects) {
         expect_not_destroyed(0);
-      } else if (expected_implicit_count != 0 && TEST_CONFIG.use_inaccessible_objects) {
+      } else if (expected_implicit_count != 0 && TEST_CONTEXT.use_inaccessible_objects) {
         expect_not_destroyed(expected_implicit_count);
       } else {
         expect_destroyed();
@@ -244,7 +259,7 @@ void expectRefCount(const char* file,
     // If the expected explicit ref count is nonzero:
     // In OpenCL 1.1 and 1.2, we expect that the explicit ref count is the actual ref count.
     // In OpenCL 2.0 and above, the actual ref count includes the implicit count as well.
-    if (TEST_CONFIG.ref_count_includes_implicit) {
+    if (TEST_CONTEXT.ref_count_includes_implicit) {
       expect_not_destroyed(expected_explicit_count + expected_implicit_count);
     } else {
       expect_not_destroyed(expected_explicit_count);
@@ -479,7 +494,8 @@ void testSubDevice(cl_platform_id platform, cl_device_id device) {
 
   if (num_cus < min_cus) {
     REPORT_ERROR() << "Test device does not have enough compute units" << std::endl;
-    exit(-1);
+    TEST_CONTEXT.fail();
+    return;
   }
 
   cl_device_partition_property props[] = {CL_DEVICE_PARTITION_EQUALLY, min_cus, 0};
@@ -829,7 +845,9 @@ void testResurrect(cl_platform_id platform, cl_device_id device) {
 }
 
 int main(int argc, char *argv[]) {
-  parseArgs(TEST_CONFIG, argc, argv);
+  if (!parseArgs(argc, argv)) {
+    return EXIT_FAILURE;
+  }
 
   cl_int status = CL_SUCCESS;
   cl_uint num_platforms = 0;
@@ -851,13 +869,13 @@ int main(int argc, char *argv[]) {
     EXPECT_SUCCESS(clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, 0, nullptr, &name_size));
     auto name = std::make_unique<char[]>(name_size);
     EXPECT_SUCCESS(clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, name_size, name.get(), nullptr));
-    if (std::strcmp(name.get(), "Object Lifetime Layer Test ICD") == 0) {
+    if (std::strcmp(name.get(), TEST_CONTEXT.platform) == 0) {
       platform = platforms[i];
       test_icd_platform_found = true;
     }
   }
   if (!test_icd_platform_found) {
-    REPORT_ERROR() << "OpenCL Test ICD platform not found" << std::endl;
+    REPORT_ERROR() << "Platform '" << TEST_CONTEXT.platform << "' not found" << std::endl;
     exit(-1);
   }
 
@@ -870,29 +888,55 @@ int main(int argc, char *argv[]) {
     exit(-1);
   }
 
-  EXPECT_SUCCESS(clGetPlatformInfo(platform, CL_PLATFORM_NUMERIC_VERSION, sizeof(cl_version), &TEST_CONFIG.version, nullptr));
+  {
+    size_t version_length;
+    EXPECT_SUCCESS(clGetPlatformInfo(platform, CL_PLATFORM_VERSION, 0, nullptr, &version_length));
+    auto version_data = std::make_unique<char[]>(version_length);
+    EXPECT_SUCCESS(clGetPlatformInfo(platform, CL_PLATFORM_VERSION, version_length, version_data.get(), nullptr));
+
+    std::stringstream version;
+    version.write(version_data.get(), version_length);
+
+    std::string opencl;
+    cl_uint major, minor;
+    version >> opencl;
+    version >> major;
+    version.get();
+    version >> minor;
+
+    if (version.fail()) {
+      REPORT_ERROR() << "Failed to parse platform OpenCL version" << std::endl;
+    }
+
+    TEST_CONTEXT.version = CL_MAKE_VERSION(major, minor, 0);
+  }
 
   testBasicCounting(platform, device);
   testLifetimeEdgeCases(platform, device);
   testSubBuffer(platform, device);
   testPipeline(platform, device);
 
-  if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(1, 2, 0)) >= 0) {
+  if (TEST_CONTEXT.compareVersion(CL_MAKE_VERSION(1, 2, 0)) >= 0) {
     testSubImage(platform, device);
     testSubDevice(platform, device);
   }
-  if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(2, 0, 0)) >= 0) {
+  if (TEST_CONTEXT.compareVersion(CL_MAKE_VERSION(2, 0, 0)) >= 0) {
     testCL200Calls(platform, device);
   }
-  if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(2, 1, 0)) >= 0) {
+  if (TEST_CONTEXT.compareVersion(CL_MAKE_VERSION(2, 1, 0)) >= 0) {
     testCloneKernel(platform, device);
   }
-  if (TEST_CONFIG.compareVersion(CL_MAKE_VERSION(3, 0, 0)) >= 0) {
+  if (TEST_CONTEXT.compareVersion(CL_MAKE_VERSION(3, 0, 0)) >= 0) {
     testCL300Calls(platform, device);
   }
-  if (TEST_CONFIG.use_inaccessible_objects) {
+  if (TEST_CONTEXT.use_inaccessible_objects) {
     testResurrect(platform, device);
   }
 
-  return 0;
+  if (TEST_CONTEXT.failed_tests != 0) {
+    std::cout << "failed " << TEST_CONTEXT.failed_tests << " assertions" << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
 }
