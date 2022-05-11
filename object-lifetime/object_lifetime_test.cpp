@@ -198,7 +198,7 @@ void expectRefCount(const char* func,
       reportError(func, line) << "expected that object was not destroyed, but it was" << std::endl;
       TEST_CONTEXT.fail();
     } else if (status != CL_SUCCESS) {
-      reportError(func, line) << "expected that object was not destroyed, got unexpected error " << status << std::endl;
+      reportError(func, line) << "expected that object was not destroyed, got error " << status << std::endl;
       TEST_CONTEXT.fail();
     } else if (actual_ref_count != expected_ref_count) {
       reportError(func, line) << "expected ref count " << expected_ref_count << ", got " << actual_ref_count << std::endl;
@@ -211,7 +211,7 @@ void expectRefCount(const char* func,
       reportError(func, line) << "expected that object was destroyed, but it is not" << std::endl;
       TEST_CONTEXT.fail();
     } else if (status != ocl_utils::CL_INVALID<Handle>) {
-      reportError(func, line) << "expected that object was destroyed, got unexpect error " << status << std::endl;
+      reportError(func, line) << "expected that object was destroyed, got error " << status << std::endl;
       TEST_CONTEXT.fail();
     }
   };
@@ -424,21 +424,22 @@ void testSubBuffer(cl_platform_id platform, cl_device_id device) {
   EXPECT_REF_COUNT(sub_buffer, 1, 0);
 
   cl_buffer_region sub_sub_region = {0, 16};
-  cl_mem sub_sub_buffer = clCreateSubBuffer(buffer,
+  cl_mem sub_sub_buffer = clCreateSubBuffer(sub_buffer,
                                             CL_MEM_READ_ONLY,
                                             CL_BUFFER_CREATE_TYPE_REGION,
                                             static_cast<const void*>(&sub_sub_region),
                                             &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(sub_sub_buffer, 1, 0);
-  EXPECT_REF_COUNT(sub_buffer, 1, 0);
+  EXPECT_REF_COUNT(sub_buffer, 1, 1);
 
   // Release sub_buffer, but sub_sub_buffer should keep both its parent alive.
   EXPECT_SUCCESS(clReleaseMemObject(sub_buffer));
   EXPECT_REF_COUNT(sub_buffer, 0, 1);
   EXPECT_REF_COUNT(buffer, 0, 1);
 
-   // Release the entire chain by releasing sub_sub_buffer
+  // Release the entire chain by releasing sub_sub_buffer
+  EXPECT_SUCCESS(clReleaseMemObject(sub_sub_buffer));
   EXPECT_DESTROYED(sub_sub_buffer);
   EXPECT_DESTROYED(sub_buffer);
   EXPECT_DESTROYED(buffer);
@@ -447,7 +448,7 @@ void testSubBuffer(cl_platform_id platform, cl_device_id device) {
   EXPECT_DESTROYED(context);
 }
 
-void testSubImage(cl_platform_id platform, cl_device_id device) {
+void testCreateImage(cl_platform_id platform, cl_device_id device) {
   cl_int status;
   cl_context context = createContext(platform, device);
 
@@ -492,16 +493,16 @@ void testSubImage(cl_platform_id platform, cl_device_id device) {
                                    nullptr,
                                    &status);
   EXPECT_SUCCESS(status);
+  EXPECT_REF_COUNT(sub_image, 1, 0);
   EXPECT_REF_COUNT(image, 1, 0);
 
-  // Release image, the sub_image should keep the chain alive
+  // Release image. In this case, sub_image should not keep image alive.
   EXPECT_SUCCESS(clReleaseMemObject(image));
   EXPECT_REF_COUNT(sub_image, 1, 0);
-  EXPECT_REF_COUNT(image, 0, 1);
+  EXPECT_DESTROYED(image);
 
   EXPECT_SUCCESS(clReleaseMemObject(sub_image));
   EXPECT_DESTROYED(sub_image);
-  EXPECT_DESTROYED(image);
 
   EXPECT_SUCCESS(clReleaseContext(context));
   EXPECT_DESTROYED(context);
@@ -690,10 +691,10 @@ void testPipeline(cl_platform_id platform, cl_device_id device) {
   cl_event top_of_pipe = clCreateUserEvent(context, &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(top_of_pipe, 1, 0);
+  EXPECT_REF_COUNT(context, 0, 4);
 
   EXPECT_SUCCESS(clRetainEvent(top_of_pipe));
   EXPECT_REF_COUNT(top_of_pipe, 2, 0);
-  EXPECT_REF_COUNT(context, 0, 4);
 
   // Setting kernel arguments should not affect reference counts.
   EXPECT_SUCCESS(clRetainSampler(sampler));
@@ -893,7 +894,7 @@ void testResurrect(cl_platform_id platform, cl_device_id device) {
   EXPECT_SUCCESS(clRetainContext(context));
   EXPECT_REF_COUNT(context, 1, 1);
   EXPECT_SUCCESS(clReleaseContext(context));
-  EXPECT_REF_COUNT(context, 0, 0);
+  EXPECT_REF_COUNT(context, 0, 1);
 
   EXPECT_SUCCESS(clReleaseMemObject(buffer));
   EXPECT_DESTROYED(buffer);
@@ -975,7 +976,7 @@ int main(int argc, char *argv[]) {
   testPipeline(platform, device);
 
   if (TEST_CONTEXT.compareVersion(CL_MAKE_VERSION(1, 2, 0)) >= 0) {
-    testSubImage(platform, device);
+    testCreateImage(platform, device);
     testSubDevice(platform, device);
   }
   if (TEST_CONTEXT.compareVersion(CL_MAKE_VERSION(2, 0, 0)) >= 0) {
