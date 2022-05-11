@@ -28,57 +28,11 @@ if (LAYERS_BUILD_TESTS)
             OpenCL::Headers
     )
 
-    add_executable (CLObjectLifetimeLayerTest object_lifetime_test.cpp)
-
-    target_link_libraries (CLObjectLifetimeLayerTest
-        PRIVATE
-            LayersCommon
-            OpenCL::OpenCL
-    )
-
-    function (add_layer_test OPENCL_VERSION)
-        cmake_parse_arguments(PARSE_ARGV 1 ARG "REPORT_IMPLICIT_REF_COUNT;ALLOW_USING_RELEASED_OBJECTS;ALLOW_USING_INACCESSIBLE_OBJECTS" "" "")
-
-        set (TEST_ENVIRONMENT
-            OPENCL_LAYERS=$<TARGET_FILE:CLObjectLifetimeLayer>
-            CL_OBJECT_LIFETIME_TRANSPARENT=1
-            CL_OBJECT_LIFETIME_LOG_SINK=file
-            CL_OBJECT_LIFETIME_LOG_FILENAME=CLObjectLifetimeLayerTest.log
-            OCL_ICD_FILENAMES=$<TARGET_FILE:CLObjectLifetimeICD>
-            OBJECT_LIFETIME_ICD_VERSION=${OPENCL_VERSION}
-        )
-        set (TEST_NAME "ObjectLifetime-CL${OPENCL_VERSION}")
-
-        if (ARG_REPORT_IMPLICIT_REF_COUNT)
-          list(APPEND TEST_ENVIRONMENT REPORT_IMPLICIT_REF_COUNT_TO_USER=1)
-          string (APPEND TEST_NAME "-ReportImplicitRefCount")
-        endif ()
-        if (ARG_ALLOW_USING_RELEASED_OBJECTS)
-          list (APPEND TEST_ENVIRONMENT ALLOW_USING_RELEASED_OBJECTS=1)
-          string (APPEND TEST_NAME "-AllowUsingReleasedObjects")
-        endif()
-        if (ARG_ALLOW_USING_INACCESSIBLE_OBJECTS)
-          list (APPEND TEST_ENVIRONMENT ALLOW_USING_INACCESSIBLE_OBJECTS)
-          string (APPEND TEST_NAME "-AllowUsingInaccessibleObjects")
-        endif()
-
-        add_test (
-            NAME ${TEST_NAME}
-            COMMAND "${CMAKE_COMMAND}"
-                -DCOMMAND=$<TARGET_FILE:CLObjectLifetimeLayerTest>
-                -DEXTRA_OUTPUT=${CMAKE_CURRENT_BINARY_DIR}/CLObjectLifetimeLayerTest.log
-                -DEXPECTED_EXTRA_OUTPUT=${CMAKE_CURRENT_SOURCE_DIR}/expected_layer_log.regex
-                -P ${CMAKE_CURRENT_LIST_DIR}/object_lifetime_test.cmake
-        )
-        set_tests_properties (${TEST_NAME} PROPERTIES ENVIRONMENT "${TEST_ENVIRONMENT}")
-    endfunction()
-
-    add_layer_test(200)
+    add_subdirectory (test)
 endif ()
 
 list (APPEND BUILD_TARGETS
     CLObjectLifetimeICD
-    CLObjectLifetimeLayerTest
 )
 
 set_target_properties (${BUILD_TARGETS}
