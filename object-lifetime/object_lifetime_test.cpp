@@ -156,35 +156,35 @@ namespace ocl_utils {
   constexpr const cl_int CL_INVALID<cl_event> = CL_INVALID_EVENT;
 }
 
-std::ostream& reportError(const char* file, int line) {
-  return std::cout << file << ":" << line << ": ";
+std::ostream& reportError(const char* func, int line) {
+  return std::cout << func << ":" << line << ": ";
 }
 
-#define REPORT_ERROR() reportError(__FILE__, __LINE__)
+#define REPORT_ERROR() reportError(__FUNCTION__, __LINE__)
 
-void expectSuccess(const char* file, int line, cl_int status) {
+void expectSuccess(const char* func, int line, cl_int status) {
   if (status != CL_SUCCESS) {
-    reportError(file, line) << "expected success, got " << status << std::endl;
+    reportError(func, line) << "expected success, got " << status << std::endl;
     TEST_CONTEXT.fail();
   }
 }
 
-#define EXPECT_SUCCESS(status) ::expectSuccess(__FILE__, __LINE__, status)
+#define EXPECT_SUCCESS(status) ::expectSuccess(__FUNCTION__, __LINE__, status)
 
-void expectError(const char* file, int line, cl_int status, cl_int expected) {
+void expectError(const char* func, int line, cl_int status, cl_int expected) {
   if (status == CL_SUCCESS) {
-    reportError(file, line) << "expected error " << expected << ", got success" << std::endl;
+    reportError(func, line) << "expected error " << expected << ", got success" << std::endl;
     TEST_CONTEXT.fail();
   } else if (status != expected) {
-    reportError(file, line) << "expected error " << expected << ", got " << status << std::endl;
+    reportError(func, line) << "expected error " << expected << ", got " << status << std::endl;
     TEST_CONTEXT.fail();
   }
 }
 
-#define EXPECT_ERROR(status, expected) ::expectError(__FILE__, __LINE__, status, expected)
+#define EXPECT_ERROR(status, expected) ::expectError(__FUNCTION__, __LINE__, status, expected)
 
 template <typename Handle>
-void expectRefCount(const char* file,
+void expectRefCount(const char* func,
                     int line,
                     Handle handle,
                     cl_uint expected_explicit_count,
@@ -195,23 +195,23 @@ void expectRefCount(const char* file,
 
   auto expect_not_destroyed = [&](cl_uint expected_ref_count) {
     if (status == ocl_utils::CL_INVALID<Handle>) {
-      reportError(file, line) << "expected that object was not destroyed, but it was" << std::endl;
+      reportError(func, line) << "expected that object was not destroyed, but it was" << std::endl;
       TEST_CONTEXT.fail();
     } else if (status != CL_SUCCESS) {
-      reportError(file, line) << "expected that object was not destroyed, got unexpected error " << status << std::endl;
+      reportError(func, line) << "expected that object was not destroyed, got unexpected error " << status << std::endl;
       TEST_CONTEXT.fail();
     } else if (actual_ref_count != expected_ref_count) {
-      reportError(file, line) << "expected ref count " << expected_ref_count << ", got " << actual_ref_count << std::endl;
+      reportError(func, line) << "expected ref count " << expected_ref_count << ", got " << actual_ref_count << std::endl;
       TEST_CONTEXT.fail();
     }
   };
 
   auto expect_destroyed = [&] {
     if (status == CL_SUCCESS) {
-      reportError(file, line) << "expected that object was destroyed, but it is not" << std::endl;
+      reportError(func, line) << "expected that object was destroyed, but it is not" << std::endl;
       TEST_CONTEXT.fail();
     } else if (status != ocl_utils::CL_INVALID<Handle>) {
-      reportError(file, line) << "expected that object was destroyed, got unexpect error " << status << std::endl;
+      reportError(func, line) << "expected that object was destroyed, got unexpect error " << status << std::endl;
       TEST_CONTEXT.fail();
     }
   };
@@ -269,7 +269,7 @@ void expectRefCount(const char* file,
 }
 
 #define EXPECT_REF_COUNT(handle, explicit_count, implicit_count) \
-  ::expectRefCount(__FILE__, __LINE__, handle, explicit_count, implicit_count)
+  ::expectRefCount(__FUNCTION__, __LINE__, handle, explicit_count, implicit_count)
 
 #define EXPECT_DESTROYED(handle) EXPECT_REF_COUNT(handle, 0, 0)
 
