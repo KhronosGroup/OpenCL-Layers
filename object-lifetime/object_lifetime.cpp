@@ -331,7 +331,7 @@ static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *h
       deleted_objects[handle].push_back(it->second);
     }
   }
-  objects[handle] =  object_record{T, 1, parent};
+  objects[handle] = object_record{T, 1, parent};
   if(parent != nullptr) {
     ++objects[parent].num_children;
   }
@@ -771,7 +771,7 @@ static void* get_parent(cl_event event) {
   cl_context parent_context;
   cl_int res = tdispatch->clGetEventInfo(
     event,
-    CL_QUEUE_CONTEXT,
+    CL_EVENT_CONTEXT,
     sizeof(parent_context), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
     &parent_context, NULL);
   if(res == CL_SUCCESS && parent_context != NULL) {
@@ -781,14 +781,14 @@ static void* get_parent(cl_event event) {
 }
 
 static void* get_parent(cl_kernel kernel) {
-  cl_context parent_context;
+  cl_program parent_program;
   cl_int res = tdispatch->clGetKernelInfo(
     kernel,
-    CL_QUEUE_CONTEXT,
-    sizeof(parent_context), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
-    &parent_context, NULL);
-  if(res == CL_SUCCESS && parent_context != NULL) {
-    return parent_context;
+    CL_KERNEL_PROGRAM,
+    sizeof(parent_program), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
+    &parent_program, NULL);
+  if(res == CL_SUCCESS && parent_program != NULL) {
+    return parent_program;
   }
   return NULL;
 }
