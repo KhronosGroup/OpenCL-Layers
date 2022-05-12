@@ -479,6 +479,8 @@ static cl_int check_release(const trimmed__func__& func, void *handle) {
   }
   if (it->second.refcount == 0 && it->second.num_children == 0) {
     notify_child_released(func, it->second.parent);
+    deleted_objects[handle].push_back(it->second);
+    objects.erase(it);
   }
   return CL_SUCCESS;
 }
@@ -505,6 +507,10 @@ cl_int check_release<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
     }
   }
   // Devices do not have parent objects
+  if (it->second.refcount == 0) {
+    deleted_objects[handle].push_back(it->second);
+    objects.erase(it);
+  }
   return CL_SUCCESS;
 }
 
