@@ -23,6 +23,7 @@ namespace lifetime
   template <> inline cl_int CL_INVALID<cl_platform_id>() { return CL_INVALID_PLATFORM; }
   template <> inline cl_int CL_INVALID<cl_device_id>() { return CL_INVALID_DEVICE; }
   template <> inline cl_int CL_INVALID<cl_context>() { return CL_INVALID_CONTEXT; }
+  template <> inline cl_int CL_INVALID<cl_mem>() { return CL_INVALID_MEM_OBJECT; }
 
   template <typename Object> struct object_parents;
 
@@ -41,6 +42,13 @@ namespace lifetime
   template <> struct object_parents<cl_command_queue>
   {
     cl_device_id parent_device;
+    cl_context parent_context;
+    void notify();
+  };
+
+  template <> struct object_parents<cl_mem>
+  {
+    cl_mem parent_mem;
     cl_context parent_context;
     void notify();
   };
@@ -204,6 +212,27 @@ struct _cl_device_id
   cl_int* errcode_ret);
 };
 
+struct _cl_mem
+  : public lifetime::icd_compatible
+  , public lifetime::ref_counted_object<cl_mem>
+{
+  size_t _size;
+
+  _cl_mem() = delete;
+  _cl_mem(cl_mem mem_parent, cl_context context_parent, size_t size);
+  _cl_mem(const _cl_mem&) = delete;
+  _cl_mem(_cl_mem&&) = delete;
+  ~_cl_mem() = default;
+  _cl_mem &operator=(const _cl_mem&) = delete;
+  _cl_mem &operator=(_cl_mem&&) = delete;
+
+  cl_mem clCreateSubBuffer(
+    cl_mem_flags flags,
+    cl_buffer_create_type buffer_create_type,
+    const void* buffer_create_info,
+    cl_int* errcode_ret);
+};
+
 struct _cl_context
   : public lifetime::icd_compatible
   , public lifetime::ref_counted_object<cl_context>
@@ -225,6 +254,12 @@ struct _cl_context
   cl_int clRetainContext();
 
   cl_int clReleaseContext();
+
+  cl_mem clCreateBuffer(
+    cl_mem_flags flags,
+    size_t size,
+    void* host_ptr,
+    cl_int* errcode_ret);
 };
 
 struct _cl_platform_id
@@ -238,8 +273,11 @@ struct _cl_platform_id
               extensions,
               suffix;
 
+  // Objects anchored here solely for the purpose of not being
+  // subjected to static initialization order issues
   std::set<std::shared_ptr<_cl_device_id>> _devices;
   std::set<std::shared_ptr<_cl_context>> _contexts;
+  std::set<std::shared_ptr<_cl_mem>> _mems;
 
   _cl_platform_id();
   _cl_platform_id(const _cl_platform_id&) = delete;
@@ -271,4 +309,5 @@ namespace lifetime
   template <typename T> std::set<std::shared_ptr<std::remove_pointer_t<T>>>& get_objects();
   template <> inline std::set<std::shared_ptr<_cl_device_id>>& get_objects<cl_device_id>() { return _platform._devices; }
   template <> inline std::set<std::shared_ptr<_cl_context>>& get_objects<cl_context>() { return _platform._contexts; }
+  template <> inline std::set<std::shared_ptr<_cl_mem>>& get_objects<cl_mem>() { return _platform._mems; }
 }

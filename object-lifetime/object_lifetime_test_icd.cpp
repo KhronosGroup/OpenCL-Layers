@@ -57,6 +57,7 @@ void _cl_device_id::init_dispatch()
   dispatch->clCreateSubDevices = clCreateSubDevices_wrap;
   dispatch->clRetainDevice = clRetainDevice_wrap;
   dispatch->clReleaseDevice = clReleaseDevice_wrap;
+  dispatch->clCreateContext = clCreateContext_wrap;
 }
 
 cl_int _cl_device_id::clGetDeviceInfo(
@@ -288,12 +289,54 @@ cl_context _cl_device_id::clCreateContext(
   }
 }
 
-cl_mem clCreateSubBuffer(
-  cl_mem_flags flags,
+_cl_mem::_cl_mem(cl_mem mem_parent, cl_context context_parent, size_t size)
+  : icd_compatible{}
+  , ref_counted_object<cl_mem>{ lifetime::object_parents<cl_mem>{ mem_parent, context_parent } }
+  , _size{ size }
+{}
+
+cl_mem _cl_mem::clCreateSubBuffer(
+  cl_mem_flags,
   cl_buffer_create_type buffer_create_type,
   const void* buffer_create_info,
   cl_int* errcode_ret)
 {
+  if (buffer_create_type != CL_BUFFER_CREATE_TYPE_REGION ||
+      buffer_create_info == nullptr)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_INVALID_VALUE;
+    return nullptr;
+  }
+
+  const cl_buffer_region* region_info =
+    reinterpret_cast<const cl_buffer_region*>(buffer_create_info);
+
+  if (region_info->origin + region_info->size > this->_size)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_INVALID_BUFFER_SIZE;
+    return nullptr;
+  }
+
+  auto result = lifetime::get_objects<cl_mem>().insert(
+    std::make_shared<_cl_mem>(
+      this,
+      parents.parent_context,
+      region_info->size
+    )
+  );
+
+  if(result.second)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
 }
 
 _cl_context::_cl_context(const cl_device_id* first_device, const cl_device_id* last_device)
@@ -365,6 +408,32 @@ cl_int _cl_context::clReleaseContext()
   return release();
 }
 
+cl_mem _cl_context::clCreateBuffer(
+  cl_mem_flags,
+  size_t size,
+  void*,
+  cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_mem>().insert(
+    std::make_shared<_cl_mem>(
+      nullptr,
+      this,
+      size
+    )
+  );
+
+  if(result.second)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
 _cl_platform_id::_cl_platform_id()
   : numeric_version{ CL_MAKE_VERSION(3, 0, 0) }
   , profile{ "FULL_PROFILE" }
@@ -432,7 +501,6 @@ void _cl_platform_id::init_dispatch()
 {
   dispatch->clGetPlatformInfo = clGetPlatformInfo_wrap;
   dispatch->clGetDeviceIDs = clGetDeviceIDs_wrap;
-  dispatch->clCreateContext = clCreateContext_wrap;
 }
 
 cl_int _cl_platform_id::clGetPlatformInfo(

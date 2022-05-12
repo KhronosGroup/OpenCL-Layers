@@ -244,6 +244,42 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseContext_wrap(
   });
 }
 
+CL_API_ENTRY cl_mem CL_API_CALL clCreateBuffer_wrap(
+  cl_context context,
+  cl_mem_flags flags,
+  size_t size,
+  void* host_ptr,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(context, errcode_ret, [&]()
+  {
+    return context->clCreateBuffer(
+      flags,
+      size,
+      host_ptr,
+      errcode_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBuffer_wrap(
+  cl_mem buffer,
+  cl_mem_flags flags,
+  cl_buffer_create_type buffer_create_type,
+  const void* buffer_create_info,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(buffer, errcode_ret, [&]()
+  {
+    return buffer->clCreateSubBuffer(
+      flags,
+      buffer_create_type,
+      buffer_create_info,
+      errcode_ret
+    );
+  });
+}
+
 // Loader hooks
 
 CL_API_ENTRY void* CL_API_CALL clGetExtensionFunctionAddress(
