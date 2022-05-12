@@ -444,13 +444,13 @@ static void notify_child_released(const trimmed__func__& func, void *parent) {
   while (parent != nullptr) {
     --objects[parent].num_children;
 
-    if (objects[parent].refcount == 0 && objects[parent].num_children == 0) {
+    if (objects[parent].refcount <= 0 && objects[parent].num_children == 0) {
       // Propagate "release notification" to parent object
       parent = objects[parent].parent;
     } else if (objects[parent].num_children <= 0) {
       *log_stream << "In " << func << " "
                   << object_type_names[objects[parent].type] << ": " << parent
-                  << "has negative number of children. This is likely a bug in "
+                  << " has negative number of children. This is likely a bug in "
                      "the object_lifetime layer.\n";
       log_stream->flush();
       parent = nullptr;
