@@ -445,8 +445,11 @@ static void notify_child_released(const trimmed__func__& func, void *parent) {
     --objects[parent].num_children;
 
     if (objects[parent].refcount <= 0 && objects[parent].num_children == 0) {
-      // Propagate "release notification" to parent object
-      parent = objects[parent].parent;
+      // Delete the parent and propagate "release notification" to parent object
+      auto it = objects.find(parent);
+      deleted_objects[parent].push_back(it->second);
+      parent = it->second.parent;
+      objects.erase(it);
     } else if (objects[parent].num_children < 0) {
       *log_stream << "In " << func << " "
                   << object_type_names[objects[parent].type] << ": " << parent
