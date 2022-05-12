@@ -1,0 +1,5 @@
+In clGetCommandQueueInfo COMMAND_QUEUE: 0x[0-9a-f]+ was used but it was recently deleted with type: COMMAND_QUEUE
+In clGetCommandQueueInfo COMMAND_QUEUE: 0x[0-9a-f]+ was used but it was recently deleted with type: COMMAND_QUEUE
+In clGetSamplerInfo SAMPLER: 0x[0-9a-f]+ was used but it was recently deleted with type: SAMPLER
+In clGetMemObjectInfo MEM: 0x[0-9a-f]+ was used but it was recently deleted with type: PIPE
+In clGetContextInfo CONTEXT: 0x[0-9a-f]+ was used but it was recently deleted with type: CONTEXT

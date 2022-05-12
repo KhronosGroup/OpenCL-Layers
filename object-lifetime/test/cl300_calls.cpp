@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
   cl_mem buffer = clCreateBufferWithProperties(context,
                                                nullptr,
                                                CL_MEM_READ_WRITE,
-                                               16,
+                                               4,
                                                nullptr,
                                                &status);
   EXPECT_SUCCESS(status);
@@ -19,18 +19,18 @@ int main(int argc, char *argv[]) {
   EXPECT_REF_COUNT(buffer, 1, 0);
 
   cl_image_desc desc = {
-    CL_MEM_OBJECT_IMAGE2D, // image_type
-    2,                     // image_width
-    2,                     // image_height
-    1,                     // image_depth
-    1,                     // image_array size
-    0,                     // image_row_pitch
-    0,                     // image_slice_pitch
-    0,                     // num_mip_levels
-    0,                     // num_samples
-    buffer                 // mem_object
+    CL_MEM_OBJECT_IMAGE1D_BUFFER, // image_type
+    4,                            // image_width
+    1,                            // image_height
+    1,                            // image_depth
+    1,                            // image_array size
+    0,                            // image_row_pitch
+    0,                            // image_slice_pitch
+    0,                            // num_mip_levels
+    0,                            // num_samples
+    buffer                        // mem_object
   };
-  cl_image_format format = {CL_R, CL_UNORM_INT8};
+  cl_image_format format = {CL_R, CL_UNSIGNED_INT8};
   cl_mem image = clCreateImageWithProperties(context,
                                              nullptr,
                                              CL_MEM_READ_WRITE,
@@ -47,6 +47,8 @@ int main(int argc, char *argv[]) {
   EXPECT_SUCCESS(clReleaseMemObject(image));
   EXPECT_DESTROYED(image);
   EXPECT_DESTROYED(buffer);
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_DESTROYED(context);
 
   return layer_test::finalize();
 }

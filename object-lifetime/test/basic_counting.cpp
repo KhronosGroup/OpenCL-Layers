@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
 
   EXPECT_SUCCESS(clReleaseMemObject(buffer_b));
   EXPECT_REF_COUNT(buffer_a, 2, 0);
-  EXPECT_DESTROYED(buffer_b);
+  EXPECT_DESTROYED(buffer_b); // recently deleted with type: BUFFER
   EXPECT_REF_COUNT(context, 3, 1);
 
   EXPECT_SUCCESS(clReleaseContext(context));
@@ -60,11 +60,11 @@ int main(int argc, char *argv[]) {
   EXPECT_REF_COUNT(context, 1, 1);
 
   EXPECT_SUCCESS(clReleaseMemObject(buffer_a));
-  EXPECT_DESTROYED(buffer_a);
+  EXPECT_DESTROYED(buffer_a); // recently deleted with type: BUFFER
   EXPECT_REF_COUNT(context, 1, 0);
 
   EXPECT_SUCCESS(clReleaseContext(context));
-  EXPECT_DESTROYED(context);
+  EXPECT_DESTROYED(context); // recently deleted with type: CONTEXT
 
   return layer_test::finalize();
 }

@@ -23,21 +23,21 @@ int main(int argc, char *argv[]) {
   EXPECT_REF_COUNT(context, 0, 2);
 
   // Try to free the context, which is now only implicitly retained.
-  EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT);
+  EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT); // released before being retained
   // That should not influence the implicit ref count
   EXPECT_REF_COUNT(context, 0, 2);
 
   EXPECT_SUCCESS(clReleaseMemObject(image_2d));
-  EXPECT_DESTROYED(image_2d);
+  EXPECT_DESTROYED(image_2d); // recently deleted with type: IMAGE
   EXPECT_REF_COUNT(context, 0, 1);
 
   EXPECT_SUCCESS(clReleaseMemObject(image_3d));
-  EXPECT_DESTROYED(image_3d);
-  EXPECT_DESTROYED(context);
+  EXPECT_DESTROYED(image_3d); // recently deleted with type: IMAGE
+  EXPECT_DESTROYED(context); // used with refcount: 0
 
   // Double free should fail.
-  EXPECT_ERROR(clReleaseMemObject(image_2d), CL_INVALID_MEM_OBJECT);
-  EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT);
+  EXPECT_ERROR(clReleaseMemObject(image_2d), CL_INVALID_MEM_OBJECT); // recently deleted with type: IMAGE
+  EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT); // released before being retained
 
   // Create a new context, which might re-use a previous context allocation.
   cl_context new_context = layer_test::createContext(platform, device);

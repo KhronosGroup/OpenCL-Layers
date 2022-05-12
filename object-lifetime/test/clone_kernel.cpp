@@ -45,14 +45,14 @@ int main(int argc, char *argv[]) {
 
   EXPECT_SUCCESS(clReleaseKernel(kernel));
   EXPECT_SUCCESS(clReleaseKernel(kernel));
-  EXPECT_DESTROYED(kernel);
+  EXPECT_DESTROYED(kernel); // recently deleted with type: KERNEL
   EXPECT_REF_COUNT(clone, 1, 0);
   EXPECT_REF_COUNT(program, 0, 1);
 
   EXPECT_SUCCESS(clReleaseKernel(clone));
-  EXPECT_DESTROYED(clone);
-  EXPECT_DESTROYED(program);
-  EXPECT_DESTROYED(context);
+  EXPECT_DESTROYED(clone); // recently deleted with type: KERNEL
+  EXPECT_DESTROYED(program); // recently deleted with type: PROGRAM
+  EXPECT_DESTROYED(context); // recently deleted with type: CONTEXT
 
   return layer_test::finalize();
 }

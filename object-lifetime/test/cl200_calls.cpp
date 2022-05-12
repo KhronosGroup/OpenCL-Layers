@@ -21,6 +21,8 @@ int main(int argc, char *argv[]) {
                                                                 device,
                                                                 props,
                                                                 &status);
+  LAYER_TEST_LOG() << "queue_a: " << static_cast<const void*>(queue_a) << " queue_b: " << static_cast<const void*>(queue_b) << std::endl;
+
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(queue_a, 2, 0);
   EXPECT_REF_COUNT(queue_b, 2, 0);
@@ -30,20 +32,22 @@ int main(int argc, char *argv[]) {
   EXPECT_REF_COUNT(queue_b, 1, 0);
 
   EXPECT_SUCCESS(clReleaseCommandQueue(queue_b));
-  EXPECT_DESTROYED(queue_a);
-  EXPECT_DESTROYED(queue_b);
+  EXPECT_DESTROYED(queue_a); // recently deleted with type: COMMAND_QUEUE
+  EXPECT_DESTROYED(queue_b); // recently deleted with type: COMMAND_QUEUE
 
   cl_sampler sampler = clCreateSamplerWithProperties(context, nullptr, &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(sampler, 1, 0);
   EXPECT_SUCCESS(clReleaseSampler(sampler));
-  EXPECT_DESTROYED(sampler);
+  EXPECT_DESTROYED(sampler); // recently deleted with type: SAMPLER
 
   cl_mem pipe = clCreatePipe(context, CL_MEM_READ_WRITE, 8, 16, nullptr, &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(pipe, 1, 0);
   EXPECT_SUCCESS(clReleaseMemObject(pipe));
-  EXPECT_DESTROYED(pipe);
+  EXPECT_DESTROYED(pipe); // recently deleted with type: PIPE
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_DESTROYED(context); // recently deleted with type: CONTEXT
 
   return layer_test::finalize();
 }
