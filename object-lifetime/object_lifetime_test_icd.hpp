@@ -209,7 +209,7 @@ struct _cl_context
   , public lifetime::ref_counted_object<cl_context>
 {
   _cl_context() = delete;
-  _cl_context(std::initializer_list<cl_device_id> devices);
+  _cl_context(const cl_device_id* first_device, const cl_device_id* last_device);
   _cl_context(const _cl_context&) = delete;
   _cl_context(_cl_context&&) = delete;
   ~_cl_context() = default;

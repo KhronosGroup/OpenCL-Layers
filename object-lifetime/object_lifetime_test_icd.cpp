@@ -271,10 +271,8 @@ cl_context _cl_device_id::clCreateContext(
 
   auto result = lifetime::get_objects<cl_context>().insert(
     std::make_shared<_cl_context>(
-      std::initializer_list<cl_device_id>(
-        devices,
-        devices + num_devices
-      )
+      devices,
+      devices + num_devices
     )
   );
 
@@ -290,9 +288,17 @@ cl_context _cl_device_id::clCreateContext(
   }
 }
 
-_cl_context::_cl_context(std::initializer_list<cl_device_id> devices)
+cl_mem clCreateSubBuffer(
+  cl_mem_flags flags,
+  cl_buffer_create_type buffer_create_type,
+  const void* buffer_create_info,
+  cl_int* errcode_ret)
+{
+}
+
+_cl_context::_cl_context(const cl_device_id* first_device, const cl_device_id* last_device)
   : icd_compatible{}
-  , ref_counted_object<cl_context>{ lifetime::object_parents<cl_context>{ devices } }
+  , ref_counted_object<cl_context>{ lifetime::object_parents<cl_context>{ {first_device, last_device} } }
 {}
 
 cl_int _cl_context::clGetContextInfo(
