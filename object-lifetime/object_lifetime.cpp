@@ -447,7 +447,7 @@ static void notify_child_released(const trimmed__func__& func, void *parent) {
     if (objects[parent].refcount <= 0 && objects[parent].num_children == 0) {
       // Propagate "release notification" to parent object
       parent = objects[parent].parent;
-    } else if (objects[parent].num_children <= 0) {
+    } else if (objects[parent].num_children < 0) {
       *log_stream << "In " << func << " "
                   << object_type_names[objects[parent].type] << ": " << parent
                   << " has negative number of children. This is likely a bug in "
@@ -469,15 +469,15 @@ static cl_int check_release(const trimmed__func__& func, void *handle) {
   } else {
     object_type t = it->second.type;
     if (t == T) {
-      it->second.refcount -= 1;
-      if (it->second.refcount < 0) {
+      if (it->second.refcount <= 0) {
         return error_invalid_release(func, handle, T);
       }
+      it->second.refcount -= 1;
     } else {
       return error_invalid_type(func, handle, t, T);
     }
   }
-  if (it->second.refcount == 0) {
+  if (it->second.refcount == 0 && it->second.num_children == 0) {
     notify_child_released(func, it->second.parent);
   }
   return CL_SUCCESS;
@@ -495,10 +495,10 @@ cl_int check_release<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
     case OCL_DEVICE:
       break;
     case OCL_SUB_DEVICE:
-      it->second.refcount -= 1;
-      if (it->second.refcount < 0) {
+      if (it->second.refcount <= 0) {
         return error_invalid_release(func, handle, OCL_SUB_DEVICE);
       }
+      it->second.refcount -= 1;
       break;
     default:
       return error_invalid_type(func, handle, t, OCL_DEVICE);
@@ -520,20 +520,19 @@ cl_int check_release<OCL_MEM>(const trimmed__func__& func, void *handle) {
     case OCL_BUFFER:
     case OCL_IMAGE:
     case OCL_PIPE:
-      it->second.refcount -= 1;
-      if (it->second.refcount == 0) {
-        deleted_objects[handle].push_back(it->second);
-        objects.erase(it);
-      } else if (it->second.refcount < 0) {
+      if (it->second.refcount <= 0) {
         return error_invalid_release(func, handle, t);
       }
+      it->second.refcount -= 1;
       break;
     default:
       return error_invalid_type(func, handle, t, OCL_MEM);
     }
   }
-  if (it->second.refcount == 0) {
+  if (it->second.refcount == 0 && it->second.num_children == 0) {
     notify_child_released(func, it->second.parent);
+    deleted_objects[handle].push_back(it->second);
+    objects.erase(it);
   }
   return CL_SUCCESS;
 }

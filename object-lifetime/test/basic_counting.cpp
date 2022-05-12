@@ -55,16 +55,15 @@ int main(int argc, char *argv[]) {
   EXPECT_REF_COUNT(context, 1, 1);
   EXPECT_REF_COUNT(buffer_a, 2, 0);
 
-  EXPECT_SUCCESS(clReleaseContext(context));
-  EXPECT_REF_COUNT(context, 0, 1);
-  EXPECT_REF_COUNT(buffer_a, 2, 0);
-
   EXPECT_SUCCESS(clReleaseMemObject(buffer_a));
   EXPECT_REF_COUNT(buffer_a, 1, 0);
-  EXPECT_REF_COUNT(context, 0, 1);
+  EXPECT_REF_COUNT(context, 1, 1);
 
   EXPECT_SUCCESS(clReleaseMemObject(buffer_a));
   EXPECT_DESTROYED(buffer_a);
+  EXPECT_REF_COUNT(context, 1, 0);
+
+  EXPECT_SUCCESS(clReleaseContext(context));
   EXPECT_DESTROYED(context);
 
   return layer_test::finalize();

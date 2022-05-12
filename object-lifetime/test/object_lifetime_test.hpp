@@ -162,7 +162,7 @@ namespace layer_test {
 
     auto expect_destroyed = [&] {
       if (status == CL_SUCCESS) {
-        log(file, line) << "expected that object was destroyed, but it is not" << std::endl;
+        log(file, line) << "expected that object was destroyed, but it has " << actual_ref_count << " references remaining" << std::endl;
         TEST_CONTEXT.fail();
       } else if (status != ocl_utils::CL_INVALID<Handle>()) {
         log(file, line) << "expected that object was destroyed, got error " << status << std::endl;
