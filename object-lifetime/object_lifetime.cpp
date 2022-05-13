@@ -498,7 +498,7 @@ cl_int check_release<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
     object_type t = it->second.type;
     switch (t) {
     case OCL_DEVICE:
-      break;
+      return CL_SUCCESS;
     case OCL_SUB_DEVICE:
       if (it->second.refcount <= 0) {
         return error_invalid_release(func, handle, OCL_SUB_DEVICE);
@@ -509,8 +509,8 @@ cl_int check_release<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
       return error_invalid_type(func, handle, t, OCL_DEVICE);
     }
   }
-  // Devices do not have parent objects
-  if (it->second.refcount == 0) {
+  if (it->second.refcount == 0 && it->second.num_children == 0) {
+    notify_child_released(func, it->second.parent);
     deleted_objects[handle].push_back(it->second);
     objects.erase(it);
   }
