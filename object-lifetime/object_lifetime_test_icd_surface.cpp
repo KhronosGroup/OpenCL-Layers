@@ -262,6 +262,22 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateBuffer_wrap(
   });
 }
 
+CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueue_wrap(
+  cl_context context,
+  cl_device_id device,
+  cl_command_queue_properties properties,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(context, errcode_ret, [&]()
+  {
+    return context->clCreateCommandQueue(
+      device,
+      properties,
+      errcode_ret
+    );
+  });
+}
+
 CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBuffer_wrap(
   cl_mem buffer,
   cl_mem_flags flags,
@@ -277,6 +293,82 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBuffer_wrap(
       buffer_create_info,
       errcode_ret
     );
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clRetainMemObject_wrap(
+  cl_mem memobj)
+{
+  return invoke_if_valid(memobj, [&]()
+  {
+    return memobj->clRetainMemObject();
+  },
+    true
+  );
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clReleaseMemObject_wrap(
+  cl_mem memobj)
+{
+  return invoke_if_valid(memobj, [&]()
+  {
+    return memobj->clReleaseMemObject();
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clGetMemObjectInfo_wrap(
+  cl_mem memobj,
+  cl_mem_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  return invoke_if_valid(memobj, [&]()
+  {
+    return memobj->clGetMemObjectInfo(
+      param_name,
+      param_value_size,
+      param_value,
+      param_value_size_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clGetCommandQueueInfo_wrap(
+  cl_command_queue command_queue,
+  cl_command_queue_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  return invoke_if_valid(command_queue, [&]()
+  {
+    return command_queue->clGetCommandQueueInfo(
+      param_name,
+      param_value_size,
+      param_value,
+      param_value_size_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clRetainCommandQueue_wrap(
+  cl_command_queue command_queue)
+{
+  return invoke_if_valid(command_queue, [&]()
+  {
+    return command_queue->clRetainCommandQueue();
+  },
+    true
+  );
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clReleaseCommandQueue_wrap(
+  cl_command_queue command_queue)
+{
+  return invoke_if_valid(command_queue, [&]()
+  {
+    return command_queue->clRetainCommandQueue();
   });
 }
 

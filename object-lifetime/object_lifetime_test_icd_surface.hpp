@@ -36,7 +36,7 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainDevice_wrap(
 CL_API_ENTRY cl_int CL_API_CALL clReleaseDevice_wrap(
   cl_device_id device);
 
-CL_API_ENTRY cl_context clCreateContext_wrap(
+CL_API_ENTRY cl_context CL_API_CALL clCreateContext_wrap(
   const cl_context_properties* properties,
   cl_uint num_devices,
   const cl_device_id* devices,
@@ -44,7 +44,7 @@ CL_API_ENTRY cl_context clCreateContext_wrap(
   void* user_data,
   cl_int* errcode_ret);
 
-CL_API_ENTRY cl_int clGetContextInfo_wrap(
+CL_API_ENTRY cl_int CL_API_CALL clGetContextInfo_wrap(
   cl_context context,
   cl_context_info param_name,
   size_t param_value_size,
@@ -64,12 +64,44 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateBuffer_wrap(
   void* host_ptr,
   cl_int* errcode_ret);
 
+CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueue_wrap(
+  cl_context context,
+  cl_device_id device,
+  cl_command_queue_properties properties,
+  cl_int* errcode_ret);
+
 CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBuffer_wrap(
   cl_mem buffer,
   cl_mem_flags flags,
   cl_buffer_create_type buffer_create_type,
   const void* buffer_create_info,
   cl_int* errcode_ret);
+
+CL_API_ENTRY cl_int CL_API_CALL clRetainMemObject_wrap(
+  cl_mem memobj);
+
+CL_API_ENTRY cl_int CL_API_CALL clReleaseMemObject_wrap(
+  cl_mem memobj);
+
+CL_API_ENTRY cl_int CL_API_CALL clGetMemObjectInfo_wrap(
+  cl_mem memobj,
+  cl_mem_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret);
+
+CL_API_ENTRY cl_int CL_API_CALL clGetCommandQueueInfo_wrap(
+  cl_command_queue command_queue,
+  cl_command_queue_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret);
+
+CL_API_ENTRY cl_int CL_API_CALL clRetainCommandQueue_wrap(
+  cl_command_queue command_queue);
+
+CL_API_ENTRY cl_int CL_API_CALL clReleaseCommandQueue_wrap(
+  cl_command_queue command_queue);
 
 // Loader hooks
 

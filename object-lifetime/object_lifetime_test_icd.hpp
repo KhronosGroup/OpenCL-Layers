@@ -24,6 +24,7 @@ namespace lifetime
   template <> inline cl_int CL_INVALID<cl_device_id>() { return CL_INVALID_DEVICE; }
   template <> inline cl_int CL_INVALID<cl_context>() { return CL_INVALID_CONTEXT; }
   template <> inline cl_int CL_INVALID<cl_mem>() { return CL_INVALID_MEM_OBJECT; }
+  template <> inline cl_int CL_INVALID<cl_command_queue>() { return CL_INVALID_COMMAND_QUEUE; }
 
   template <typename Object> struct object_parents;
 
@@ -147,7 +148,6 @@ namespace lifetime
   struct icd_compatible
   {
     cl_icd_dispatch* dispatch;
-    std::unique_ptr<cl_icd_dispatch> scoped_dispatch;
 
     icd_compatible();
     icd_compatible(const icd_compatible&) = delete;
@@ -226,11 +226,50 @@ struct _cl_mem
   _cl_mem &operator=(const _cl_mem&) = delete;
   _cl_mem &operator=(_cl_mem&&) = delete;
 
+  void init_dispatch();
+
   cl_mem clCreateSubBuffer(
     cl_mem_flags flags,
     cl_buffer_create_type buffer_create_type,
     const void* buffer_create_info,
     cl_int* errcode_ret);
+
+  cl_int clGetMemObjectInfo(
+    cl_mem_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret);
+
+  cl_int clRetainMemObject();
+
+  cl_int clReleaseMemObject();
+};
+
+struct _cl_command_queue
+  : public lifetime::icd_compatible
+  , public lifetime::ref_counted_object<cl_command_queue>
+{
+  size_t _size;
+
+  _cl_command_queue() = delete;
+  _cl_command_queue(cl_device_id parent_device, cl_context parent_context);
+  _cl_command_queue(const _cl_command_queue&) = delete;
+  _cl_command_queue(_cl_command_queue&&) = delete;
+  ~_cl_command_queue() = default;
+  _cl_command_queue &operator=(const _cl_command_queue&) = delete;
+  _cl_command_queue &operator=(_cl_command_queue&&) = delete;
+
+  void init_dispatch();
+
+  cl_int clGetCommandQueueInfo(
+    cl_device_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret);
+
+  cl_int clRetainCommandQueue();
+
+  cl_int clReleaseCommandQueue();
 };
 
 struct _cl_context
@@ -244,6 +283,8 @@ struct _cl_context
   ~_cl_context() = default;
   _cl_context &operator=(const _cl_context&) = delete;
   _cl_context &operator=(_cl_context&&) = delete;
+
+  void init_dispatch();
 
   cl_int clGetContextInfo(
     cl_context_info param_name,
@@ -259,6 +300,11 @@ struct _cl_context
     cl_mem_flags flags,
     size_t size,
     void* host_ptr,
+    cl_int* errcode_ret);
+
+  cl_command_queue clCreateCommandQueue(
+    cl_device_id device,
+    cl_command_queue_properties properties,
     cl_int* errcode_ret);
 };
 
@@ -278,6 +324,7 @@ struct _cl_platform_id
   std::set<std::shared_ptr<_cl_device_id>> _devices;
   std::set<std::shared_ptr<_cl_context>> _contexts;
   std::set<std::shared_ptr<_cl_mem>> _mems;
+  std::set<std::shared_ptr<_cl_command_queue>> _queues;
 
   _cl_platform_id();
   _cl_platform_id(const _cl_platform_id&) = delete;
@@ -305,9 +352,11 @@ namespace lifetime
 {
   extern std::map<std::string, void*> _extensions;
   extern _cl_platform_id _platform;
+  extern cl_icd_dispatch _dispatch;
 
   template <typename T> std::set<std::shared_ptr<std::remove_pointer_t<T>>>& get_objects();
   template <> inline std::set<std::shared_ptr<_cl_device_id>>& get_objects<cl_device_id>() { return _platform._devices; }
   template <> inline std::set<std::shared_ptr<_cl_context>>& get_objects<cl_context>() { return _platform._contexts; }
   template <> inline std::set<std::shared_ptr<_cl_mem>>& get_objects<cl_mem>() { return _platform._mems; }
+  template <> inline std::set<std::shared_ptr<_cl_command_queue>>& get_objects<cl_command_queue>() { return _platform._queues; }
 }

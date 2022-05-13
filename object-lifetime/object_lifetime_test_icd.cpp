@@ -24,9 +24,14 @@ namespace lifetime
     parent_context->unreference();
   }
 
+  void object_parents<cl_mem>::notify()
+  {
+    parent_mem->unreference();
+    parent_context->unreference();
+  }
+
   icd_compatible::icd_compatible()
-    : dispatch{ new cl_icd_dispatch{} }
-    , scoped_dispatch{ dispatch }
+    : dispatch{ &_dispatch }
   {}
 }
 
@@ -47,18 +52,7 @@ _cl_device_id::_cl_device_id(device_kind kind, cl_device_id parent, cl_uint num_
   , vendor{ "The Khronos Group" }
   , extensions{ "" }
   , cu_count{ num_cu }
-{
-  init_dispatch();
-}
-
-void _cl_device_id::init_dispatch()
-{
-  dispatch->clGetDeviceInfo = clGetDeviceInfo_wrap;
-  dispatch->clCreateSubDevices = clCreateSubDevices_wrap;
-  dispatch->clRetainDevice = clRetainDevice_wrap;
-  dispatch->clReleaseDevice = clReleaseDevice_wrap;
-  dispatch->clCreateContext = clCreateContext_wrap;
-}
+{}
 
 cl_int _cl_device_id::clGetDeviceInfo(
     cl_device_info param_name,
@@ -339,10 +333,175 @@ cl_mem _cl_mem::clCreateSubBuffer(
   }
 }
 
+cl_int _cl_mem::clGetMemObjectInfo(
+    cl_mem_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret)
+{
+  if (param_value_size == 0 && param_value != NULL)
+    return CL_INVALID_VALUE;
+
+  std::vector<char> result;
+  switch(param_name)
+  {
+    case CL_MEM_SIZE:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&_size),
+        reinterpret_cast<char*>(&_size) + sizeof(_size),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_MEM_CONTEXT:
+      std::copy(
+        reinterpret_cast<char*>(&parents.parent_context),
+        reinterpret_cast<char*>(&parents.parent_context) + sizeof(parents.parent_context),
+        std::back_inserter(result));
+      break;
+    case CL_MEM_REFERENCE_COUNT:
+    {
+      cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    default:
+      return CL_INVALID_VALUE;
+  }
+
+  if (param_value_size_ret)
+    *param_value_size_ret = result.size();
+
+  if (param_value_size && param_value_size < result.size())
+    return CL_INVALID_VALUE;
+
+  if (param_value)
+  {
+    std::copy(result.begin(), result.end(), static_cast<char*>(param_value));
+  }
+
+  return CL_SUCCESS;
+}
+
+cl_int _cl_mem::clRetainMemObject()
+{
+  return retain();
+}
+
+cl_int _cl_mem::clReleaseMemObject()
+{
+  return release();
+}
+
+_cl_command_queue::_cl_command_queue(cl_device_id parent_device, cl_context parent_context)
+  : icd_compatible{}
+  , ref_counted_object<cl_command_queue>{ lifetime::object_parents<cl_command_queue>{ parent_device, parent_context } }
+{}
+
+cl_int _cl_command_queue::clGetCommandQueueInfo(
+  cl_device_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  if (param_value_size == 0 && param_value != NULL)
+    return CL_INVALID_VALUE;
+
+  std::vector<char> result;
+  switch(param_name)
+  {
+    case CL_QUEUE_CONTEXT:
+      std::copy(
+        reinterpret_cast<char*>(&parents.parent_context),
+        reinterpret_cast<char*>(&parents.parent_context) + sizeof(parents.parent_context),
+        std::back_inserter(result));
+      break;
+    case CL_QUEUE_DEVICE:
+      std::copy(
+        reinterpret_cast<char*>(&parents.parent_context),
+        reinterpret_cast<char*>(&parents.parent_context) + sizeof(parents.parent_context),
+        std::back_inserter(result));
+      break;
+    case CL_MEM_REFERENCE_COUNT:
+    {
+      cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    default:
+      return CL_INVALID_VALUE;
+  }
+
+  if (param_value_size_ret)
+    *param_value_size_ret = result.size();
+
+  if (param_value_size && param_value_size < result.size())
+    return CL_INVALID_VALUE;
+
+  if (param_value)
+  {
+    std::copy(result.begin(), result.end(), static_cast<char*>(param_value));
+  }
+
+  return CL_SUCCESS;
+}
+
+cl_int _cl_command_queue::clRetainCommandQueue()
+{
+  return retain();
+}
+
+cl_int _cl_command_queue::clReleaseCommandQueue()
+{
+  return release();
+}
+
 _cl_context::_cl_context(const cl_device_id* first_device, const cl_device_id* last_device)
   : icd_compatible{}
   , ref_counted_object<cl_context>{ lifetime::object_parents<cl_context>{ {first_device, last_device} } }
 {}
+
+cl_command_queue _cl_context::clCreateCommandQueue(
+  cl_device_id device,
+  cl_command_queue_properties,
+  cl_int* errcode_ret)
+{
+  if (std::find(
+    parents.parents.cbegin(),
+    parents.parents.cend(),
+    device
+  ) == parents.parents.cend()
+  )
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_INVALID_DEVICE;
+    return nullptr;
+  }
+
+  auto result = lifetime::get_objects<cl_command_queue>().insert(
+    std::make_shared<_cl_command_queue>(
+      device,
+      this
+    )
+  );
+
+  if(result.second)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
 
 cl_int _cl_context::clGetContextInfo(
     cl_context_info param_name,
@@ -444,9 +603,9 @@ _cl_platform_id::_cl_platform_id()
   , suffix{ "khronos" }
   , _contexts{}
   , _devices{}
+  , _mems{}
+  , _queues{}
 {
-  scoped_dispatch = std::make_unique<cl_icd_dispatch>();
-  dispatch = scoped_dispatch.get();
   init_dispatch();
 
   std::string ICD_VERSION;
@@ -501,6 +660,23 @@ void _cl_platform_id::init_dispatch()
 {
   dispatch->clGetPlatformInfo = clGetPlatformInfo_wrap;
   dispatch->clGetDeviceIDs = clGetDeviceIDs_wrap;
+  dispatch->clGetDeviceInfo = clGetDeviceInfo_wrap;
+  dispatch->clCreateSubDevices = clCreateSubDevices_wrap;
+  dispatch->clRetainDevice = clRetainDevice_wrap;
+  dispatch->clReleaseDevice = clReleaseDevice_wrap;
+  dispatch->clCreateContext = clCreateContext_wrap;
+  dispatch->clGetContextInfo = clGetContextInfo_wrap;
+  dispatch->clRetainContext = clRetainContext_wrap;
+  dispatch->clReleaseContext = clReleaseContext_wrap;
+  dispatch->clCreateBuffer = clCreateBuffer_wrap;
+  dispatch->clCreateCommandQueue = clCreateCommandQueue_wrap;
+  dispatch->clCreateSubBuffer = clCreateSubBuffer_wrap;
+  dispatch->clRetainMemObject = clRetainMemObject_wrap;
+  dispatch->clReleaseMemObject = clReleaseMemObject_wrap;
+  dispatch->clGetMemObjectInfo = clGetMemObjectInfo_wrap;
+  dispatch->clGetCommandQueueInfo = clGetCommandQueueInfo_wrap;
+  dispatch->clRetainCommandQueue = clRetainCommandQueue_wrap;
+  dispatch->clReleaseCommandQueue = clReleaseCommandQueue_wrap;
 }
 
 cl_int _cl_platform_id::clGetPlatformInfo(
@@ -619,4 +795,5 @@ namespace lifetime
     std::make_pair("clIcdGetPlatformIDsKHR", reinterpret_cast<void*>(clIcdGetPlatformIDsKHR))
   };
   _cl_platform_id _platform;
+  cl_icd_dispatch _dispatch;
 }
