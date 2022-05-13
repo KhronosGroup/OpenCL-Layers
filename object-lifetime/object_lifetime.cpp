@@ -941,7 +941,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetContextInfo_wrap(
     size_t* param_value_size_ret)
 {
   CHECK_EXISTS(OCL_CONTEXT, context);
-  
+
   cl_int result;
   size_t param_value_size_ret_force;
   if (param_name == CL_CONTEXT_DEVICES && param_value && !param_value_size_ret)
@@ -2557,7 +2557,7 @@ clCreateSubDevicesEXT_wrap(
     out_devices,
     num_devices);
   if (out_devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices, in_device, out_devices);
+    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices, out_devices, in_device);
   return result;
 }
 
@@ -2614,7 +2614,7 @@ clCreateSubDevices_wrap(
     num_devices_ret);
 
   if (out_devices && result == CL_SUCCESS && *num_devices_ret > 0)
-    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices_ret, in_device, out_devices);
+    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices_ret, out_devices, in_device);
   return result;
 }
 
