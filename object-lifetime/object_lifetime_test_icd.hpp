@@ -25,6 +25,10 @@ namespace lifetime
   template <> inline cl_int CL_INVALID<cl_context>() { return CL_INVALID_CONTEXT; }
   template <> inline cl_int CL_INVALID<cl_mem>() { return CL_INVALID_MEM_OBJECT; }
   template <> inline cl_int CL_INVALID<cl_command_queue>() { return CL_INVALID_COMMAND_QUEUE; }
+  template <> inline cl_int CL_INVALID<cl_program>() { return CL_INVALID_PROGRAM; }
+  template <> inline cl_int CL_INVALID<cl_kernel>() { return CL_INVALID_KERNEL; }
+  template <> inline cl_int CL_INVALID<cl_event>() { return CL_INVALID_EVENT; }
+  template <> inline cl_int CL_INVALID<cl_sampler>() { return CL_INVALID_SAMPLER; }
 
   template <typename Object> struct object_parents;
 
@@ -36,7 +40,7 @@ namespace lifetime
 
   template <> struct object_parents<cl_context>
   {
-    std::vector<cl_device_id> parents;
+    std::vector<cl_device_id> parent_devices;
     void notify();
   };
 
@@ -50,6 +54,31 @@ namespace lifetime
   template <> struct object_parents<cl_mem>
   {
     cl_mem parent_mem;
+    cl_context parent_context;
+    void notify();
+  };
+
+  template <> struct object_parents<cl_program>
+  {
+    cl_context parent_context;
+    std::vector<cl_device_id> parent_devices;
+    void notify();
+  };
+
+  template <> struct object_parents<cl_kernel>
+  {
+    cl_program parent_program;
+    void notify();
+  };
+
+  template <> struct object_parents<cl_event>
+  {
+    cl_context parent_context;
+    void notify();
+  };
+
+  template <> struct object_parents<cl_sampler>
+  {
     cl_context parent_context;
     void notify();
   };
@@ -306,6 +335,127 @@ struct _cl_context
     cl_device_id device,
     cl_command_queue_properties properties,
     cl_int* errcode_ret);
+
+  cl_program clCreateProgramWithSource(
+    cl_uint count,
+    const char** strings,
+    const size_t* lengths,
+    cl_int* errcode_ret);
+
+  cl_event clCreateUserEvent(
+    cl_int* errcode_ret);
+
+  cl_sampler clCreateSampler(
+    cl_bool normalized_coords,
+    cl_addressing_mode addressing_mode,
+    cl_filter_mode filter_mode,
+    cl_int* errcode_ret);
+};
+
+struct _cl_program
+  : public lifetime::icd_compatible
+  , public lifetime::ref_counted_object<cl_program>
+{
+  _cl_program() = delete;
+  _cl_program(const cl_context parent_context, const cl_device_id* first_device = nullptr, const cl_device_id* last_device = nullptr);
+  _cl_program(const _cl_program&) = delete;
+  _cl_program(_cl_program&&) = delete;
+  ~_cl_program() = default;
+  _cl_program &operator=(const _cl_program&) = delete;
+  _cl_program &operator=(_cl_program&&) = delete;
+
+  cl_int clBuildProgram(
+    cl_uint num_devices,
+    const cl_device_id* device_list,
+    const char* options,
+    void (CL_CALLBACK* pfn_notify)(cl_program program, void* user_data),
+    void* user_data);
+
+  cl_int clGetProgramInfo(
+    cl_program_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret);
+
+  cl_int clRetainProgram();
+
+  cl_int clReleaseProgram();
+
+  cl_kernel clCreateKernel(
+    const char* kernel_name,
+    cl_int* errcode_ret);
+};
+
+struct _cl_kernel
+  : public lifetime::icd_compatible
+  , public lifetime::ref_counted_object<cl_kernel>
+{
+  _cl_kernel() = delete;
+  _cl_kernel(const cl_program parent_program);
+  _cl_kernel(const _cl_kernel&) = delete;
+  _cl_kernel(_cl_kernel&&) = delete;
+  ~_cl_kernel() = default;
+  _cl_kernel &operator=(const _cl_kernel&) = delete;
+  _cl_kernel &operator=(_cl_kernel&&) = delete;
+
+  cl_int clGetKernelInfo(
+    cl_kernel_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret);
+
+  cl_int clRetainKernel();
+
+  cl_int clReleaseKernel();
+
+  cl_kernel clCloneKernel(
+    cl_int* errcode_ret);
+};
+
+struct _cl_event
+  : public lifetime::icd_compatible
+  , public lifetime::ref_counted_object<cl_event>
+{
+  _cl_event() = delete;
+  _cl_event(const cl_context parent_context);
+  _cl_event(const _cl_event&) = delete;
+  _cl_event(_cl_event&&) = delete;
+  ~_cl_event() = default;
+  _cl_event &operator=(const _cl_event&) = delete;
+  _cl_event &operator=(_cl_event&&) = delete;
+
+  cl_int clGetEventInfo(
+    cl_event_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret);
+
+  cl_int clRetainEvent();
+
+  cl_int clReleaseEvent();
+};
+
+struct _cl_sampler
+  : public lifetime::icd_compatible
+  , public lifetime::ref_counted_object<cl_sampler>
+{
+  _cl_sampler() = delete;
+  _cl_sampler(const cl_context parent_context);
+  _cl_sampler(const _cl_sampler&) = delete;
+  _cl_sampler(_cl_sampler&&) = delete;
+  ~_cl_sampler() = default;
+  _cl_sampler &operator=(const _cl_sampler&) = delete;
+  _cl_sampler &operator=(_cl_sampler&&) = delete;
+
+  cl_int clGetSamplerInfo(
+    cl_sampler_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret);
+
+  cl_int clRetainSampler();
+
+  cl_int clReleaseSampler();
 };
 
 struct _cl_platform_id

@@ -677,6 +677,24 @@ void _cl_platform_id::init_dispatch()
   dispatch->clGetCommandQueueInfo = clGetCommandQueueInfo_wrap;
   dispatch->clRetainCommandQueue = clRetainCommandQueue_wrap;
   dispatch->clReleaseCommandQueue = clReleaseCommandQueue_wrap;
+  dispatch->clCreateProgramWithSource = clCreateProgramWithSource_wrap;
+  dispatch->clBuildProgram = clBuildProgram_wrap;
+  dispatch->clGetProgramInfo = clGetProgramInfo_wrap;
+  dispatch->clRetainProgram = clRetainProgram_wrap;
+  dispatch->clReleaseProgram = clReleaseProgram_wrap;
+  dispatch->clCreateKernel = clCreateKernel_wrap;
+  dispatch->clCloneKernel = clCloneKernel_wrap;
+  dispatch->clGetKernelInfo = clGetKernelInfo_wrap;
+  dispatch->clRetainKernel = clRetainKernel_wrap;
+  dispatch->clReleaseKernel = clReleaseKernel_wrap;
+  dispatch->clCreateUserEvent = clCreateUserEvent_wrap;
+  dispatch->clGetEventInfo = clGetEventInfo_wrap;
+  dispatch->clRetainEvent = clRetainEvent_wrap;
+  dispatch->clReleaseEvent = clReleaseEvent_wrap;
+  dispatch->clCreateSampler = clCreateSampler_wrap;
+  dispatch->clGetSamplerInfo = clGetSamplerInfo_wrap;
+  dispatch->clRetainSampler = clRetainSampler_wrap;
+  dispatch->clReleaseSampler = clReleaseSampler_wrap;
 }
 
 cl_int _cl_platform_id::clGetPlatformInfo(

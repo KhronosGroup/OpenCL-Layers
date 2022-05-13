@@ -372,6 +372,250 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseCommandQueue_wrap(
   });
 }
 
+CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithSource_wrap(
+  cl_context context,
+  cl_uint count,
+  const char** strings,
+  const size_t* lengths,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(context, errcode_ret, [&]()
+  {
+    return context->clCreateProgramWithSource(
+      count,
+      strings,
+      lengths,
+      errcode_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clBuildProgram_wrap(
+  cl_program program,
+  cl_uint num_devices,
+  const cl_device_id* device_list,
+  const char* options,
+  void (CL_CALLBACK* pfn_notify)(cl_program program, void* user_data),
+  void* user_data)
+{
+  return invoke_if_valid(program, [&]()
+  {
+    return program->clBuildProgram(
+      num_devices,
+      device_list,
+      options,
+      pfn_notify,
+      user_data
+    );
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfo_wrap(
+  cl_program program,
+  cl_program_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  return invoke_if_valid(program, [&]()
+  {
+    return program->clGetProgramInfo(
+      param_name,
+      param_value_size,
+      param_value,
+      param_value_size_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clRetainProgram_wrap(
+  cl_program program)
+{
+  return invoke_if_valid(program, [&]()
+  {
+    return program->clRetainProgram();
+  },
+    true
+  );
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clReleaseProgram_wrap(
+  cl_program program)
+{
+  return invoke_if_valid(program, [&]()
+  {
+    return program->clReleaseProgram();
+  });
+}
+
+CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel_wrap(
+  cl_program program,
+  const char* kernel_name,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(program, errcode_ret, [&]()
+  {
+    return program->clCreateKernel(
+      kernel_name,
+      errcode_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_kernel CL_API_CALL clCloneKernel_wrap(
+  cl_kernel source_kernel,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(source_kernel, errcode_ret, [&]()
+  {
+    return source_kernel->clCloneKernel(
+      errcode_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clGetKernelInfo_wrap(
+  cl_kernel kernel,
+  cl_kernel_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  return invoke_if_valid(kernel, [&]()
+  {
+    return kernel->clGetKernelInfo(
+      param_name,
+      param_value_size,
+      param_value,
+      param_value_size_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clRetainKernel_wrap(
+  cl_kernel kernel)
+{
+  return invoke_if_valid(kernel, [&]()
+  {
+    return kernel->clRetainKernel();
+  },
+    true
+  );
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clReleaseKernel_wrap(
+  cl_kernel kernel)
+{
+  return invoke_if_valid(kernel, [&]()
+  {
+    return kernel->clReleaseKernel();
+  });
+}
+
+CL_API_ENTRY cl_event CL_API_CALL clCreateUserEvent_wrap(
+  cl_context context,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(context, errcode_ret, [&]()
+  {
+    return context->clCreateUserEvent(
+      errcode_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clGetEventInfo_wrap(
+  cl_event event,
+  cl_event_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  return invoke_if_valid(event, [&]()
+  {
+    return event->clGetEventInfo(
+    param_name,
+    param_value_size,
+    param_value,
+    param_value_size_ret);
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clRetainEvent_wrap(
+  cl_event event)
+{
+  return invoke_if_valid(event, [&]()
+  {
+    return event->clRetainEvent();
+  },
+    true
+  );
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clReleaseEvent_wrap(
+  cl_event event)
+{
+  return invoke_if_valid(event, [&]()
+  {
+    return event->clReleaseEvent();
+  });
+}
+
+CL_API_ENTRY cl_sampler CL_API_CALL clCreateSampler_wrap(
+  cl_context context,
+  cl_bool normalized_coords,
+  cl_addressing_mode addressing_mode,
+  cl_filter_mode filter_mode,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(context, errcode_ret, [&]()
+  {
+    return context->clCreateSampler(
+      normalized_coords,
+      addressing_mode,
+      filter_mode,
+      errcode_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clGetSamplerInfo_wrap(
+  cl_sampler sampler,
+  cl_sampler_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  return invoke_if_valid(sampler, [&]()
+  {
+    return sampler->clGetSamplerInfo(
+    param_name,
+    param_value_size,
+    param_value,
+    param_value_size_ret);
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clRetainSampler_wrap(
+  cl_sampler sampler)
+{
+  return invoke_if_valid(sampler, [&]()
+  {
+    return sampler->clRetainSampler();
+  },
+    true
+  );
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clReleaseSampler_wrap(
+  cl_sampler sampler)
+{
+  return invoke_if_valid(sampler, [&]()
+  {
+    return sampler->clReleaseSampler();
+  });
+}
+
 // Loader hooks
 
 CL_API_ENTRY void* CL_API_CALL clGetExtensionFunctionAddress(
