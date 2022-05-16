@@ -10,9 +10,11 @@ int main(int argc, char *argv[]) {
 
   cl_context context = layer_test::createContext(platform, device);
 
-  constexpr const cl_uint num_sub_devices = 5;
-  constexpr const cl_uint min_num_sub_cus = 2;
-  constexpr const cl_uint min_cus = num_sub_devices * min_num_sub_cus;
+  constexpr const cl_uint num_sub_devices = 2;
+  constexpr const cl_uint num_sub_sub_devices_per_sub_device = 2;
+  constexpr const cl_uint min_cus = num_sub_devices * num_sub_sub_devices_per_sub_device;
+  constexpr const cl_uint num_sub_sub_devices = num_sub_devices * num_sub_sub_devices_per_sub_device;
+  static_assert(num_sub_sub_devices >= 4, "test requires at least 4 sub-sub-devices");
 
   {
     size_t size;
@@ -49,23 +51,27 @@ int main(int argc, char *argv[]) {
     EXPECT_REF_COUNT(sub_device, 1, 0);
   }
 
-  // Create one sub-sub-device for each sub-device
-  std::array<cl_device_id, num_sub_devices> sub_sub_devices;
+  // Create two sub-sub-devices for each sub-device
+  std::array<cl_device_id, num_sub_sub_devices> sub_sub_devices;
   for (size_t i = 0; i < num_sub_devices; ++i) {
-    cl_device_partition_property sub_props[] = {CL_DEVICE_PARTITION_EQUALLY, num_sub_cus / num_sub_devices, 0};
+    cl_device_partition_property sub_props[] = {CL_DEVICE_PARTITION_EQUALLY, num_sub_cus / 2, 0};
     EXPECT_SUCCESS(clCreateSubDevices(sub_devices[i],
                                       sub_props,
-                                      1,
-                                      &sub_sub_devices[i],
+                                      num_sub_sub_devices_per_sub_device,
+                                      &sub_sub_devices[i * num_sub_sub_devices_per_sub_device],
                                       nullptr));
   }
 
-  // Check ref counts of sub-sub-devices and Release sub-devices
-  for (size_t i = 0; i < num_sub_devices; ++i) {
+  // Check ref counts of sub-sub-devices
+  for (size_t i = 0; i < num_sub_sub_devices; ++i) {
     EXPECT_REF_COUNT(sub_sub_devices[i], 1, 0);
-    EXPECT_REF_COUNT(sub_devices[i], 1, 1);
+  }
+
+  // Check ref counts of and delete sub-devices.
+  for (size_t i = 0; i < num_sub_devices; ++i) {
+    EXPECT_REF_COUNT(sub_devices[i], 1, num_sub_sub_devices_per_sub_device);
     EXPECT_SUCCESS(clReleaseDevice(sub_devices[i]));
-    EXPECT_REF_COUNT(sub_devices[i], 0, 1);
+    EXPECT_REF_COUNT(sub_devices[i], 0, num_sub_sub_devices_per_sub_device);
   }
 
   {
@@ -80,14 +86,17 @@ int main(int argc, char *argv[]) {
   }
 
   {
-    // Release the first and check if the rest is okay.
+    // Release the first device and check if the rest is okay.
     EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[0]));
-    EXPECT_DESTROYED(sub_sub_devices[0]);
-    EXPECT_DESTROYED(sub_devices[0]);
+    EXPECT_DESTROYED(sub_sub_devices[0]); // recently deleted with type: SUB_DEVICE
+    EXPECT_REF_COUNT(sub_devices[0], 0, num_sub_sub_devices_per_sub_device - 1);
+
+    for (cl_uint i = 1; i < num_sub_sub_devices; ++i) {
+      EXPECT_REF_COUNT(sub_sub_devices[i], 1, 0);
+    }
 
     for (cl_uint i = 1; i < num_sub_devices; ++i) {
-      EXPECT_REF_COUNT(sub_sub_devices[i], 1, 0);
-      EXPECT_REF_COUNT(sub_devices[i], 1, 1);
+      EXPECT_REF_COUNT(sub_devices[i], 0, num_sub_sub_devices_per_sub_device);
     }
   }
 
@@ -96,52 +105,49 @@ int main(int argc, char *argv[]) {
     cl_context context = layer_test::createContext(platform, sub_sub_devices[1]);
     EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[1]));
     EXPECT_REF_COUNT(sub_sub_devices[1], 0, 1);
-    EXPECT_REF_COUNT(sub_devices[1], 0, 1);
 
     EXPECT_SUCCESS(clReleaseContext(context));
-    EXPECT_DESTROYED(context);
-    EXPECT_DESTROYED(sub_sub_devices[1]);
-    EXPECT_DESTROYED(sub_devices[1]);
+    EXPECT_DESTROYED(context); // recently destroyed with type: CONTEXT
+    EXPECT_DESTROYED(sub_sub_devices[1]); // recently destroyed with type: SUB_DEVICE
 
     for (cl_uint i = 2; i < num_sub_devices; ++i) {
       EXPECT_REF_COUNT(sub_sub_devices[i], 1, 0);
-      EXPECT_REF_COUNT(sub_devices[i], 1, 1);
     }
   }
 
   {
-    constexpr const cl_uint first_sub_sub_device = 2;
-    constexpr const cl_uint num_sub_sub_devices = 2;
+    cl_uint used_devices = 2;
+    cl_uint remaining_devices = num_sub_sub_devices - used_devices;
     cl_int status;
-    // Create a context with 2 devices, check that the context keeps them both alive.
+    // Create a context with the remaining devices, check that the context keeps them both alive.
     cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platform), 0};
     cl_context context = clCreateContext(properties,
-                                         num_sub_sub_devices,
-                                         &sub_sub_devices[first_sub_sub_device],
+                                         remaining_devices,
+                                         &sub_sub_devices[used_devices],
                                          nullptr,
                                          nullptr,
                                          &status);
     EXPECT_SUCCESS(status);
     EXPECT_REF_COUNT(context, 1, 0);
-    for (cl_uint i = 0; i < num_sub_sub_devices; ++i) {
-      EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[first_sub_sub_device + i]));
-      EXPECT_REF_COUNT(sub_sub_devices[first_sub_sub_device + i], 0, 1);
-      EXPECT_REF_COUNT(sub_devices[first_sub_sub_device + i], 0, 1);
+    for (cl_uint i = used_devices; i < num_sub_sub_devices; ++i) {
+      EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[i]));
+      EXPECT_REF_COUNT(sub_sub_devices[i], 0, 1);
     }
+
     EXPECT_SUCCESS(clReleaseContext(context));
+    EXPECT_DESTROYED(context);
 
-    for (cl_uint i = 0; i < num_sub_sub_devices; ++i) {
-      EXPECT_DESTROYED(sub_sub_devices[first_sub_sub_device + i]);
-      EXPECT_DESTROYED(sub_devices[first_sub_sub_device + i]);
+    for (cl_uint i = used_devices; i < num_sub_sub_devices; ++i) {
+      EXPECT_DESTROYED(sub_sub_devices[i]); // recently destroyed with type: SUB_DEVICE (2x)
     }
   }
 
-  // Just release the other sub-sub-devices
-  for (cl_uint i = 4; i < num_sub_devices; ++i) {
-    EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[i]));
-    EXPECT_DESTROYED(sub_sub_devices[i]);
-    EXPECT_DESTROYED(sub_devices[i]);
+  for (cl_uint i = 0; i < num_sub_devices; ++i) {
+    EXPECT_DESTROYED(sub_devices[i]); // recently destroyed with type: SUB_DEVICE (2x)
   }
+
+  EXPECT_SUCCESS(clReleaseContext(context));
+  EXPECT_DESTROYED(context); // recently destroyed with type: CONTEXT
 
   return layer_test::finalize();
 }
