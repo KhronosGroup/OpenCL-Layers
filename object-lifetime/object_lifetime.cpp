@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <cassert>
 #include <CL/cl_layer.h>
 #include <mutex>
 #include <tuple>
@@ -12,8 +13,7 @@
 #include <fstream>
 #include <algorithm>
 #include <memory>
-
-#include <cstdlib>
+#include <vector>
 
 #include <sys/stat.h>
 
@@ -86,10 +86,30 @@ static inline trimmed__func__ rtrim(const char* s) {
 namespace {
 
 struct object_record {
-  object_type type;
-  cl_long     refcount;
-  void*       parent = nullptr;
-  cl_long     num_children = 0;
+  object_type        type;
+  cl_long            refcount;
+  std::vector<void*> parents = {};
+  cl_long            num_children = 0;
+
+  object_record(object_type type, cl_long refcount)
+    : type{type}
+    , refcount{refcount}
+  {
+  }
+
+  object_record(object_type type, cl_long refcount, void* parent)
+    : type{type}
+    , refcount{refcount}
+  {
+    this->parents.push_back(parent);
+  }
+
+  object_record(object_type type, cl_long refcount, std::vector<void*>&& parents)
+    : type{type}
+    , refcount{refcount}
+    , parents(std::move(parents))
+  {
+  }
 };
 
 std::map<void*, object_record> objects;
@@ -322,7 +342,7 @@ static cl_int check_exist_list(const trimmed__func__& func, cl_uint num_handles,
   } while (false)
 
 template<object_type T>
-static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *handle, void* parent = nullptr) {
+static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *handle, std::vector<void*>&& parents = {}) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end()) {
@@ -331,41 +351,49 @@ static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *h
       deleted_objects[handle].push_back(it->second);
     }
   }
-  objects[handle] = object_record{T, 1, parent};
-  if(parent != nullptr) {
-    ++objects[parent].num_children;
+  objects.insert({handle, object_record(T, 1, std::move(parents))});
+  for (void* parent : objects.at(handle).parents) {
+    ++objects.at(parent).num_children;
   }
   return result;
 }
 
 template<>
-cl_int check_creation_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handle, void*) {
+cl_int check_creation_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handle, std::vector<void*>&&) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end() && it->second.type != OCL_DEVICE) {
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
     deleted_objects[handle].push_back(it->second);
   }
-  objects[handle] = object_record{OCL_DEVICE, 0};
+  objects.insert({handle, object_record(OCL_DEVICE, 0)});
   return result;
 }
 
 template<>
-cl_int check_creation_no_lock<OCL_PLATFORM>(const trimmed__func__& func, void *handle, void*) {
+cl_int check_creation_no_lock<OCL_PLATFORM>(const trimmed__func__& func, void *handle, std::vector<void*>&&) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end() && it->second.type != OCL_PLATFORM) {
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
     deleted_objects[handle].push_back(it->second);
   }
-  objects[handle] = object_record{OCL_PLATFORM, 0};
+  objects.insert({handle, object_record(OCL_PLATFORM, 0)});
   return result;
 }
 
 template<object_type T>
-static cl_int check_creation(const trimmed__func__& func, void *handle, void* parent) {
+static cl_int check_creation(const trimmed__func__& func, void *handle, std::vector<void*>&& parents) {
   std::lock_guard<std::mutex> g{objects_mutex};
-  return check_creation_no_lock<T>(func, handle, parent);
+  return check_creation_no_lock<T>(func, handle, std::move(parents));
+}
+
+template<object_type T>
+static cl_int check_creation(const trimmed__func__& func, void* handle, void* parent) {
+  if (parent)
+    return check_creation<T>(func, handle, std::vector<void*>{parent});
+  else
+    return check_creation<T>(func, handle, NULL);
 }
 
 #define CHECK_CREATION(type, handle, parent)                                   \
@@ -390,7 +418,7 @@ static cl_int check_creation_list(const trimmed__func__& func, cl_uint num_handl
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
   for (cl_uint i = 0; i < num_handles; i++) {
-    const cl_int error = check_creation_no_lock<T>(func, handles[i], parent);
+    const cl_int error = check_creation_no_lock<T>(func, handles[i], std::vector<void*>{parent});
     if(error != CL_SUCCESS && result == CL_SUCCESS) {
       result = error;
     }
@@ -419,13 +447,13 @@ static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
         result = error_already_exist(func, handle, it->second.type, it->second.refcount);
         deleted_objects[handle].push_back(it->second);
       }
-      objects[handle] = object_record{T, 0, parent};
+      objects.at(handle) = object_record(T, 0, parent);
     }
   } else {
-    objects[handle] = object_record{T, 0, parent};
+    objects.at(handle) = object_record(T, 0, parent);
   }
   if(parent != nullptr) {
-    ++objects[parent].num_children;
+    ++objects.at(parent).num_children;
   }
   return result;
 }
@@ -438,28 +466,33 @@ static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
     }                                                                          \
   } while (false)
 
+#define CHECK_ADD_OR_EXISTS_ERRC(type, handle, parent, errc, return_type)      \
+  do {                                                                         \
+    *errc = check_add_or_exists<type>(RTRIM_FUNC, handle, parent);             \
+    if (*errc != CL_SUCCESS) {                                                 \
+      return static_cast<return_type>(0);                                      \
+    }                                                                          \
+  } while (false)
+
 static void notify_child_released(const trimmed__func__& func, void *parent) {
   // "Recursively" notify all parents if the refcount and the number of children becomes zero.
   // This signals that the object is no longer kept alive by any of its children.
-  while (parent != nullptr) {
-    --objects[parent].num_children;
+  auto it = objects.find(parent);
+  assert(it != objects.end());
 
-    if (objects[parent].refcount <= 0 && objects[parent].num_children == 0) {
-      // Delete the parent and propagate "release notification" to parent object
-      auto it = objects.find(parent);
-      deleted_objects[parent].push_back(it->second);
-      parent = it->second.parent;
-      objects.erase(it);
-    } else if (objects[parent].num_children < 0) {
+  --it->second.num_children;
+  if (it->second.refcount == 0 && it->second.num_children == 0) {
+    deleted_objects[parent].push_back(std::move(it->second));
+    objects.erase(it);
+    for (auto* grandparent : deleted_objects[parent].back().parents) {
+      notify_child_released(func, grandparent);
+    }
+  } else if (it->second.num_children < 0) {
       *log_stream << "In " << func << " "
-                  << object_type_names[objects[parent].type] << ": " << parent
+                  << object_type_names[objects.at(parent).type] << ": " << parent
                   << " has negative number of children. This is likely a bug in "
                      "the object_lifetime layer.\n";
       log_stream->flush();
-      parent = nullptr;
-    } else {
-      parent = nullptr;
-    }
   }
 }
 
@@ -481,8 +514,10 @@ static cl_int check_release(const trimmed__func__& func, void *handle) {
     }
   }
   if (it->second.refcount == 0 && it->second.num_children == 0) {
-    notify_child_released(func, it->second.parent);
-    deleted_objects[handle].push_back(it->second);
+    for (void* parent : it->second.parents) {
+      notify_child_released(func, parent);
+    }
+    deleted_objects[handle].push_back(std::move(it->second));
     objects.erase(it);
   }
   return CL_SUCCESS;
@@ -510,8 +545,10 @@ cl_int check_release<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
     }
   }
   if (it->second.refcount == 0 && it->second.num_children == 0) {
-    notify_child_released(func, it->second.parent);
-    deleted_objects[handle].push_back(it->second);
+    for (void* parent : it->second.parents) {
+      notify_child_released(func, parent);
+    }
+    deleted_objects[handle].push_back(std::move(it->second));
     objects.erase(it);
   }
   return CL_SUCCESS;
@@ -539,8 +576,10 @@ cl_int check_release<OCL_MEM>(const trimmed__func__& func, void *handle) {
     }
   }
   if (it->second.refcount == 0 && it->second.num_children == 0) {
-    notify_child_released(func, it->second.parent);
-    deleted_objects[handle].push_back(it->second);
+    for (void* parent : it->second.parents) {
+      notify_child_released(func, parent);
+    }
+    deleted_objects[handle].push_back(std::move(it->second));
     objects.erase(it);
   }
   return CL_SUCCESS;
@@ -796,6 +835,30 @@ static void* get_parent(cl_kernel kernel) {
   return NULL;
 }
 
+static std::vector<void*> get_parent_devices(cl_context context) {
+  size_t devices_size;
+  cl_int res = tdispatch->clGetContextInfo(
+    context,
+    CL_CONTEXT_DEVICES,
+    0,
+    NULL,
+    &devices_size);
+  if (res != CL_SUCCESS) {
+    return {};
+  };
+  std::vector<void*> devices(devices_size / sizeof(cl_device_id));
+  res = tdispatch->clGetContextInfo(
+    context,
+    CL_CONTEXT_DEVICES,
+    devices_size,
+    (void*)devices.data(),
+    NULL);
+  if (res != CL_SUCCESS) {
+    return {};
+  }
+  return devices;
+}
+
   /* OpenCL 1.0 */
 static CL_API_ENTRY cl_int CL_API_CALL clGetPlatformIDs_wrap(
     cl_uint num_entries,
@@ -892,7 +955,7 @@ static CL_API_ENTRY cl_context CL_API_CALL clCreateContext_wrap(
     errcode_ret);
 
   if (context)
-    CHECK_CREATION_ERRC(OCL_CONTEXT, context, NULL, errcode_ret, cl_context);
+    CHECK_CREATION_ERRC(OCL_CONTEXT, context, std::vector<void*>((void**)devices, (void**)(devices + num_devices)), errcode_ret, cl_context);
   return context;
 }
 
@@ -913,7 +976,7 @@ static CL_API_ENTRY cl_context CL_API_CALL clCreateContextFromType_wrap(
     errcode_ret);
 
   if (context)
-    CHECK_CREATION_ERRC(OCL_CONTEXT, context, NULL, errcode_ret, cl_context);
+    CHECK_CREATION_ERRC(OCL_CONTEXT, context, get_parent_devices(context), errcode_ret, cl_context);
   return context;
 }
 
