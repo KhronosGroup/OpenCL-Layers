@@ -74,6 +74,7 @@ namespace lifetime
   template <> struct object_parents<cl_event>
   {
     cl_context parent_context;
+    cl_command_queue parent_queue;
     void notify();
   };
 
@@ -417,7 +418,7 @@ struct _cl_event
   , public lifetime::ref_counted_object<cl_event>
 {
   _cl_event() = delete;
-  _cl_event(const cl_context parent_context);
+  _cl_event(const cl_context parent_context, const cl_command_queue parent_queue);
   _cl_event(const _cl_event&) = delete;
   _cl_event(_cl_event&&) = delete;
   ~_cl_event() = default;
@@ -475,6 +476,10 @@ struct _cl_platform_id
   std::set<std::shared_ptr<_cl_context>> _contexts;
   std::set<std::shared_ptr<_cl_mem>> _mems;
   std::set<std::shared_ptr<_cl_command_queue>> _queues;
+  std::set<std::shared_ptr<_cl_program>> _programs;
+  std::set<std::shared_ptr<_cl_kernel>> _kernels;
+  std::set<std::shared_ptr<_cl_event>> _events;
+  std::set<std::shared_ptr<_cl_sampler>> _samplers;
 
   _cl_platform_id();
   _cl_platform_id(const _cl_platform_id&) = delete;
@@ -509,4 +514,8 @@ namespace lifetime
   template <> inline std::set<std::shared_ptr<_cl_context>>& get_objects<cl_context>() { return _platform._contexts; }
   template <> inline std::set<std::shared_ptr<_cl_mem>>& get_objects<cl_mem>() { return _platform._mems; }
   template <> inline std::set<std::shared_ptr<_cl_command_queue>>& get_objects<cl_command_queue>() { return _platform._queues; }
+  template <> inline std::set<std::shared_ptr<_cl_program>>& get_objects<cl_program>() { return _platform._programs; }
+  template <> inline std::set<std::shared_ptr<_cl_kernel>>& get_objects<cl_kernel>() { return _platform._kernels; }
+  template <> inline std::set<std::shared_ptr<_cl_event>>& get_objects<cl_event>() { return _platform._events; }
+  template <> inline std::set<std::shared_ptr<_cl_sampler>>& get_objects<cl_sampler>() { return _platform._samplers; }
 }

@@ -14,7 +14,7 @@ namespace lifetime
 
   void object_parents<cl_context>::notify()
   {
-    for (auto& parent : parents)
+    for (auto& parent : parent_devices)
       parent->unreference();
   }
 
@@ -27,6 +27,30 @@ namespace lifetime
   void object_parents<cl_mem>::notify()
   {
     parent_mem->unreference();
+    parent_context->unreference();
+  }
+
+  void object_parents<cl_program>::notify()
+  {
+    parent_context->unreference();
+    for (auto& parent : parent_devices)
+      parent->unreference();
+  }
+
+  void object_parents<cl_kernel>::notify()
+  {
+    parent_program->unreference();
+  }
+
+  void object_parents<cl_event>::notify()
+  {
+    parent_context->unreference();
+    if (parent_queue)
+      parent_queue->unreference();
+  }
+
+  void object_parents<cl_sampler>::notify()
+  {
     parent_context->unreference();
   }
 
@@ -467,42 +491,6 @@ _cl_context::_cl_context(const cl_device_id* first_device, const cl_device_id* l
   , ref_counted_object<cl_context>{ lifetime::object_parents<cl_context>{ {first_device, last_device} } }
 {}
 
-cl_command_queue _cl_context::clCreateCommandQueue(
-  cl_device_id device,
-  cl_command_queue_properties,
-  cl_int* errcode_ret)
-{
-  if (std::find(
-    parents.parents.cbegin(),
-    parents.parents.cend(),
-    device
-  ) == parents.parents.cend()
-  )
-  {
-    if (errcode_ret)
-      *errcode_ret = CL_INVALID_DEVICE;
-    return nullptr;
-  }
-
-  auto result = lifetime::get_objects<cl_command_queue>().insert(
-    std::make_shared<_cl_command_queue>(
-      device,
-      this
-    )
-  );
-
-  if(result.second)
-  {
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
-}
-
 cl_int _cl_context::clGetContextInfo(
     cl_context_info param_name,
     size_t param_value_size,
@@ -526,7 +514,7 @@ cl_int _cl_context::clGetContextInfo(
     }
     case CL_CONTEXT_NUM_DEVICES:
     {
-      cl_uint tmp = static_cast<cl_uint>(parents.parents.size());
+      cl_uint tmp = static_cast<cl_uint>(parents.parent_devices.size());
       std::copy(
         reinterpret_cast<char*>(&tmp),
         reinterpret_cast<char*>(&tmp) + sizeof(tmp),
@@ -535,8 +523,8 @@ cl_int _cl_context::clGetContextInfo(
     }
     case CL_CONTEXT_DEVICES:
       std::copy(
-        reinterpret_cast<char*>(&(*parents.parents.begin())),
-        reinterpret_cast<char*>(&(*parents.parents.end())),
+        reinterpret_cast<char*>(&(*parents.parent_devices.begin())),
+        reinterpret_cast<char*>(&(*parents.parent_devices.end())),
         std::back_inserter(result));
       break;
     default:
@@ -591,6 +579,472 @@ cl_mem _cl_context::clCreateBuffer(
   {
     std::exit(-1);
   }
+}
+
+cl_command_queue _cl_context::clCreateCommandQueue(
+  cl_device_id device,
+  cl_command_queue_properties,
+  cl_int* errcode_ret)
+{
+  if (std::find(
+    parents.parent_devices.cbegin(),
+    parents.parent_devices.cend(),
+    device
+  ) == parents.parent_devices.cend()
+  )
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_INVALID_DEVICE;
+    return nullptr;
+  }
+
+  auto result = lifetime::get_objects<cl_command_queue>().insert(
+    std::make_shared<_cl_command_queue>(
+      device,
+      this
+    )
+  );
+
+  if(result.second)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+cl_program _cl_context::clCreateProgramWithSource(
+  cl_uint,
+  const char**,
+  const size_t*,
+  cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_program>().insert(
+    std::make_shared<_cl_program>(
+      this,
+      parents.parent_devices.data(),
+      parents.parent_devices.data() + parents.parent_devices.size()
+    )
+  );
+
+  if(result.second)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+cl_event _cl_context::clCreateUserEvent(
+    cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_event>().insert(
+    std::make_shared<_cl_event>(
+      this,
+      nullptr
+    )
+  );
+
+  if(result.second)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+cl_sampler _cl_context::clCreateSampler(
+    cl_bool,
+    cl_addressing_mode,
+    cl_filter_mode,
+    cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_sampler>().insert(
+    std::make_shared<_cl_sampler>(
+      this
+    )
+  );
+
+  if(result.second)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+_cl_program::_cl_program(
+  const cl_context parent_context,
+  const cl_device_id* first_device,
+  const cl_device_id* last_device
+)
+  : icd_compatible{}
+  , ref_counted_object<cl_program>{ lifetime::object_parents<cl_program>{ parent_context, {first_device, last_device} } }
+{}
+
+cl_int _cl_program::clBuildProgram(
+  cl_uint num_devices,
+  const cl_device_id* device_list,
+  const char*,
+  void (CL_CALLBACK*)(cl_program program, void* user_data),
+  void*)
+{
+  bool all_devices_are_in_context = std::all_of(
+    device_list,
+    device_list + num_devices,
+    [this](const cl_device_id& device) mutable
+    {
+      return std::find(
+        parents.parent_devices.cbegin(),
+        parents.parent_devices.cend(),
+        device
+      ) != parents.parent_devices.cend();
+    }
+  );
+
+  if (!all_devices_are_in_context)
+  {
+    return CL_INVALID_DEVICE;
+  }
+
+  return CL_SUCCESS;
+}
+
+cl_int _cl_program::clGetProgramInfo(
+  cl_program_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  if (param_value_size == 0 && param_value != NULL)
+    return CL_INVALID_VALUE;
+
+  std::vector<char> result;
+  switch(param_name)
+  {
+    case CL_PROGRAM_REFERENCE_COUNT:
+    {
+      cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_PROGRAM_CONTEXT:
+      std::copy(
+        reinterpret_cast<char*>(&parents.parent_context),
+        reinterpret_cast<char*>(&parents.parent_context + sizeof(parents.parent_context)),
+        std::back_inserter(result));
+      break;
+    case CL_PROGRAM_NUM_DEVICES:
+    {
+      cl_uint tmp = static_cast<cl_uint>(parents.parent_devices.size());
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_PROGRAM_DEVICES:
+      std::copy(
+        reinterpret_cast<char*>(&(*parents.parent_devices.begin())),
+        reinterpret_cast<char*>(&(*parents.parent_devices.end())),
+        std::back_inserter(result));
+      break;
+    default:
+      return CL_INVALID_VALUE;
+  }
+
+  if (param_value_size_ret)
+    *param_value_size_ret = result.size();
+
+  if (param_value_size && param_value_size < result.size())
+    return CL_INVALID_VALUE;
+
+  if (param_value)
+  {
+    std::copy(result.begin(), result.end(), static_cast<char*>(param_value));
+  }
+
+  return CL_SUCCESS;
+}
+
+cl_int _cl_program::clRetainProgram()
+{
+  return retain();
+}
+
+cl_int _cl_program::clReleaseProgram()
+{
+  return release();
+}
+
+cl_kernel _cl_program::clCreateKernel(
+  const char*,
+  cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_kernel>().insert(
+    std::make_shared<_cl_kernel>(
+      this
+    )
+  );
+
+  if(result.second)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+_cl_kernel::_cl_kernel(const cl_program parent_program)
+  : icd_compatible{}
+  , ref_counted_object<cl_kernel>{ lifetime::object_parents<cl_kernel>{ parent_program } }
+{}
+
+cl_int _cl_kernel::clGetKernelInfo(
+  cl_kernel_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  if (param_value_size == 0 && param_value != NULL)
+    return CL_INVALID_VALUE;
+
+  std::vector<char> result;
+  switch(param_name)
+  {
+    case CL_KERNEL_REFERENCE_COUNT:
+    {
+      cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_KERNEL_PROGRAM:
+      std::copy(
+        reinterpret_cast<char*>(&parents.parent_program),
+        reinterpret_cast<char*>(&parents.parent_program + sizeof(parents.parent_program)),
+        std::back_inserter(result));
+      break;
+    case CL_KERNEL_CONTEXT:
+    {
+      cl_context tmp = parents.parent_program->parents.parent_context;
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    default:
+      return CL_INVALID_VALUE;
+  }
+
+  if (param_value_size_ret)
+    *param_value_size_ret = result.size();
+
+  if (param_value_size && param_value_size < result.size())
+    return CL_INVALID_VALUE;
+
+  if (param_value)
+  {
+    std::copy(result.begin(), result.end(), static_cast<char*>(param_value));
+  }
+
+  return CL_SUCCESS;
+}
+
+cl_int _cl_kernel::clRetainKernel()
+{
+  return retain();
+}
+
+cl_int _cl_kernel::clReleaseKernel()
+{
+  return release();
+}
+
+cl_kernel _cl_kernel::clCloneKernel(
+  cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_kernel>().insert(
+    std::make_shared<_cl_kernel>(
+      parents.parent_program
+    )
+  );
+
+  if(result.second)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+_cl_event::_cl_event(const cl_context parent_context, const cl_command_queue parent_queue)
+  : icd_compatible{}
+  , ref_counted_object<cl_event>{ lifetime::object_parents<cl_event>{ parent_context, parent_queue } }
+{}
+
+cl_int _cl_event::clGetEventInfo(
+  cl_event_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  if (param_value_size == 0 && param_value != NULL)
+    return CL_INVALID_VALUE;
+
+  std::vector<char> result;
+  switch(param_name)
+  {
+    case CL_EVENT_COMMAND_QUEUE:
+      if (parents.parent_queue)
+        std::copy(
+          reinterpret_cast<char*>(&parents.parent_queue),
+          reinterpret_cast<char*>(&parents.parent_queue + sizeof(parents.parent_queue)),
+          std::back_inserter(result));
+      else
+      {
+        cl_command_queue tmp = NULL;
+        std::copy(
+          reinterpret_cast<char*>(&tmp),
+          reinterpret_cast<char*>(&tmp + sizeof(tmp)),
+          std::back_inserter(result));
+      }
+      break;
+    case CL_EVENT_CONTEXT:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&parents.parent_context),
+        reinterpret_cast<char*>(&parents.parent_context) + sizeof(parents.parent_context),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_EVENT_REFERENCE_COUNT:
+    {
+      cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    default:
+      return CL_INVALID_VALUE;
+  }
+
+  if (param_value_size_ret)
+    *param_value_size_ret = result.size();
+
+  if (param_value_size && param_value_size < result.size())
+    return CL_INVALID_VALUE;
+
+  if (param_value)
+  {
+    std::copy(result.begin(), result.end(), static_cast<char*>(param_value));
+  }
+
+  return CL_SUCCESS;
+}
+
+cl_int _cl_event::clRetainEvent()
+{
+  return retain();
+}
+
+cl_int _cl_event::clReleaseEvent()
+{
+  return release();
+}
+
+_cl_sampler::_cl_sampler(const cl_context parent_context)
+  : icd_compatible{}
+  , ref_counted_object<cl_sampler>{ lifetime::object_parents<cl_sampler>{ parent_context } }
+{}
+
+cl_int _cl_sampler::clGetSamplerInfo(
+  cl_event_info param_name,
+  size_t param_value_size,
+  void* param_value,
+  size_t* param_value_size_ret)
+{
+  if (param_value_size == 0 && param_value != NULL)
+    return CL_INVALID_VALUE;
+
+  std::vector<char> result;
+  switch(param_name)
+  {
+    case CL_SAMPLER_REFERENCE_COUNT:
+    {
+      cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
+      std::copy(
+        reinterpret_cast<char*>(&tmp),
+        reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_SAMPLER_CONTEXT:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&parents.parent_context),
+        reinterpret_cast<char*>(&parents.parent_context) + sizeof(parents.parent_context),
+        std::back_inserter(result));
+      break;
+    }
+    default:
+      return CL_INVALID_VALUE;
+  }
+
+  if (param_value_size_ret)
+    *param_value_size_ret = result.size();
+
+  if (param_value_size && param_value_size < result.size())
+    return CL_INVALID_VALUE;
+
+  if (param_value)
+  {
+    std::copy(result.begin(), result.end(), static_cast<char*>(param_value));
+  }
+
+  return CL_SUCCESS;
+}
+
+cl_int _cl_sampler::clRetainSampler()
+{
+  return retain();
+}
+
+cl_int _cl_sampler::clReleaseSampler()
+{
+  return release();
 }
 
 _cl_platform_id::_cl_platform_id()
