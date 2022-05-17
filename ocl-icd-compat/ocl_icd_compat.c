@@ -99,7 +99,7 @@ static void _set_default_id() {
     if (default_platform) {
 #else
     #define default_platform_max_len 5
-    const char default_platform[default_platform_max_len];
+    const char default_platform[default_platform_max_len] = "";
     errno_t err = getenv_s(
       NULL,
       (char*)default_platform,
