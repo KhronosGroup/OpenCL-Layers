@@ -279,10 +279,10 @@ static CL_API_ENTRY cl_context CL_API_CALL clCreateContextFromType_wrap(
   } else {
     if (_default_id == NULL)
       goto out;
-    cl_context_properties new_props[3] =
-     { (cl_context_properties)CL_CONTEXT_PLATFORM,
-       (cl_context_properties)_default_id,
-       (cl_context_properties)NULL};
+    cl_context_properties new_props[3];
+    new_props[0] = (cl_context_properties)CL_CONTEXT_PLATFORM;
+    new_props[1] = (cl_context_properties)_default_id;
+    new_props[2] = (cl_context_properties)NULL;
     return tdispatch->clCreateContextFromType(
       new_props,
       device_type,
