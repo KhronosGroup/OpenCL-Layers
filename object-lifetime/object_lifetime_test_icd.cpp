@@ -1057,10 +1057,14 @@ _cl_platform_id::_cl_platform_id()
   , vendor{ "Khronos" }
   , extensions{ "cl_khr_icd cl_khr_extended_versioning" }
   , suffix{ "khronos" }
-  , _contexts{}
   , _devices{}
+  , _contexts{}
   , _mems{}
   , _queues{}
+  , _programs{}
+  , _kernels{}
+  , _events{}
+  , _samplers{}
 {
   init_dispatch();
 
