@@ -100,8 +100,8 @@ struct object_record {
   object_record(object_type type, cl_long refcount, void* parent)
     : type{type}
     , refcount{refcount}
+    , parents{parent}
   {
-    this->parents.push_back(parent);
   }
 
   object_record(object_type type, cl_long refcount, std::vector<void*>&& parents)
@@ -447,10 +447,10 @@ static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
         result = error_already_exist(func, handle, it->second.type, it->second.refcount);
         deleted_objects[handle].push_back(it->second);
       }
-      objects.at(handle) = object_record(T, 0, parent);
+      objects.insert({handle, object_record(T, 0, parent)});
     }
   } else {
-    objects.at(handle) = object_record(T, 0, parent);
+    objects.insert({handle, object_record(T, 0, parent)});
   }
   if(parent != nullptr) {
     ++objects.at(parent).num_children;
@@ -469,6 +469,40 @@ static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
 #define CHECK_ADD_OR_EXISTS_ERRC(type, handle, parent, errc, return_type)      \
   do {                                                                         \
     *errc = check_add_or_exists<type>(RTRIM_FUNC, handle, parent);             \
+    if (*errc != CL_SUCCESS) {                                                 \
+      return static_cast<return_type>(0);                                      \
+    }                                                                          \
+  } while (false)
+
+template <object_type T>
+static cl_int check_create_or_exists(const trimmed__func__& func, void* handle,
+                                     void *parent = nullptr) {
+  cl_int result = CL_SUCCESS;
+  std::lock_guard<std::mutex> g{objects_mutex};
+  auto it = objects.find(handle);
+  if (it != objects.end()) {
+    if (it->second.type != T) {
+      if (it->second.refcount > 0) {
+        result = error_already_exist(func, handle, it->second.type, it->second.refcount);
+        deleted_objects[handle].push_back(it->second);
+      }
+      objects.insert({handle, object_record(T, 1, parent)});
+    } else {
+      ++it->second.refcount;
+      return result;
+    }
+  } else {
+    objects.insert({handle, object_record(T, 1, parent)});
+  }
+  if(parent != nullptr) {
+    ++objects.at(parent).num_children;
+  }
+  return result;
+}
+
+#define CHECK_CREATE_OR_EXISTS_ERRC(type, handle, parent, errc, return_type)   \
+  do {                                                                         \
+    *errc = check_create_or_exists<type>(RTRIM_FUNC, handle, parent);          \
     if (*errc != CL_SUCCESS) {                                                 \
       return static_cast<return_type>(0);                                      \
     }                                                                          \
@@ -760,6 +794,19 @@ static cl_platform_id context_properties_get_platform(const cl_context_propertie
       platform = (cl_platform_id)property[1];
   return platform;
 }
+
+static bool queue_properties_is_on_device_default(const cl_queue_properties *properties) {
+  if (properties == NULL)
+    return false;
+  bool on_device_default = false;
+  constexpr const cl_uint flags = CL_QUEUE_ON_DEVICE_DEFAULT;
+  for (const cl_queue_properties *property = properties; properties[0]; properties += 2) {
+    if (property[0] == CL_QUEUE_PROPERTIES) {
+      on_device_default = (((cl_command_queue_properties) property[1]) & flags) == flags;
+    }
+  }
+  return on_device_default;
+} 
 
 static inline cl_device_id get_parent_device(cl_device_id dev) {
   cl_device_id parent;
@@ -3293,8 +3340,13 @@ static CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueueWithPropert
     device,
     properties,
     errcode_ret);
-  if (command_queue)
-    CHECK_CREATION_ERRC(OCL_COMMAND_QUEUE, command_queue, context, errcode_ret, cl_command_queue);
+  if (command_queue) {
+    if (queue_properties_is_on_device_default(properties)) {
+      CHECK_CREATE_OR_EXISTS_ERRC(OCL_COMMAND_QUEUE, command_queue, context, errcode_ret, cl_command_queue);
+    } else {
+      CHECK_CREATION_ERRC(OCL_COMMAND_QUEUE, command_queue, context, errcode_ret, cl_command_queue);
+    }
+  }
   return command_queue;
 }
 
