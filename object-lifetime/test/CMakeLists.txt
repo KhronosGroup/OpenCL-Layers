@@ -25,7 +25,7 @@ function (add_layer_test TEST_EXE OPENCL_VERSION)
         OPENCL_LAYERS=$<TARGET_FILE:CLObjectLifetimeLayer>
         CL_OBJECT_LIFETIME_TRANSPARENT=0
         CL_OBJECT_LIFETIME_LOG_SINK=file
-        # OCL_ICD_FILENAMES=$<TARGET_FILE:CLObjectLifetimeICD>
+        OCL_ICD_FILENAMES=$<TARGET_FILE:CLObjectLifetimeICD>
         OBJECT_LIFETIME_ICD_VERSION=${OPENCL_VERSION}
     )
     set (TEST_NAME "ObjectLifetime-${TEST_EXE}-CL${OPENCL_VERSION}")
@@ -72,30 +72,48 @@ add_layer_test_exe (TestCL200Calls        cl200_calls.cpp)
 add_layer_test_exe (TestCloneKernel       clone_kernel.cpp)
 add_layer_test_exe (TestCL300Calls        cl300_calls.cpp)
 add_layer_test_exe (TestResurrect         resurrect.cpp)
+add_layer_test_exe (TestLeak              leak.cpp)
 
-add_layer_test (TestBasicCounting 200
+add_layer_test (TestBasicCounting 300
   REGEX "${CMAKE_CURRENT_SOURCE_DIR}/basic_counting.regex"
 )
 
-# add_layer_test (TestLifetimeEdgeCases 200
-#   REGEX "${CMAKE_CURRENT_SOURCE_DIR}/lifetime_edge_cases.regex")
+add_layer_test (TestLifetimeEdgeCases 300
+  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/lifetime_edge_cases.regex"
+)
 
-add_layer_test (TestSubBuffer 200
+add_layer_test (TestSubBuffer 300
   REGEX "${CMAKE_CURRENT_SOURCE_DIR}/sub_buffer.regex"
 )
 
-# add_layer_test (TestPipeline 200)
+add_layer_test (TestPipeline 300
+  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/pipeline.regex"
+)
 
-add_layer_test (TestCreateImage 200
+add_layer_test (TestCreateImage 300
   REGEX "${CMAKE_CURRENT_SOURCE_DIR}/create_image.regex"
 )
 
-# add_layer_test (TestSubDevice 200)
-# add_layer_test (TestCL200Calls 200)
+add_layer_test (TestSubDevice 300
+  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/sub_device.regex"
+)
 
-add_layer_test (TestCloneKernel 200
+add_layer_test (TestCL200Calls 300
+  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cl200_calls.regex"
+)
+
+add_layer_test (TestCloneKernel 300
   REGEX "${CMAKE_CURRENT_SOURCE_DIR}/clone_kernel.regex"
 )
 
-# add_layer_test (TestCL300Calls 200)
-# add_layer_test (TestResurrect 200)
+add_layer_test (TestCL300Calls 300
+  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cl300_calls.regex"
+)
+
+add_layer_test (TestResurrect 300
+  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/resurrect.regex"
+)
+
+add_layer_test (TestLeak 300
+  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/leak.regex"
+)
