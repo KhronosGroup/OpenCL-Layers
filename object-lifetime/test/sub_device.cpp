@@ -6,7 +6,6 @@
 int main(int argc, char *argv[]) {
   cl_platform_id platform;
   cl_device_id device;
-  cl_int status;
   layer_test::setup(argc, argv, CL_MAKE_VERSION(1, 2, 0), platform, device);
 
   cl_context context = layer_test::createContext(platform, device);
