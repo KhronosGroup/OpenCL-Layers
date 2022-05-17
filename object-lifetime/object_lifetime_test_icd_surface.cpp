@@ -185,7 +185,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseDevice_wrap(
   });
 }
 
-CL_API_ENTRY cl_context clCreateContext_wrap(
+CL_API_ENTRY cl_context CL_API_CALL clCreateContext_wrap(
   const cl_context_properties* properties,
   cl_uint num_devices,
   const cl_device_id* devices,
@@ -206,7 +206,7 @@ CL_API_ENTRY cl_context clCreateContext_wrap(
   });
 }
 
-CL_API_ENTRY cl_int clGetContextInfo_wrap(
+CL_API_ENTRY cl_int CL_API_CALL clGetContextInfo_wrap(
   cl_context context,
   cl_context_info param_name,
   size_t param_value_size,
