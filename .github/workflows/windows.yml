@@ -227,8 +227,8 @@ jobs:
       shell: pwsh
       run: |
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
-        $C_FLAGS = '/W4'
-        $CXX_FLAGS = '/W4'
+        $C_FLAGS = '/W4 /WX'
+        $CXX_FLAGS = '/W4 /WX /EHsc'
         & ${env:CMAKE_EXE} `
           -G '${{matrix.GEN}}' `
           -A $BIN `
@@ -255,7 +255,8 @@ jobs:
           'v143' {'14.3'} }
         Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
         Enter-VsDevShell -VsInstallPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' -SkipAutomaticLocation -DevCmdArguments "-host_arch=x64 -arch=${{matrix.BIN}} -vcvars_ver=${VER}"
-        $C_FLAGS = '/w'
+        $C_FLAGS = '/W4 /WX'
+        $CXX_FLAGS = '/W4 /WX /EHsc'
         & ${env:CMAKE_EXE} `
           -G '${{matrix.GEN}}' `
           -D CMAKE_MAKE_PROGRAM="${env:NINJA_EXE}" `
