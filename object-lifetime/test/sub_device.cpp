@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
   }
 
   cl_uint num_sub_cus = num_cus / num_sub_devices;
-  cl_device_partition_property props[] = {CL_DEVICE_PARTITION_EQUALLY, num_sub_cus, 0};
+  cl_device_partition_property props[] = {CL_DEVICE_PARTITION_EQUALLY, static_cast<cl_device_partition_property>(num_sub_cus), 0};
   std::array<cl_device_id, num_sub_devices> sub_devices;
   EXPECT_SUCCESS(clCreateSubDevices(device,
                                     props,
@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
   // Create two sub-sub-devices for each sub-device
   std::array<cl_device_id, num_sub_sub_devices> sub_sub_devices;
   for (size_t i = 0; i < num_sub_devices; ++i) {
-    cl_device_partition_property sub_props[] = {CL_DEVICE_PARTITION_EQUALLY, num_sub_cus / 2, 0};
+    cl_device_partition_property sub_props[] = {CL_DEVICE_PARTITION_EQUALLY, static_cast<cl_device_partition_property>(num_sub_cus / 2), 0};
     EXPECT_SUCCESS(clCreateSubDevices(sub_devices[i],
                                       sub_props,
                                       num_sub_sub_devices_per_sub_device,
