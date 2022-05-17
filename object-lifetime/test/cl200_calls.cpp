@@ -8,7 +8,7 @@ int main(int argc, char *argv[]) {
 
   cl_context context = layer_test::createContext(platform, device);
 
-  cl_queue_properties props[] = {CL_QUEUE_PROPERTIES, CL_QUEUE_ON_DEVICE | CL_QUEUE_ON_DEVICE_DEFAULT , 0};
+  cl_queue_properties props[] = {CL_QUEUE_PROPERTIES, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE | CL_QUEUE_ON_DEVICE | CL_QUEUE_ON_DEVICE_DEFAULT , 0};
   cl_command_queue queue_a = clCreateCommandQueueWithProperties(context,
                                                                 device,
                                                                 props,
@@ -21,9 +21,11 @@ int main(int argc, char *argv[]) {
                                                                 device,
                                                                 props,
                                                                 &status);
-  LAYER_TEST_LOG() << "queue_a: " << static_cast<const void*>(queue_a) << " queue_b: " << static_cast<const void*>(queue_b) << std::endl;
-
   EXPECT_SUCCESS(status);
+  if (queue_a != queue_b) {
+    LAYER_TEST_LOG() << "clCreateCommandQueueWithProperties with CL_QUEUE_ON_DEVICE_DEFAULT returned two different queues" << std::endl;
+    layer_test::TEST_CONTEXT.fail();
+  }
   EXPECT_REF_COUNT(queue_a, 2, 0);
   EXPECT_REF_COUNT(queue_b, 2, 0);
 
