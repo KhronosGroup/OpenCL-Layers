@@ -102,12 +102,12 @@ int main(int argc, char *argv[]) {
 
   {
     // Check that device dependencies keep the device alive.
-    cl_context context = layer_test::createContext(platform, sub_sub_devices[1]);
+    cl_context context1 = layer_test::createContext(platform, sub_sub_devices[1]);
     EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[1]));
     EXPECT_REF_COUNT(sub_sub_devices[1], 0, 1);
 
-    EXPECT_SUCCESS(clReleaseContext(context));
-    EXPECT_DESTROYED(context); // recently destroyed with type: CONTEXT
+    EXPECT_SUCCESS(clReleaseContext(context1));
+    EXPECT_DESTROYED(context1); // recently destroyed with type: CONTEXT
     EXPECT_DESTROYED(sub_sub_devices[1]); // recently destroyed with type: SUB_DEVICE
 
     for (cl_uint i = 2; i < num_sub_devices; ++i) {
@@ -121,21 +121,21 @@ int main(int argc, char *argv[]) {
     cl_int status;
     // Create a context with the remaining devices, check that the context keeps them both alive.
     cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platform), 0};
-    cl_context context = clCreateContext(properties,
+    cl_context context2 = clCreateContext(properties,
                                          remaining_devices,
                                          &sub_sub_devices[used_devices],
                                          nullptr,
                                          nullptr,
                                          &status);
     EXPECT_SUCCESS(status);
-    EXPECT_REF_COUNT(context, 1, 0);
+    EXPECT_REF_COUNT(context2, 1, 0);
     for (cl_uint i = used_devices; i < num_sub_sub_devices; ++i) {
       EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[i]));
       EXPECT_REF_COUNT(sub_sub_devices[i], 0, 1);
     }
 
-    EXPECT_SUCCESS(clReleaseContext(context));
-    EXPECT_DESTROYED(context);
+    EXPECT_SUCCESS(clReleaseContext(context2));
+    EXPECT_DESTROYED(context2);
 
     for (cl_uint i = used_devices; i < num_sub_sub_devices; ++i) {
       EXPECT_DESTROYED(sub_sub_devices[i]); // recently destroyed with type: SUB_DEVICE (2x)
