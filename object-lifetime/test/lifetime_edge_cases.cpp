@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
 
   EXPECT_SUCCESS(clReleaseMemObject(image_3d));
   EXPECT_DESTROYED(image_3d); // recently deleted with type: IMAGE
-  EXPECT_DESTROYED(context); // used with refcount: 0
+  EXPECT_DESTROYED(context); // recently deleted with type: CONTEXT
 
   // Double free should fail.
   EXPECT_ERROR(clReleaseMemObject(image_2d), CL_INVALID_MEM_OBJECT); // recently deleted with type: IMAGE

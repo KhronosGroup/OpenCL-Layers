@@ -122,11 +122,11 @@ int main(int argc, char *argv[]) {
     // Create a context with the remaining devices, check that the context keeps them both alive.
     cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)(platform), 0};
     cl_context context2 = clCreateContext(properties,
-                                         remaining_devices,
-                                         &sub_sub_devices[used_devices],
-                                         nullptr,
-                                         nullptr,
-                                         &status);
+                                          remaining_devices,
+                                          &sub_sub_devices[used_devices],
+                                          nullptr,
+                                          nullptr,
+                                          &status);
     EXPECT_SUCCESS(status);
     EXPECT_REF_COUNT(context2, 1, 0);
     for (cl_uint i = used_devices; i < num_sub_sub_devices; ++i) {

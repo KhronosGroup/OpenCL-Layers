@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
     0,                     // image_slice_pitch
     0,                     // num_mip_levels
     0,                     // num_samples
-    nullptr                // mem_object
+    { nullptr }            // mem_object
   };
   cl_image_format format = {CL_R, CL_UNORM_INT8};
   cl_mem image = clCreateImage(context,
@@ -30,18 +30,6 @@ int main(int argc, char *argv[]) {
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(image, 1, 0);
 
-  cl_image_desc sub_desc = {
-    CL_MEM_OBJECT_IMAGE2D, // image_type
-    1,                     // image_width
-    1,                     // image_height
-    1,                     // image_depth
-    1,                     // image_array size
-    0,                     // image_row_pitch
-    0,                     // image_slice_pitch
-    0,                     // num_mip_levels
-    0,                     // num_samples
-    image                  // mem_object
-  };
   cl_mem sub_image = clCreateImage(context,
                                    CL_MEM_READ_ONLY,
                                    &format,
