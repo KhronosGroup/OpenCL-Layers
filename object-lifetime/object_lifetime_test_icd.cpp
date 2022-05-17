@@ -9,7 +9,8 @@ namespace lifetime
 
   void object_parents<cl_device_id>::notify()
   {
-    parent->unreference();
+    if (parent)
+      parent->unreference();
   }
 
   void object_parents<cl_context>::notify()
@@ -26,7 +27,8 @@ namespace lifetime
 
   void object_parents<cl_mem>::notify()
   {
-    parent_mem->unreference();
+    if (parent_mem)
+      parent_mem->unreference();
     parent_context->unreference();
   }
 
