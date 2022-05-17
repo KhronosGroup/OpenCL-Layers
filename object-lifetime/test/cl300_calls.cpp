@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
     0,                            // image_slice_pitch
     0,                            // num_mip_levels
     0,                            // num_samples
-    buffer                        // mem_object
+    { buffer }                    // mem_object (extra {} silences GCC buggy warn)
   };
   cl_image_format format = {CL_R, CL_UNSIGNED_INT8};
   cl_mem image = clCreateImageWithProperties(context,
