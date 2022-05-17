@@ -112,7 +112,9 @@ struct object_record {
   }
 };
 
-std::map<void*, object_record> objects;
+using object_record_map = std::map<void*, object_record>;
+
+object_record_map objects;
 std::map<void*, std::list<object_record>> deleted_objects;
 std::mutex objects_mutex;
 
@@ -209,6 +211,56 @@ static cl_int error_invalid_release(const trimmed__func__& func, void *handle, o
   return settings.transparent ? CL_SUCCESS : object_errors[t];
 }
 
+static void notify_child_released(const trimmed__func__& func, void *parent) {
+  // "Recursively" notify all parents if the refcount and the number of children becomes zero.
+  // This signals that the object is no longer kept alive by any of its children.
+  auto it = objects.find(parent);
+  assert(it != objects.end());
+
+  switch (it->second.type) {
+    case OCL_PLATFORM:
+    case OCL_DEVICE:
+      return;
+    default:
+      break;
+  }
+
+  --it->second.num_children;
+  if (it->second.refcount == 0 && it->second.num_children == 0) {
+    deleted_objects[parent].push_back(std::move(it->second));
+    objects.erase(it);
+    for (void* grandparent : deleted_objects[parent].back().parents) {
+      notify_child_released(func, grandparent);
+    }
+  } else if (it->second.num_children < 0) {
+    *log_stream << "In " << func << " "
+                << object_type_names[objects.at(parent).type] << ": " << parent
+                << " has negative number of children. This is likely a bug in "
+                   "the object_lifetime layer.\n";
+    log_stream->flush();
+  }
+}
+
+static void delete_object_record(const trimmed__func__& func, object_record_map::iterator it) {
+  for (void* parent : it->second.parents) {
+    notify_child_released(func, parent);
+  }
+  deleted_objects[it->first].push_back(std::move(it->second));
+  objects.erase(it);
+}
+
+static cl_int release_object(const trimmed__func__& func, object_record_map::iterator it, object_type t) {
+  assert(it != objects.end());
+  if (it->second.refcount <= 0) {
+    return error_invalid_release(func, it->first, t);
+  }
+
+  --it->second.refcount;
+  if (it->second.refcount == 0 && it->second.num_children == 0) {
+    delete_object_record(func, it);
+  }
+  return CL_SUCCESS;
+}
 template<object_type T>
 static inline cl_int check_exists_no_lock(const trimmed__func__& func, void *handle) {
   auto it = objects.find(handle);
@@ -341,6 +393,20 @@ static cl_int check_exist_list(const trimmed__func__& func, cl_uint num_handles,
     }                                                                          \
   } while (false)
 
+static void reference_parent(void *parent) {
+  auto it = objects.find(parent);
+  assert(it != objects.end());
+
+  switch (it->second.type) {
+    case OCL_PLATFORM:
+    case OCL_DEVICE:
+      return;
+    default:
+      ++it->second.num_children;
+      break;
+  }
+}
+
 template<object_type T>
 static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *handle, std::vector<void*>&& parents = {}) {
   cl_int result = CL_SUCCESS;
@@ -353,7 +419,7 @@ static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *h
   }
   objects.insert({handle, object_record(T, 1, std::move(parents))});
   for (void* parent : objects.at(handle).parents) {
-    ++objects.at(parent).num_children;
+    reference_parent(parent);
   }
   return result;
 }
@@ -364,7 +430,7 @@ cl_int check_creation_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *han
   auto it = objects.find(handle);
   if (it != objects.end() && it->second.type != OCL_DEVICE) {
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-    deleted_objects[handle].push_back(it->second);
+    delete_object_record(func, it);
   }
   objects.insert({handle, object_record(OCL_DEVICE, 0)});
   return result;
@@ -376,7 +442,7 @@ cl_int check_creation_no_lock<OCL_PLATFORM>(const trimmed__func__& func, void *h
   auto it = objects.find(handle);
   if (it != objects.end() && it->second.type != OCL_PLATFORM) {
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-    deleted_objects[handle].push_back(it->second);
+    delete_object_record(func, it);
   }
   objects.insert({handle, object_record(OCL_PLATFORM, 0)});
   return result;
@@ -445,7 +511,7 @@ static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
     if (it->second.type != T) {
       if (it->second.refcount > 0) {
         result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-        deleted_objects[handle].push_back(it->second);
+        delete_object_record(func, it);
       }
       objects.insert({handle, object_record(T, 0, parent)});
     }
@@ -453,7 +519,7 @@ static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
     objects.insert({handle, object_record(T, 0, parent)});
   }
   if(parent != nullptr) {
-    ++objects.at(parent).num_children;
+    reference_parent(parent);
   }
   return result;
 }
@@ -484,7 +550,7 @@ static cl_int check_create_or_exists(const trimmed__func__& func, void* handle,
     if (it->second.type != T) {
       if (it->second.refcount > 0) {
         result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-        deleted_objects[handle].push_back(it->second);
+        delete_object_record(func, it);
       }
       objects.insert({handle, object_record(T, 1, parent)});
     } else {
@@ -495,7 +561,7 @@ static cl_int check_create_or_exists(const trimmed__func__& func, void* handle,
     objects.insert({handle, object_record(T, 1, parent)});
   }
   if(parent != nullptr) {
-    ++objects.at(parent).num_children;
+    reference_parent(parent);
   }
   return result;
 }
@@ -508,28 +574,6 @@ static cl_int check_create_or_exists(const trimmed__func__& func, void* handle,
     }                                                                          \
   } while (false)
 
-static void notify_child_released(const trimmed__func__& func, void *parent) {
-  // "Recursively" notify all parents if the refcount and the number of children becomes zero.
-  // This signals that the object is no longer kept alive by any of its children.
-  auto it = objects.find(parent);
-  assert(it != objects.end());
-
-  --it->second.num_children;
-  if (it->second.refcount == 0 && it->second.num_children == 0) {
-    deleted_objects[parent].push_back(std::move(it->second));
-    objects.erase(it);
-    for (auto* grandparent : deleted_objects[parent].back().parents) {
-      notify_child_released(func, grandparent);
-    }
-  } else if (it->second.num_children < 0) {
-      *log_stream << "In " << func << " "
-                  << object_type_names[objects.at(parent).type] << ": " << parent
-                  << " has negative number of children. This is likely a bug in "
-                     "the object_lifetime layer.\n";
-      log_stream->flush();
-  }
-}
-
 template<object_type T>
 static cl_int check_release(const trimmed__func__& func, void *handle) {
   std::lock_guard<std::mutex> g{objects_mutex};
@@ -539,22 +583,11 @@ static cl_int check_release(const trimmed__func__& func, void *handle) {
   } else {
     object_type t = it->second.type;
     if (t == T) {
-      if (it->second.refcount <= 0) {
-        return error_invalid_release(func, handle, T);
-      }
-      it->second.refcount -= 1;
+      return release_object(func, it, t);
     } else {
       return error_invalid_type(func, handle, t, T);
     }
   }
-  if (it->second.refcount == 0 && it->second.num_children == 0) {
-    for (void* parent : it->second.parents) {
-      notify_child_released(func, parent);
-    }
-    deleted_objects[handle].push_back(std::move(it->second));
-    objects.erase(it);
-  }
-  return CL_SUCCESS;
 }
 
 template<>
@@ -569,23 +602,11 @@ cl_int check_release<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
     case OCL_DEVICE:
       return CL_SUCCESS;
     case OCL_SUB_DEVICE:
-      if (it->second.refcount <= 0) {
-        return error_invalid_release(func, handle, OCL_SUB_DEVICE);
-      }
-      it->second.refcount -= 1;
-      break;
+      return release_object(func, it, OCL_SUB_DEVICE);
     default:
       return error_invalid_type(func, handle, t, OCL_DEVICE);
     }
   }
-  if (it->second.refcount == 0 && it->second.num_children == 0) {
-    for (void* parent : it->second.parents) {
-      notify_child_released(func, parent);
-    }
-    deleted_objects[handle].push_back(std::move(it->second));
-    objects.erase(it);
-  }
-  return CL_SUCCESS;
 }
 
 template<>
@@ -600,23 +621,11 @@ cl_int check_release<OCL_MEM>(const trimmed__func__& func, void *handle) {
     case OCL_BUFFER:
     case OCL_IMAGE:
     case OCL_PIPE:
-      if (it->second.refcount <= 0) {
-        return error_invalid_release(func, handle, t);
-      }
-      it->second.refcount -= 1;
-      break;
+      return release_object(func, it, t);
     default:
       return error_invalid_type(func, handle, t, OCL_MEM);
     }
   }
-  if (it->second.refcount == 0 && it->second.num_children == 0) {
-    for (void* parent : it->second.parents) {
-      notify_child_released(func, parent);
-    }
-    deleted_objects[handle].push_back(std::move(it->second));
-    objects.erase(it);
-  }
-  return CL_SUCCESS;
 }
 
 #define CHECK_RELEASE(type, handle)                                            \
@@ -806,7 +815,7 @@ static bool queue_properties_is_on_device_default(const cl_queue_properties *pro
     }
   }
   return on_device_default;
-} 
+}
 
 static inline cl_device_id get_parent_device(cl_device_id dev) {
   cl_device_id parent;
