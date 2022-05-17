@@ -1,6 +1,7 @@
 #include "object_lifetime_test.hpp"
 #include <memory>
 #include <algorithm>
+#include <array>
 
 int main(int argc, char *argv[]) {
   cl_platform_id platform;
