@@ -102,7 +102,7 @@ namespace lifetime
 
     cl_uint CL_OBJECT_REFERENCE_COUNT();
 
-    bool is_valid(bool retain);
+    bool is_valid(bool retain = false);
 
     void reference(int count = 1);
     void unreference();
@@ -297,6 +297,16 @@ struct _cl_command_queue
     void* param_value,
     size_t* param_value_size_ret);
 
+  cl_int clEnqueueNDRangeKernel(
+    cl_kernel kernel,
+    cl_uint work_dim,
+    const size_t* global_work_offset,
+    const size_t* global_work_size,
+    const size_t* local_work_size,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event);
+
   cl_int clRetainCommandQueue();
 
   cl_int clReleaseCommandQueue();
@@ -405,6 +415,11 @@ struct _cl_kernel
     void* param_value,
     size_t* param_value_size_ret);
 
+  cl_int clSetKernelArg(
+    cl_uint arg_index,
+    size_t arg_size,
+    const void* arg_value);
+
   cl_int clRetainKernel();
 
   cl_int clReleaseKernel();
@@ -430,6 +445,13 @@ struct _cl_event
     size_t param_value_size,
     void* param_value,
     size_t* param_value_size_ret);
+
+  cl_int clWaitForEvents(
+    cl_uint num_events,
+    const cl_event* event_list);
+
+  cl_int clSetUserEventStatus(
+    cl_int execution_status);
 
   cl_int clRetainEvent();
 

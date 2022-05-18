@@ -478,6 +478,61 @@ cl_int _cl_command_queue::clGetCommandQueueInfo(
   return CL_SUCCESS;
 }
 
+cl_int _cl_command_queue::clEnqueueNDRangeKernel(
+  cl_kernel kernel,
+  cl_uint,
+  const size_t*,
+  const size_t*,
+  const size_t*,
+  cl_uint num_events_in_wait_list,
+  const cl_event* event_wait_list,
+  cl_event* event)
+{
+  cl_context kernel_ctx = nullptr;
+  kernel->dispatch->clGetKernelInfo(kernel, CL_KERNEL_CONTEXT, sizeof(cl_context), &kernel_ctx, nullptr);
+  if (kernel_ctx != parents.parent_context)
+    return CL_INVALID_KERNEL;
+
+  if (kernel->is_valid())
+    return CL_INVALID_KERNEL;
+
+  if (num_events_in_wait_list == 0 && event_wait_list != nullptr ||
+      num_events_in_wait_list != 0 && event_wait_list == nullptr)
+    return CL_INVALID_EVENT_WAIT_LIST;
+
+  bool all_events_are_ours_and_valid = std::all_of(
+    event_wait_list,
+    event_wait_list + num_events_in_wait_list,
+    [event_ctx = (cl_context)nullptr, this](const cl_event& event) mutable
+    {
+      if (event->dispatch->clGetEventInfo(event, CL_EVENT_CONTEXT, sizeof(cl_context), &event_ctx, nullptr) != CL_SUCCESS)
+        return false;
+
+      if (event_ctx != parents.parent_context)
+        return false;
+
+      return event->is_valid();
+    }
+  );
+
+  if (all_events_are_ours_and_valid && event)
+  {
+    auto result = lifetime::get_objects<cl_event>().insert(
+      std::make_shared<_cl_event>(
+        parents.parent_context,
+        this
+      )
+    );
+
+    if(result.second)
+      *event = result.first->get();
+    else
+      std::exit(-1);
+  }
+
+  return CL_SUCCESS;
+}
+
 cl_int _cl_command_queue::clRetainCommandQueue()
 {
   return retain();
@@ -879,6 +934,14 @@ cl_int _cl_kernel::clGetKernelInfo(
   return CL_SUCCESS;
 }
 
+cl_int _cl_kernel::clSetKernelArg(
+  cl_uint,
+  size_t,
+  const void*)
+{
+  return CL_SUCCESS;
+}
+
 cl_int _cl_kernel::clRetainKernel()
 {
   return retain();
@@ -973,6 +1036,50 @@ cl_int _cl_event::clGetEventInfo(
   {
     std::copy(result.begin(), result.end(), static_cast<char*>(param_value));
   }
+
+  return CL_SUCCESS;
+}
+
+cl_int _cl_event::clWaitForEvents(
+  cl_uint num_events,
+  const cl_event* event_list)
+{
+  bool all_events_are_in_the_same_context = std::all_of(
+    event_list,
+    event_list + num_events,
+    [event_ctx = (cl_context)nullptr, this](const cl_event& event) mutable
+    {
+      if (event->dispatch->clGetEventInfo(event, CL_EVENT_CONTEXT, sizeof(cl_context), &event_ctx, nullptr) != CL_SUCCESS)
+        return false;
+
+      return event_ctx != parents.parent_context;
+    }
+  );
+
+  if (!all_events_are_in_the_same_context)
+    return CL_INVALID_CONTEXT;
+
+  bool all_events_are_valid = std::all_of(
+    event_list,
+    event_list + num_events,
+    [](const cl_event& event){ return event->is_valid(); }
+  );
+
+  if (all_events_are_valid)
+    return CL_SUCCESS;
+  else
+    return CL_INVALID_EVENT;
+}
+
+cl_int _cl_event::clSetUserEventStatus(
+  cl_int execution_status)
+{
+  if (parents.parent_queue != nullptr)
+    return CL_INVALID_EVENT;
+
+  if (execution_status != CL_COMPLETE ||
+      execution_status < 0)
+    return CL_INVALID_VALUE;
 
   return CL_SUCCESS;
 }

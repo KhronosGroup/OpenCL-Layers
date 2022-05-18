@@ -278,6 +278,32 @@ CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueue_wrap(
   });
 }
 
+CL_API_ENTRY cl_int CL_API_CALL clEnqueueNDRangeKernel_wrap(
+  cl_command_queue command_queue,
+  cl_kernel kernel,
+  cl_uint work_dim,
+  const size_t* global_work_offset,
+  const size_t* global_work_size,
+  const size_t* local_work_size,
+  cl_uint num_events_in_wait_list,
+  const cl_event* event_wait_list,
+  cl_event* event)
+{
+  return invoke_if_valid(command_queue, [&]()
+  {
+    return command_queue->clEnqueueNDRangeKernel(
+      kernel,
+      work_dim,
+      global_work_offset,
+      global_work_size,
+      local_work_size,
+      num_events_in_wait_list,
+      event_wait_list,
+      event
+    );
+  });
+}
+
 CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBuffer_wrap(
   cl_mem buffer,
   cl_mem_flags flags,
@@ -462,6 +488,22 @@ CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel_wrap(
   });
 }
 
+CL_API_ENTRY cl_int CL_API_CALL clSetKernelArg_wrap(
+  cl_kernel kernel,
+  cl_uint arg_index,
+  size_t arg_size,
+  const void* arg_value)
+{
+  return invoke_if_valid(kernel, [&]()
+  {
+    return kernel->clSetKernelArg(
+      arg_index,
+      arg_size,
+      arg_value
+    );
+  });
+}
+
 CL_API_ENTRY cl_kernel CL_API_CALL clCloneKernel_wrap(
   cl_kernel source_kernel,
   cl_int* errcode_ret)
@@ -524,6 +566,17 @@ CL_API_ENTRY cl_event CL_API_CALL clCreateUserEvent_wrap(
   });
 }
 
+CL_API_ENTRY cl_int CL_API_CALL clSetUserEventStatus_wrap(
+  cl_event event,
+  cl_int execution_status)
+{
+  return invoke_if_valid(event, [&]()
+  {
+    return event->clSetUserEventStatus(
+      execution_status);
+  });
+}
+
 CL_API_ENTRY cl_int CL_API_CALL clGetEventInfo_wrap(
   cl_event event,
   cl_event_info param_name,
@@ -539,6 +592,22 @@ CL_API_ENTRY cl_int CL_API_CALL clGetEventInfo_wrap(
     param_value,
     param_value_size_ret);
   });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clWaitForEvents_wrap(
+  cl_uint num_events,
+  const cl_event* event_list)
+{
+  if (num_events != 0 && event_list != nullptr)
+    return invoke_if_valid(event_list[0], [&]()
+    {
+      return event_list[0]->clWaitForEvents(
+        num_events,
+        event_list
+      );
+    });
+  else
+    return CL_INVALID_EVENT;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clRetainEvent_wrap(

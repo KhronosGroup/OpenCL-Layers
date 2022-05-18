@@ -97,6 +97,17 @@ CL_API_ENTRY cl_int CL_API_CALL clGetCommandQueueInfo_wrap(
   void* param_value,
   size_t* param_value_size_ret);
 
+CL_API_ENTRY cl_int CL_API_CALL clEnqueueNDRangeKernel_wrap(
+  cl_command_queue command_queue,
+  cl_kernel kernel,
+  cl_uint work_dim,
+  const size_t* global_work_offset,
+  const size_t* global_work_size,
+  const size_t* local_work_size,
+  cl_uint num_events_in_wait_list,
+  const cl_event* event_wait_list,
+  cl_event* event);
+
 CL_API_ENTRY cl_int CL_API_CALL clRetainCommandQueue_wrap(
   cl_command_queue command_queue);
 
@@ -136,6 +147,12 @@ CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel_wrap(
   const char* kernel_name,
   cl_int* errcode_ret);
 
+CL_API_ENTRY cl_int CL_API_CALL clSetKernelArg_wrap(
+  cl_kernel kernel,
+  cl_uint arg_index,
+  size_t arg_size,
+  const void* arg_value);
+
 CL_API_ENTRY cl_kernel CL_API_CALL clCloneKernel_wrap(
   cl_kernel source_kernel,
   cl_int* errcode_ret);
@@ -157,12 +174,20 @@ CL_API_ENTRY cl_event CL_API_CALL clCreateUserEvent_wrap(
   cl_context context,
   cl_int* errcode_ret);
 
+CL_API_ENTRY cl_int CL_API_CALL clSetUserEventStatus_wrap(
+  cl_event event,
+  cl_int execution_status);
+
 CL_API_ENTRY cl_int CL_API_CALL clGetEventInfo_wrap(
   cl_event event,
   cl_event_info param_name,
   size_t param_value_size,
   void* param_value,
   size_t* param_value_size_ret);
+
+CL_API_ENTRY cl_int CL_API_CALL clWaitForEvents_wrap(
+  cl_uint num_events,
+  const cl_event* event_list);
 
 CL_API_ENTRY cl_int CL_API_CALL clRetainEvent_wrap(
   cl_event event);
