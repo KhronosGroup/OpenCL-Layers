@@ -188,7 +188,9 @@ namespace layer_test {
       // - Otherwise we expect CL_INVALID.
 
       if (TEST_CONTEXT.version >= CL_MAKE_VERSION(1, 1, 0) && TEST_CONTEXT.version <= CL_MAKE_VERSION(1, 2, 0)) {
-        if (TEST_CONTEXT.use_released_objects) {
+        if (expected_implicit_count > 0 && TEST_CONTEXT.ref_count_includes_implicit) {
+          expect_not_destroyed(expected_implicit_count);
+        } else if (expected_implicit_count == 0 && TEST_CONTEXT.use_released_objects) {
           expect_not_destroyed(0);
         } else {
           expect_destroyed();
