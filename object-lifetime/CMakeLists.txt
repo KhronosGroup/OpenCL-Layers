@@ -30,9 +30,9 @@ if (OPENCL_LAYERS_BUILD_TESTING AND OFF) # Temporarily disable tests
     )
     set(TEST_ENVIRONMENT
             OPENCL_LAYERS=$<TARGET_FILE:CLObjectLifetimeLayer>
-            CL_OBJECT_LIFETIME_TRANSPARENT=1
-            CL_OBJECT_LIFETIME_LOG_SINK=file
-            CL_OBJECT_LIFETIME_LOG_FILENAME=CLObjectLifetimeLayerTest.log)
+            OPENCL_OBJECT_LIFETIME_TRANSPARENT=1
+            OPENCL_OBJECT_LIFETIME_LOG_SINK=file
+            OPENCL_OBJECT_LIFETIME_LOG_FILENAME=CLObjectLifetimeLayerTest.log)
     set_tests_properties (CLObjectLifetimeLayerTest
         PROPERTIES ENVIRONMENT "${TEST_ENVIRONMENT}"
     )

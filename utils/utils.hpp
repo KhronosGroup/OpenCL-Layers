@@ -34,22 +34,32 @@ struct settings_parser {
   void get_enumeration(const char *option_name,
                        const std::map<std::string, T> &values_map,
                        T &out) const {
-    const auto full_option_name = prefix_ + "." + option_name;
-    if (settings_->find(full_option_name) != settings_->end() &&
-        settings_->at(full_option_name) != "") {
-      detail::parse_enumeration(settings_->at(full_option_name), values_map,
-                                out);
-    }
-    std::string env_option;
-    if (detail::get_environment(
-      detail::to_upper("CL_" + prefix_ + "_" + option_name),
-      env_option))
-    {
-      detail::parse_enumeration(env_option, values_map, out);
-    }
+    get_option(option_name, [&values_map, &out](const std::string &value) {
+      detail::parse_enumeration(value, values_map, out);
+    });
   }
 
 private:
+  // Fetch the value corresponding to a particular option key. This value can
+  // either come from the settings file, or it can be overridden from the environment.
+  // If such an argument was found, the function calls the `parse` callback to process it.
+  // This callback may be called multiple times, in which case the lattermost option should remain.
+  template <typename ParseCallback>
+  void get_option(const char *option_name, ParseCallback parse) const {
+    const auto full_option_name = prefix_ + "." + option_name;
+    auto it = settings_->find(full_option_name);
+    if (it != settings_->end() && it->second != "")
+    {
+      parse(it->second);
+    }
+    std::string env_option_value;
+    const std::string option_env_var = detail::to_upper("OPENCL_" + prefix_ + "_" + option_name);
+    if (detail::get_environment(option_env_var, env_option_value))
+    {
+      parse(env_option_value);
+    }
+  }
+
   std::string prefix_;
   const std::map<std::string, std::string> *settings_;
 };

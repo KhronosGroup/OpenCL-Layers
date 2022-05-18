@@ -670,12 +670,13 @@ void init_output_stream() {
     break;
   case layer_settings::DebugLogType::File:
     log_stream.reset(new std::ofstream(settings.log_filename));
-    break;
-  }
+    if (log_stream->fail()) {
+      log_stream.reset(&std::cerr);
+      *log_stream << "object_lifetime failed to open specified output stream: "
+                  << settings.log_filename << ". Falling back to stderr." << '\n';
+    }
 
-  if(log_stream->fail()) {
-    std::cerr << "object_lifetime failed to open specified output stream: "
-              << settings.log_filename << ". Falling back to stderr." << '\n';
+    break;
   }
 } // namespace
 
