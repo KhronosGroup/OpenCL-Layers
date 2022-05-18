@@ -349,6 +349,7 @@ cl_mem _cl_mem::clCreateSubBuffer(
 
   if(result.second)
   {
+    reference();
     if (errcode_ret)
       *errcode_ret = CL_SUCCESS;
     return result.first->get();
@@ -628,6 +629,7 @@ cl_mem _cl_context::clCreateBuffer(
 
   if(result.second)
   {
+    reference();
     if (errcode_ret)
       *errcode_ret = CL_SUCCESS;
     return result.first->get();
@@ -664,6 +666,7 @@ cl_command_queue _cl_context::clCreateCommandQueue(
 
   if(result.second)
   {
+    reference();
     if (errcode_ret)
       *errcode_ret = CL_SUCCESS;
     return result.first->get();
@@ -690,6 +693,7 @@ cl_program _cl_context::clCreateProgramWithSource(
 
   if(result.second)
   {
+    reference();
     if (errcode_ret)
       *errcode_ret = CL_SUCCESS;
     return result.first->get();
@@ -712,6 +716,7 @@ cl_event _cl_context::clCreateUserEvent(
 
   if(result.second)
   {
+    reference();
     if (errcode_ret)
       *errcode_ret = CL_SUCCESS;
     return result.first->get();
@@ -736,6 +741,7 @@ cl_sampler _cl_context::clCreateSampler(
 
   if(result.second)
   {
+    reference();
     if (errcode_ret)
       *errcode_ret = CL_SUCCESS;
     return result.first->get();
@@ -865,6 +871,7 @@ cl_kernel _cl_program::clCreateKernel(
 
   if(result.second)
   {
+    reference();
     if (errcode_ret)
       *errcode_ret = CL_SUCCESS;
     return result.first->get();
