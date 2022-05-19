@@ -813,7 +813,7 @@ cl_int _cl_program::clGetProgramInfo(
     case CL_PROGRAM_CONTEXT:
       std::copy(
         reinterpret_cast<char*>(&parents.parent_context),
-        reinterpret_cast<char*>(&parents.parent_context + sizeof(parents.parent_context)),
+        reinterpret_cast<char*>(&parents.parent_context) + sizeof(parents.parent_context),
         std::back_inserter(result));
       break;
     case CL_PROGRAM_NUM_DEVICES:
@@ -911,7 +911,7 @@ cl_int _cl_kernel::clGetKernelInfo(
     case CL_KERNEL_PROGRAM:
       std::copy(
         reinterpret_cast<char*>(&parents.parent_program),
-        reinterpret_cast<char*>(&parents.parent_program + sizeof(parents.parent_program)),
+        reinterpret_cast<char*>(&parents.parent_program) + sizeof(parents.parent_program),
         std::back_inserter(result));
       break;
     case CL_KERNEL_CONTEXT:
@@ -1001,7 +1001,7 @@ cl_int _cl_event::clGetEventInfo(
       if (parents.parent_queue)
         std::copy(
           reinterpret_cast<char*>(&parents.parent_queue),
-          reinterpret_cast<char*>(&parents.parent_queue + sizeof(parents.parent_queue)),
+          reinterpret_cast<char*>(&parents.parent_queue) + sizeof(parents.parent_queue),
           std::back_inserter(result));
       else
       {
