@@ -452,7 +452,7 @@ cl_int _cl_command_queue::clGetCommandQueueInfo(
         reinterpret_cast<char*>(&parents.parent_context) + sizeof(parents.parent_context),
         std::back_inserter(result));
       break;
-    case CL_MEM_REFERENCE_COUNT:
+    case CL_QUEUE_REFERENCE_COUNT:
     {
       cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
       std::copy(
@@ -494,7 +494,7 @@ cl_int _cl_command_queue::clEnqueueNDRangeKernel(
   if (kernel_ctx != parents.parent_context)
     return CL_INVALID_KERNEL;
 
-  if (kernel->is_valid())
+  if (!kernel->is_valid())
     return CL_INVALID_KERNEL;
 
   if ((num_events_in_wait_list == 0 && event_wait_list != nullptr) ||
@@ -1201,12 +1201,13 @@ cl_int _cl_event::clWaitForEvents(
   bool all_events_are_in_the_same_context = std::all_of(
     event_list,
     event_list + num_events,
-    [event_ctx = (cl_context)nullptr, this](const cl_event& event) mutable
+    [this_ctx = parents.parent_context](const cl_event& event)
     {
+      cl_context event_ctx = nullptr;
       if (event->dispatch->clGetEventInfo(event, CL_EVENT_CONTEXT, sizeof(cl_context), &event_ctx, nullptr) != CL_SUCCESS)
         return false;
 
-      return event_ctx != parents.parent_context;
+      return event_ctx == this_ctx;
     }
   );
 
@@ -1401,6 +1402,7 @@ void _cl_platform_id::init_dispatch()
   dispatch->clReleaseMemObject = clReleaseMemObject_wrap;
   dispatch->clGetMemObjectInfo = clGetMemObjectInfo_wrap;
   dispatch->clGetCommandQueueInfo = clGetCommandQueueInfo_wrap;
+  dispatch->clEnqueueNDRangeKernel = clEnqueueNDRangeKernel_wrap;
   dispatch->clRetainCommandQueue = clRetainCommandQueue_wrap;
   dispatch->clReleaseCommandQueue = clReleaseCommandQueue_wrap;
   dispatch->clCreateProgramWithSource = clCreateProgramWithSource_wrap;
