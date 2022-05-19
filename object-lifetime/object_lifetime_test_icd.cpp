@@ -497,8 +497,8 @@ cl_int _cl_command_queue::clEnqueueNDRangeKernel(
   if (kernel->is_valid())
     return CL_INVALID_KERNEL;
 
-  if (num_events_in_wait_list == 0 && event_wait_list != nullptr ||
-      num_events_in_wait_list != 0 && event_wait_list == nullptr)
+  if ((num_events_in_wait_list == 0 && event_wait_list != nullptr) ||
+      (num_events_in_wait_list != 0 && event_wait_list == nullptr))
     return CL_INVALID_EVENT_WAIT_LIST;
 
   bool all_events_are_ours_and_valid = std::all_of(
