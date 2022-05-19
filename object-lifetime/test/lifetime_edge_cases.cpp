@@ -39,23 +39,5 @@ int main(int argc, char *argv[]) {
   EXPECT_ERROR(clReleaseMemObject(image_2d), CL_INVALID_MEM_OBJECT); // recently deleted with type: IMAGE
   EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT); // released before being retained
 
-  // Create a new context, which might re-use a previous context allocation.
-  cl_context new_context = layer_test::createContext(platform, device);
-
-  EXPECT_DESTROYED(context);
-
-  EXPECT_SUCCESS(clRetainContext(new_context));
-  EXPECT_REF_COUNT(new_context, 2, 0);
-  EXPECT_DESTROYED(context);
-
-  EXPECT_SUCCESS(clReleaseContext(new_context));
-  EXPECT_REF_COUNT(new_context, 1, 0);
-  EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT);
-  EXPECT_REF_COUNT(new_context, 1, 0);
-  EXPECT_DESTROYED(context);
-
-  EXPECT_SUCCESS(clReleaseContext(new_context));
-  EXPECT_DESTROYED(new_context);
-
   return layer_test::finalize();
 }
