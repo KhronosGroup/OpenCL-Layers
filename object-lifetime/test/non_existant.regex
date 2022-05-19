@@ -1,0 +1,2 @@
+In clGetMemObjectInfo MEM: (0x)?0*[aA]+ was used but it does not exist
+In clGetContextInfo CONTEXT: (0x)?[0-9a-fA-F]+ was used but it was recently deleted with type: CONTEXT
