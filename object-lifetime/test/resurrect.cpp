@@ -13,13 +13,13 @@ int main(int argc, char *argv[]) {
   EXPECT_REF_COUNT(buffer, 1, 0);
 
   EXPECT_SUCCESS(clReleaseContext(context));
-  EXPECT_REF_COUNT(context, 0, 1);
+  EXPECT_REF_COUNT(context, 0, 1); // used with implicit refcount: 1
 
   // Try to 'resurrect' the context
   EXPECT_SUCCESS(clRetainContext(context));
   EXPECT_REF_COUNT(context, 1, 1);
   EXPECT_SUCCESS(clReleaseContext(context));
-  EXPECT_REF_COUNT(context, 0, 1);
+  EXPECT_REF_COUNT(context, 0, 1); // used with implicit refcount: 1
 
   EXPECT_SUCCESS(clReleaseMemObject(buffer));
   EXPECT_DESTROYED(buffer); // recently deleted with type: BUFFER

@@ -1,3 +1,3 @@
-In clGetContextInfo BUFFER: (0x)?[0-9a-fA-F]+ was used whereas function expects: CONTEXT
-In clGetMemObjectInfo MEM: (0x)?[0-9a-fA-F]+ was used but it was recently deleted with type: BUFFER
-In clGetContextInfo CONTEXT: (0x)?[0-9a-fA-F]+ was used but it was recently deleted with type: CONTEXT
+In clGetContextInfo BUFFER: [0-9a-fA-FxX]+ was used whereas function expects: CONTEXT
+In clGetMemObjectInfo MEM: [0-9a-fA-FxX]+ was used but it was recently deleted with type: BUFFER
+In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ was used but it was recently deleted with type: CONTEXT

@@ -43,12 +43,12 @@ int main(int argc, char *argv[]) {
   EXPECT_REF_COUNT(buffer, 1, 1);
 
   EXPECT_SUCCESS(clReleaseMemObject(buffer));
-  EXPECT_REF_COUNT(buffer, 0, 1);
+  EXPECT_REF_COUNT(buffer, 0, 1); // used with implicit refcount: 1
   EXPECT_SUCCESS(clReleaseMemObject(image));
-  EXPECT_DESTROYED(image);
-  EXPECT_DESTROYED(buffer);
+  EXPECT_DESTROYED(image); // recently deleted with type: IMAGE
+  EXPECT_DESTROYED(buffer); // recently deleted with type: BUFFER
   EXPECT_SUCCESS(clReleaseContext(context));
-  EXPECT_DESTROYED(context);
+  EXPECT_DESTROYED(context); // recently deleted with type: CONTEXT
 
   return layer_test::finalize();
 }

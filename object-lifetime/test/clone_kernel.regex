@@ -1,4 +1,8 @@
-In clGetKernelInfo KERNEL: [0x]?[0-9a-fA-F]+ was used but it was recently deleted with type: KERNEL
-In clGetKernelInfo KERNEL: [0x]?[0-9a-fA-F]+ was used but it was recently deleted with type: KERNEL
-In clGetProgramInfo PROGRAM: [0x]?[0-9a-fA-F]+ was used but it was recently deleted with type: PROGRAM
-In clGetContextInfo CONTEXT: [0x]?[0-9a-fA-F]+ was used but it was recently deleted with type: CONTEXT
+In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ used with explicit refcount: 0 and implicit refcount: 1
+In clGetProgramInfo PROGRAM: [0-9a-fA-FxX]+ used with explicit refcount: 0 and implicit refcount: 1
+In clGetProgramInfo PROGRAM: [0-9a-fA-FxX]+ used with explicit refcount: 0 and implicit refcount: 2
+In clGetKernelInfo KERNEL: [0-9a-fA-FxX]+ was used but it was recently deleted with type: KERNEL
+In clGetProgramInfo PROGRAM: [0-9a-fA-FxX]+ used with explicit refcount: 0 and implicit refcount: 1
+In clGetKernelInfo KERNEL: [0-9a-fA-FxX]+ was used but it was recently deleted with type: KERNEL
+In clGetProgramInfo PROGRAM: [0-9a-fA-FxX]+ was used but it was recently deleted with type: PROGRAM
+In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ was used but it was recently deleted with type: CONTEXT

@@ -211,6 +211,15 @@ static cl_int error_invalid_release(const trimmed__func__& func, void *handle, o
   return settings.transparent ? CL_SUCCESS : object_errors[t];
 }
 
+static void warn_implicitly_retained(const trimmed__func__& func, void *handle, object_type t) {
+  *log_stream << "In " << func << " " <<
+               object_type_names[t] <<
+               ": " << handle <<
+               " used with explicit refcount: 0 and implicit refcount: " <<
+               objects.at(handle).num_children << "\n";
+  log_stream->flush();
+}
+
 static void notify_child_released(const trimmed__func__& func, void *parent) {
   // "Recursively" notify all parents if the refcount and the number of children becomes zero.
   // This signals that the object is no longer kept alive by any of its children.
@@ -272,7 +281,7 @@ static inline cl_int check_exists_no_lock(const trimmed__func__& func, void *han
     if(it->second.num_children <= 0) {
       return error_ref_count(func, handle, T, it->second.refcount);
     }
-    // TODO: Warn object only kept alive only by its children
+    warn_implicitly_retained(func, handle, T);
   }
   return CL_SUCCESS;
 }
@@ -307,8 +316,7 @@ cl_int check_exists_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handl
     if(it->second.num_children <= 0) {
       return error_ref_count(func, handle, OCL_SUB_DEVICE, it->second.refcount);
     }
-    // TODO: Warn object only kept alive only by its children
-    // TODO: Devices can be kept alive by contexts, which is not yet tracked
+    warn_implicitly_retained(func, handle, OCL_SUB_DEVICE);
   }
   return CL_SUCCESS;
 }
@@ -328,7 +336,7 @@ cl_int check_exists_no_lock<OCL_MEM>(const trimmed__func__& func, void *handle) 
         if (it->second.num_children <= 0) {
           return error_ref_count(func, handle, t, it->second.refcount);
         }
-        // TODO: Warn object only kept alive only by its children
+        warn_implicitly_retained(func, handle, t);
       }
       break;
     default:

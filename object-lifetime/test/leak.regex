@@ -1,5 +1,7 @@
-In clGetMemObjectInfo MEM: [0x]?[0-9a-fA-F]+ was used but it was recently deleted with type: BUFFER
+In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ used with explicit refcount: 0 and implicit refcount: 3
+In clGetMemObjectInfo MEM: [0-9a-fA-FxX]+ was used but it was recently deleted with type: BUFFER
+In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ used with explicit refcount: 0 and implicit refcount: 2
 OpenCL object leaks:
-(EVENT \(([0x]?[0-9a-fA-F]+)\) reference count: 1
-SAMPLER \(([0x]?[0-9a-fA-F]+)\) reference count: 1|SAMPLER \(([0x]?[0-9a-fA-F]+)\) reference count: 1
-EVENT \(([0x]?[0-9a-fA-F]+)\) reference count: 1)
+(EVENT \(([0-9a-fA-FxX]+)\) reference count: 1
+SAMPLER \(([0-9a-fA-FxX]+)\) reference count: 1|SAMPLER \(([0-9a-fA-FxX]+)\) reference count: 1
+EVENT \(([0-9a-fA-FxX]+)\) reference count: 1)

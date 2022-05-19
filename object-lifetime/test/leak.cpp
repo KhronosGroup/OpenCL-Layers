@@ -21,11 +21,11 @@ int main(int argc, char *argv[]) {
   EXPECT_REF_COUNT(event, 1, 0);
 
   EXPECT_SUCCESS(clReleaseContext(context));
-  EXPECT_REF_COUNT(context, 0, 2);
+  EXPECT_REF_COUNT(context, 0, 3); // used with implicit refcount: 3
 
   EXPECT_SUCCESS(clReleaseMemObject(buffer));
   EXPECT_DESTROYED(buffer); // recently deleted with type: BUFFER
-  EXPECT_REF_COUNT(context, 0, 1);
+  EXPECT_REF_COUNT(context, 0, 2); // used with implicit refcount: 2
 
   // Leak sampler and event
 

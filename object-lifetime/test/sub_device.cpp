@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
   for (size_t i = 0; i < num_sub_devices; ++i) {
     EXPECT_REF_COUNT(sub_devices[i], 1, num_sub_sub_devices_per_sub_device);
     EXPECT_SUCCESS(clReleaseDevice(sub_devices[i]));
-    EXPECT_REF_COUNT(sub_devices[i], 0, num_sub_sub_devices_per_sub_device);
+    EXPECT_REF_COUNT(sub_devices[i], 0, num_sub_sub_devices_per_sub_device); // used with implicit refcount: 2
   }
 
   {
@@ -89,14 +89,14 @@ int main(int argc, char *argv[]) {
     // Release the first device and check if the rest is okay.
     EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[0]));
     EXPECT_DESTROYED(sub_sub_devices[0]); // recently deleted with type: SUB_DEVICE
-    EXPECT_REF_COUNT(sub_devices[0], 0, num_sub_sub_devices_per_sub_device - 1);
+    EXPECT_REF_COUNT(sub_devices[0], 0, num_sub_sub_devices_per_sub_device - 1); // used with implicit refcount: 1
 
     for (cl_uint i = 1; i < num_sub_sub_devices; ++i) {
       EXPECT_REF_COUNT(sub_sub_devices[i], 1, 0);
     }
 
     for (cl_uint i = 1; i < num_sub_devices; ++i) {
-      EXPECT_REF_COUNT(sub_devices[i], 0, num_sub_sub_devices_per_sub_device);
+      EXPECT_REF_COUNT(sub_devices[i], 0, num_sub_sub_devices_per_sub_device); // used with implicit refcount: 2
     }
   }
 
@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
     // Check that device dependencies keep the device alive.
     cl_context context1 = layer_test::createContext(platform, sub_sub_devices[1]);
     EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[1]));
-    EXPECT_REF_COUNT(sub_sub_devices[1], 0, 1);
+    EXPECT_REF_COUNT(sub_sub_devices[1], 0, 1); // used with implicit refcount: 1
 
     EXPECT_SUCCESS(clReleaseContext(context1));
     EXPECT_DESTROYED(context1); // recently destroyed with type: CONTEXT
@@ -131,11 +131,11 @@ int main(int argc, char *argv[]) {
     EXPECT_REF_COUNT(context2, 1, 0);
     for (cl_uint i = used_devices; i < num_sub_sub_devices; ++i) {
       EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[i]));
-      EXPECT_REF_COUNT(sub_sub_devices[i], 0, 1);
+      EXPECT_REF_COUNT(sub_sub_devices[i], 0, 1); // used with implicit refcount: 1
     }
 
     EXPECT_SUCCESS(clReleaseContext(context2));
-    EXPECT_DESTROYED(context2);
+    EXPECT_DESTROYED(context2); // recently destroyed with type: CONTEXT
 
     for (cl_uint i = used_devices; i < num_sub_sub_devices; ++i) {
       EXPECT_DESTROYED(sub_sub_devices[i]); // recently destroyed with type: SUB_DEVICE (2x)

@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
 
   // Release context, the buffer should keep it alive.
   EXPECT_SUCCESS(clReleaseContext(context));
-  EXPECT_REF_COUNT(context, 0, 1);
+  EXPECT_REF_COUNT(context, 0, 1); // used with implicit refcount: 1
 
   cl_buffer_region sub_region = {0, 32};
   cl_mem sub_buffer = clCreateSubBuffer(buffer,
@@ -28,8 +28,8 @@ int main(int argc, char *argv[]) {
   // Release buffer, the child should keep it alive
   EXPECT_SUCCESS(clReleaseMemObject(buffer));
   EXPECT_REF_COUNT(sub_buffer, 1, 0);
-  EXPECT_REF_COUNT(buffer, 0, 1);
-  EXPECT_REF_COUNT(context, 0, 1);
+  EXPECT_REF_COUNT(buffer, 0, 1); // used with imlicit refcount: 1
+  EXPECT_REF_COUNT(context, 0, 1); // used with imlicit refcount: 1
 
   // Release the entire chain by releasing sub_buffer
   EXPECT_SUCCESS(clReleaseMemObject(sub_buffer));

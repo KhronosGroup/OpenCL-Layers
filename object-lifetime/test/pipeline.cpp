@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
   EXPECT_REF_COUNT(context, 1, 4);
 
   EXPECT_SUCCESS(clReleaseContext(context));
-  EXPECT_REF_COUNT(context, 0, 4);
+  EXPECT_REF_COUNT(context, 0, 4); // used with implicit refcount: 4
 
   EXPECT_SUCCESS(clRetainEvent(top_of_pipe));
   EXPECT_REF_COUNT(top_of_pipe, 2, 0);
