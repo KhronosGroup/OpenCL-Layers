@@ -459,7 +459,7 @@ static cl_int check_creation(const trimmed__func__& func, void* handle, void* pa
   if (parent)
     return check_creation<T>(func, handle, std::vector<void*>{parent});
   else
-    return check_creation<T>(func, handle, NULL);
+    return check_creation<T>(func, handle, std::vector<void*>{});
 }
 
 #define CHECK_CREATION(type, handle, parent)                                   \
