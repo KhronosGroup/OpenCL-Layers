@@ -74,6 +74,7 @@ add_layer_test_exe (TestCL300Calls        cl300_calls.cpp)
 add_layer_test_exe (TestResurrect         resurrect.cpp)
 add_layer_test_exe (TestLeak              leak.cpp)
 add_layer_test_exe (TestNonExistant       non_existant.cpp)
+add_layer_test_exe (TestInvalidType       invalid_type.cpp)
 
 add_layer_test (TestBasicCounting 300
   REGEX "${CMAKE_CURRENT_SOURCE_DIR}/basic_counting.regex"
@@ -121,4 +122,8 @@ add_layer_test (TestLeak 300
 
 add_layer_test (TestNonExistant 300
   REGEX "${CMAKE_CURRENT_LIST_DIR}/non_existant.regex"
+)
+
+add_layer_test (TestInvalidType 300
+  REGEX "${CMAKE_CURRENT_LIST_DIR}/invalid_type.regex"
 )

@@ -183,7 +183,7 @@ static cl_int error_invalid_type(const trimmed__func__& func, void *handle, obje
                " was used whereas function expects: " <<
                object_type_names[expect] << "\n";
   log_stream->flush();
-  return settings.transparent ? CL_SUCCESS : object_errors[t];
+  return settings.transparent ? CL_SUCCESS : object_errors[expect];
 }
 
 static cl_int error_does_not_exist(const trimmed__func__& func, void *handle, object_type t) {
