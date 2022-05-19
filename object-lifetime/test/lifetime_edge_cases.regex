@@ -1,6 +1,6 @@
-In clReleaseContext CONTEXT: 0x[0-9a-f]+ was released before being retained
-In clGetMemObjectInfo MEM: 0x[0-9a-f]+ was used but it was recently deleted with type: IMAGE
-In clGetMemObjectInfo MEM: 0x[0-9a-f]+ was used but it was recently deleted with type: IMAGE
-In clGetContextInfo CONTEXT: 0x[0-9a-f]+ used with refcount: 0
-In clReleaseMemObject MEM: 0x[0-9a-f]+ was used but it was recently deleted with type: IMAGE
-In clReleaseContext CONTEXT: 0x[0-9a-f]+ was released before being retained
+In clReleaseContext CONTEXT: [0x]?[0-9a-fA-F]+ was released before being retained
+In clGetMemObjectInfo MEM: [0x]?[0-9a-fA-F]+ was used but it was recently deleted with type: IMAGE
+In clGetMemObjectInfo MEM: [0x]?[0-9a-fA-F]+ was used but it was recently deleted with type: IMAGE
+In clGetContextInfo CONTEXT: [0x]?[0-9a-fA-F]+ used with refcount: 0
+In clReleaseMemObject MEM: [0x]?[0-9a-fA-F]+ was used but it was recently deleted with type: IMAGE
+In clReleaseContext CONTEXT: [0x]?[0-9a-fA-F]+ was released before being retained

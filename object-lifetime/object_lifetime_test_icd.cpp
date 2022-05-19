@@ -640,6 +640,153 @@ cl_mem _cl_context::clCreateBuffer(
   }
 }
 
+cl_mem _cl_context::clCreateBufferWithProperties(
+  const cl_mem_properties*,
+  cl_mem_flags,
+  size_t size,
+  void*,
+  cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_mem>().insert(
+    std::make_shared<_cl_mem>(
+      nullptr,
+      this,
+      size
+    )
+  );
+
+  if(result.second)
+  {
+    reference();
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+cl_mem _cl_context::clCreateImage(
+  cl_mem_flags,
+  const cl_image_format*,
+  const cl_image_desc*,
+  void*,
+  cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_mem>().insert(
+    std::make_shared<_cl_mem>(
+      nullptr,
+      this,
+      0
+    )
+  );
+
+  if(result.second)
+  {
+    reference();
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+cl_mem _cl_context::clCreateImageWithProperties(
+    const cl_mem_properties*,
+    cl_mem_flags,
+    const cl_image_format*,
+    const cl_image_desc*,
+    void*,
+    cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_mem>().insert(
+    std::make_shared<_cl_mem>(
+      nullptr,
+      this,
+      0
+    )
+  );
+
+  if(result.second)
+  {
+    reference();
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+cl_mem _cl_context::clCreateImage2D(
+  cl_mem_flags,
+  const cl_image_format*,
+  size_t,
+  size_t,
+  size_t,
+  void*,
+  cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_mem>().insert(
+    std::make_shared<_cl_mem>(
+      nullptr,
+      this,
+      0
+    )
+  );
+
+  if(result.second)
+  {
+    reference();
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+cl_mem _cl_context::clCreateImage3D(
+  cl_mem_flags,
+  const cl_image_format*,
+  size_t,
+  size_t,
+  size_t,
+  size_t,
+  size_t,
+  void*,
+  cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_mem>().insert(
+    std::make_shared<_cl_mem>(
+      nullptr,
+      this,
+      0
+    )
+  );
+
+  if(result.second)
+  {
+    reference();
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
 cl_command_queue _cl_context::clCreateCommandQueue(
   cl_device_id device,
   cl_command_queue_properties,
@@ -1243,6 +1390,11 @@ void _cl_platform_id::init_dispatch()
   dispatch->clRetainContext = clRetainContext_wrap;
   dispatch->clReleaseContext = clReleaseContext_wrap;
   dispatch->clCreateBuffer = clCreateBuffer_wrap;
+  dispatch->clCreateBufferWithProperties = clCreateBufferWithProperties_wrap;
+  dispatch->clCreateImage = clCreateImage_wrap;
+  dispatch->clCreateImageWithProperties = clCreateImageWithProperties_wrap;
+  dispatch->clCreateImage2D = clCreateImage2D_wrap;
+  dispatch->clCreateImage3D = clCreateImage3D_wrap;
   dispatch->clCreateCommandQueue = clCreateCommandQueue_wrap;
   dispatch->clCreateSubBuffer = clCreateSubBuffer_wrap;
   dispatch->clRetainMemObject = clRetainMemObject_wrap;
@@ -1257,12 +1409,15 @@ void _cl_platform_id::init_dispatch()
   dispatch->clRetainProgram = clRetainProgram_wrap;
   dispatch->clReleaseProgram = clReleaseProgram_wrap;
   dispatch->clCreateKernel = clCreateKernel_wrap;
+  dispatch->clSetKernelArg = clSetKernelArg_wrap;
   dispatch->clCloneKernel = clCloneKernel_wrap;
   dispatch->clGetKernelInfo = clGetKernelInfo_wrap;
   dispatch->clRetainKernel = clRetainKernel_wrap;
   dispatch->clReleaseKernel = clReleaseKernel_wrap;
   dispatch->clCreateUserEvent = clCreateUserEvent_wrap;
+  dispatch->clSetUserEventStatus = clSetUserEventStatus_wrap;
   dispatch->clGetEventInfo = clGetEventInfo_wrap;
+  dispatch->clWaitForEvents = clWaitForEvents_wrap;
   dispatch->clRetainEvent = clRetainEvent_wrap;
   dispatch->clReleaseEvent = clReleaseEvent_wrap;
   dispatch->clCreateSampler = clCreateSampler_wrap;

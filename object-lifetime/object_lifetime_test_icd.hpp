@@ -342,6 +342,48 @@ struct _cl_context
     void* host_ptr,
     cl_int* errcode_ret);
 
+  cl_mem clCreateBufferWithProperties(
+    const cl_mem_properties* properties,
+    cl_mem_flags flags,
+    size_t size,
+    void* host_ptr,
+    cl_int* errcode_ret);
+
+  cl_mem clCreateImage(
+    cl_mem_flags flags,
+    const cl_image_format* image_format,
+    const cl_image_desc* image_desc,
+    void* host_ptr,
+    cl_int* errcode_ret);
+
+  cl_mem clCreateImageWithProperties(
+    const cl_mem_properties* properties,
+    cl_mem_flags flags,
+    const cl_image_format* image_format,
+    const cl_image_desc* image_desc,
+    void* host_ptr,
+    cl_int* errcode_ret);
+
+  cl_mem clCreateImage2D(
+    cl_mem_flags flags,
+    const cl_image_format* image_format,
+    size_t image_width,
+    size_t image_height,
+    size_t image_row_pitch,
+    void* host_ptr,
+    cl_int* errcode_ret);
+
+  cl_mem clCreateImage3D(
+    cl_mem_flags flags,
+    const cl_image_format* image_format,
+    size_t image_width,
+    size_t image_height,
+    size_t image_depth,
+    size_t image_row_pitch,
+    size_t image_slice_pitch,
+    void* host_ptr,
+    cl_int* errcode_ret);
+
   cl_command_queue clCreateCommandQueue(
     cl_device_id device,
     cl_command_queue_properties properties,

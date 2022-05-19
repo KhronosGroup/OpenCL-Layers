@@ -64,6 +64,53 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateBuffer_wrap(
   void* host_ptr,
   cl_int* errcode_ret);
 
+CL_API_ENTRY cl_mem CL_API_CALL clCreateBufferWithProperties_wrap(
+  cl_context context,
+  const cl_mem_properties* properties,
+  cl_mem_flags flags,
+  size_t size,
+  void* host_ptr,
+  cl_int* errcode_ret);
+
+CL_API_ENTRY cl_mem CL_API_CALL clCreateImage_wrap(
+  cl_context context,
+  cl_mem_flags flags,
+  const cl_image_format* image_format,
+  const cl_image_desc* image_desc,
+  void* host_ptr,
+  cl_int* errcode_ret);
+
+CL_API_ENTRY cl_mem CL_API_CALL clCreateImageWithProperties_wrap(
+  cl_context context,
+  const cl_mem_properties* properties,
+  cl_mem_flags flags,
+  const cl_image_format* image_format,
+  const cl_image_desc* image_desc,
+  void* host_ptr,
+  cl_int* errcode_ret);
+
+CL_API_ENTRY cl_mem CL_API_CALL clCreateImage2D_wrap(
+  cl_context context,
+  cl_mem_flags flags,
+  const cl_image_format* image_format,
+  size_t image_width,
+  size_t image_height,
+  size_t image_row_pitch,
+  void* host_ptr,
+  cl_int* errcode_ret);
+
+CL_API_ENTRY cl_mem CL_API_CALL clCreateImage3D_wrap(
+  cl_context context,
+  cl_mem_flags flags,
+  const cl_image_format* image_format,
+  size_t image_width,
+  size_t image_height,
+  size_t image_depth,
+  size_t image_row_pitch,
+  size_t image_slice_pitch,
+  void* host_ptr,
+  cl_int* errcode_ret);
+
 CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueue_wrap(
   cl_context context,
   cl_device_id device,
