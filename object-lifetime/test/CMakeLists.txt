@@ -114,6 +114,7 @@ add_layer_test (TestCL300Calls 300
 
 add_layer_test (TestResurrect 300
   REGEX "${CMAKE_CURRENT_SOURCE_DIR}/resurrect.regex"
+  ALLOW_USING_INACCESSIBLE_OBJECTS
 )
 
 add_layer_test (TestLeak 300
