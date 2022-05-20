@@ -59,6 +59,24 @@ namespace lifetime
   icd_compatible::icd_compatible()
     : dispatch{ &_dispatch }
   {}
+
+  template <typename T, typename... Args> auto create_or_exit(cl_int* errcode_ret, Args&& ...args)
+  {
+    auto result = get_objects<T>().insert(
+      std::make_shared<std::remove_pointer_t<T>>(
+        args...
+      )
+    );
+
+    if(result.second)
+    {
+      if (errcode_ret)
+        *errcode_ret = CL_SUCCESS;
+      return result.first->get();
+    }
+    else
+      std::exit(-1);
+  }
 }
 
 #include <utils.hpp>
@@ -294,23 +312,11 @@ cl_context _cl_device_id::clCreateContext(
     }
   );
 
-  auto result = lifetime::get_objects<cl_context>().insert(
-    std::make_shared<_cl_context>(
-      devices,
-      devices + num_devices
-    )
+  return lifetime::create_or_exit<cl_context>(
+    errcode_ret,
+    devices,
+    devices + num_devices
   );
-
-  if(result.second)
-  {
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 _cl_mem::_cl_mem(cl_mem mem_parent, cl_context context_parent, size_t size)
@@ -343,25 +349,13 @@ cl_mem _cl_mem::clCreateSubBuffer(
     return nullptr;
   }
 
-  auto result = lifetime::get_objects<cl_mem>().insert(
-    std::make_shared<_cl_mem>(
-      this,
-      parents.parent_context,
-      region_info->size
-    )
+  reference();
+  return lifetime::create_or_exit<cl_mem>(
+    errcode_ret,
+    this,
+    parents.parent_context,
+    region_info->size
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_int _cl_mem::clGetMemObjectInfo(
@@ -524,20 +518,12 @@ cl_int _cl_command_queue::clEnqueueNDRangeKernel(
 
   if (all_events_are_ours_and_valid && event)
   {
-    auto result = lifetime::get_objects<cl_event>().insert(
-      std::make_shared<_cl_event>(
-        parents.parent_context,
-        this
-      )
+    reference();
+    *event = lifetime::create_or_exit<cl_event>(
+      nullptr,
+      parents.parent_context,
+      this
     );
-
-    if(result.second)
-    {
-      reference();
-      *event = result.first->get();
-    }
-    else
-      std::exit(-1);
   }
 
   return CL_SUCCESS;
@@ -628,25 +614,13 @@ cl_mem _cl_context::clCreateBuffer(
   void*,
   cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_mem>().insert(
-    std::make_shared<_cl_mem>(
-      nullptr,
-      this,
-      size
-    )
+  reference();
+  return lifetime::create_or_exit<cl_mem>(
+    errcode_ret,
+    nullptr,
+    this,
+    size
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_mem _cl_context::clCreateBufferWithProperties(
@@ -656,25 +630,13 @@ cl_mem _cl_context::clCreateBufferWithProperties(
   void*,
   cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_mem>().insert(
-    std::make_shared<_cl_mem>(
-      nullptr,
-      this,
-      size
-    )
+  reference();
+  return lifetime::create_or_exit<cl_mem>(
+    errcode_ret,
+    nullptr,
+    this,
+    size
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_mem _cl_context::clCreateImage(
@@ -684,25 +646,13 @@ cl_mem _cl_context::clCreateImage(
   void*,
   cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_mem>().insert(
-    std::make_shared<_cl_mem>(
-      nullptr,
-      this,
-      0
-    )
+  reference();
+  return lifetime::create_or_exit<cl_mem>(
+    errcode_ret,
+    nullptr,
+    this,
+    0
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_mem _cl_context::clCreateImageWithProperties(
@@ -713,25 +663,13 @@ cl_mem _cl_context::clCreateImageWithProperties(
     void*,
     cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_mem>().insert(
-    std::make_shared<_cl_mem>(
-      nullptr,
-      this,
-      0
-    )
+  reference();
+  return lifetime::create_or_exit<cl_mem>(
+    errcode_ret,
+    nullptr,
+    this,
+    0
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_mem _cl_context::clCreateImage2D(
@@ -743,25 +681,13 @@ cl_mem _cl_context::clCreateImage2D(
   void*,
   cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_mem>().insert(
-    std::make_shared<_cl_mem>(
-      nullptr,
-      this,
-      0
-    )
+  reference();
+  return lifetime::create_or_exit<cl_mem>(
+    errcode_ret,
+    nullptr,
+    this,
+    0
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_mem _cl_context::clCreateImage3D(
@@ -775,25 +701,13 @@ cl_mem _cl_context::clCreateImage3D(
   void*,
   cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_mem>().insert(
-    std::make_shared<_cl_mem>(
-      nullptr,
-      this,
-      0
-    )
+  reference();
+  return lifetime::create_or_exit<cl_mem>(
+    errcode_ret,
+    nullptr,
+    this,
+    0
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_mem _cl_context::clCreatePipe(
@@ -803,25 +717,13 @@ cl_mem _cl_context::clCreatePipe(
   const cl_pipe_properties*,
   cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_mem>().insert(
-    std::make_shared<_cl_mem>(
-      nullptr,
-      this,
-      0
-    )
+  reference();
+  return lifetime::create_or_exit<cl_mem>(
+    errcode_ret,
+    nullptr,
+    this,
+    0
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_command_queue _cl_context::clCreateCommandQueue(
@@ -841,26 +743,14 @@ cl_command_queue _cl_context::clCreateCommandQueue(
     return nullptr;
   }
 
-  auto result = lifetime::get_objects<cl_command_queue>().insert(
-    std::make_shared<_cl_command_queue>(
-      device,
-      this,
-      &properties,
-      &properties + 1
-    )
+  reference();
+  return lifetime::create_or_exit<cl_command_queue>(
+    errcode_ret,
+    device,
+    this,
+    &properties,
+    &properties + 1
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_command_queue _cl_context::clCreateCommandQueueWithProperties(
@@ -932,26 +822,14 @@ cl_command_queue _cl_context::clCreateCommandQueueWithProperties(
     }
     else
     {
-      auto result = lifetime::get_objects<cl_command_queue>().insert(
-        std::make_shared<_cl_command_queue>(
-          device,
-          this,
-          props.data(),
-          props.data() + props.size()
-        )
+      reference();
+      return lifetime::create_or_exit<cl_command_queue>(
+        errcode_ret,
+        device,
+        this,
+        props.data(),
+        props.data() + props.size()
       );
-
-      if (result.second)
-      {
-        reference();
-        if (errcode_ret)
-          *errcode_ret = CL_SUCCESS;
-        return result.first->get();
-      }
-      else
-      {
-        std::exit(-1);
-      }
     }
   }
   else
@@ -985,48 +863,24 @@ cl_program _cl_context::clCreateProgramWithSource(
   const size_t*,
   cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_program>().insert(
-    std::make_shared<_cl_program>(
-      this,
-      parents.parent_devices.data(),
-      parents.parent_devices.data() + parents.parent_devices.size()
-    )
+  reference();
+  return lifetime::create_or_exit<cl_program>(
+    errcode_ret,
+    this,
+    parents.parent_devices.data(),
+    parents.parent_devices.data() + parents.parent_devices.size()
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_event _cl_context::clCreateUserEvent(
     cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_event>().insert(
-    std::make_shared<_cl_event>(
-      this,
-      nullptr
-    )
+  reference();
+  return lifetime::create_or_exit<cl_event>(
+    errcode_ret,
+    this,
+    nullptr
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_sampler _cl_context::clCreateSampler(
@@ -1035,46 +889,22 @@ cl_sampler _cl_context::clCreateSampler(
     cl_filter_mode,
     cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_sampler>().insert(
-    std::make_shared<_cl_sampler>(
-      this
-    )
+  reference();
+  return lifetime::create_or_exit<cl_sampler>(
+    errcode_ret,
+    this
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 cl_sampler _cl_context::clCreateSamplerWithProperties(
   const cl_sampler_properties*,
   cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_sampler>().insert(
-    std::make_shared<_cl_sampler>(
-      this
-    )
+  reference();
+  return lifetime::create_or_exit<cl_sampler>(
+    errcode_ret,
+    this
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 _cl_program::_cl_program(
@@ -1188,23 +1018,11 @@ cl_kernel _cl_program::clCreateKernel(
   const char*,
   cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_kernel>().insert(
-    std::make_shared<_cl_kernel>(
-      this
-    )
+  reference();
+  return lifetime::create_or_exit<cl_kernel>(
+    errcode_ret,
+    this
   );
-
-  if(result.second)
-  {
-    reference();
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 _cl_kernel::_cl_kernel(const cl_program parent_program)
@@ -1287,22 +1105,11 @@ cl_int _cl_kernel::clReleaseKernel()
 cl_kernel _cl_kernel::clCloneKernel(
   cl_int* errcode_ret)
 {
-  auto result = lifetime::get_objects<cl_kernel>().insert(
-    std::make_shared<_cl_kernel>(
-      parents.parent_program
-    )
+  reference();
+  return lifetime::create_or_exit<cl_kernel>(
+    errcode_ret,
+    parents.parent_program
   );
-
-  if(result.second)
-  {
-    if (errcode_ret)
-      *errcode_ret = CL_SUCCESS;
-    return result.first->get();
-  }
-  else
-  {
-    std::exit(-1);
-  }
 }
 
 _cl_event::_cl_event(const cl_context parent_context, const cl_command_queue parent_queue)
