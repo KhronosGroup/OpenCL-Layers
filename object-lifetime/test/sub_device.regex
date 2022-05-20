@@ -7,6 +7,7 @@ In clGetDeviceInfo SUB_DEVICE: [0-9a-fA-FxX]+ used with explicit refcount: 0 and
 In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ was used but it was recently deleted with type: CONTEXT
 In clGetDeviceInfo DEVICE: [0-9a-fA-FxX]+ was used but it was recently deleted with type: SUB_DEVICE
 In clGetDeviceInfo SUB_DEVICE: [0-9a-fA-FxX]+ used with explicit refcount: 0 and implicit refcount: 1
+In clGetDeviceInfo SUB_DEVICE: [0-9a-fA-FxX]+ used with explicit refcount: 0 and implicit refcount: 1
 In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ was used but it was recently deleted with type: CONTEXT
 In clGetDeviceInfo DEVICE: [0-9a-fA-FxX]+ was used but it was recently deleted with type: SUB_DEVICE
 In clGetDeviceInfo DEVICE: [0-9a-fA-FxX]+ was used but it was recently deleted with type: SUB_DEVICE
