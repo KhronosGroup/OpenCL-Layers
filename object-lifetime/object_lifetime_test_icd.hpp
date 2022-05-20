@@ -118,7 +118,7 @@ namespace lifetime
   template <typename Object>
   cl_int ref_counted_object<Object>::retain()
   {
-    if (ref_count > 0)
+    if (ref_count > 0 || (implicit_ref_count > 0 && allow_using_inaccessible_objects))
     {
       ++ref_count;
       return CL_SUCCESS;
