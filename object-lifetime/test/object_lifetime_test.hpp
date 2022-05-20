@@ -30,7 +30,8 @@ namespace layer_test {
     cl_version version = CL_MAKE_VERSION(1, 1, 0);
     // Whether CL_*_REFERENCE_COUNT reports implicit or explicit reference count.
     bool ref_count_includes_implicit = false;
-    // Whether released objects can still be used.
+    // Whether querying released objects (with an expected total refcount of 0) is expected
+    // to return CL_INVALID or the actual ref count.
     bool use_released_objects = false;
     // Whether inaccessible objects that are still implicitly referenced can be used.
     bool use_inaccessible_objects = false;
@@ -161,7 +162,9 @@ namespace layer_test {
     };
 
     auto expect_destroyed = [&] {
-      if (status == CL_SUCCESS) {
+      if (TEST_CONTEXT.use_released_objects) {
+        expect_not_destroyed(0);
+      } else if (status == CL_SUCCESS) {
         log(file, line) << "expected that object was destroyed, but it has " << actual_ref_count << " references remaining" << std::endl;
         TEST_CONTEXT.fail();
       } else if (status != ocl_utils::CL_INVALID<Handle>()) {
@@ -190,24 +193,22 @@ namespace layer_test {
       if (TEST_CONTEXT.version >= CL_MAKE_VERSION(1, 1, 0) && TEST_CONTEXT.version <= CL_MAKE_VERSION(1, 2, 0)) {
         if (expected_implicit_count > 0 && TEST_CONTEXT.ref_count_includes_implicit) {
           expect_not_destroyed(expected_implicit_count);
-        } else if (TEST_CONTEXT.use_released_objects) {
-          expect_not_destroyed(expected_implicit_count);
         } else {
           expect_destroyed();
         }
       } else if (TEST_CONTEXT.version == CL_MAKE_VERSION(2, 0, 0)) {
-        if (expected_implicit_count != 0) {
+        if (expected_implicit_count > 0 && TEST_CONTEXT.ref_count_includes_implicit) {
           expect_not_destroyed(expected_implicit_count);
-        } else if (TEST_CONTEXT.use_released_objects) {
-          expect_not_destroyed(0);
         } else {
           expect_destroyed();
         }
       } else if (TEST_CONTEXT.version >= CL_MAKE_VERSION(2, 1, 0)) {
-        if (expected_implicit_count == 0 && TEST_CONTEXT.use_released_objects) {
-          expect_not_destroyed(0);
-        } else if (expected_implicit_count != 0 && TEST_CONTEXT.use_inaccessible_objects) {
-          expect_not_destroyed(expected_implicit_count);
+        if (expected_implicit_count > 0 && TEST_CONTEXT.use_inaccessible_objects) {
+          if (TEST_CONTEXT.ref_count_includes_implicit) {
+            expect_not_destroyed(expected_implicit_count);
+          } else {
+            expect_not_destroyed(0);
+          }
         } else {
           expect_destroyed();
         }
@@ -215,7 +216,7 @@ namespace layer_test {
     } else {
       // If the expected explicit ref count is nonzero:
       // In OpenCL 1.1 and 1.2, we expect that the explicit ref count is the actual ref count.
-      // In OpenCL 2.0 and above, the actual ref count includes the implicit count as well.
+      // In OpenCL 2.0 and above, the actual ref count includes the implicit count as well (if that is enbled).
       if (TEST_CONTEXT.ref_count_includes_implicit) {
         expect_not_destroyed(expected_explicit_count + expected_implicit_count);
       } else {

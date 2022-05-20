@@ -211,12 +211,12 @@ static cl_int error_invalid_release(const trimmed__func__& func, void *handle, o
   return settings.transparent ? CL_SUCCESS : object_errors[t];
 }
 
-static void warn_implicitly_retained(const trimmed__func__& func, void *handle, object_type t) {
+static void warn_implicitly_retained(const trimmed__func__& func, void *handle, object_type t, cl_long num_children) {
   *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
                " used with explicit refcount: 0 and implicit refcount: " <<
-               objects.at(handle).num_children << "\n";
+               num_children << "\n";
   log_stream->flush();
 }
 
@@ -281,7 +281,7 @@ static inline cl_int check_exists_no_lock(const trimmed__func__& func, void *han
     if(it->second.num_children <= 0) {
       return error_ref_count(func, handle, T, it->second.refcount);
     }
-    warn_implicitly_retained(func, handle, T);
+    warn_implicitly_retained(func, handle, T, it->second.num_children);
   }
   return CL_SUCCESS;
 }
@@ -316,7 +316,7 @@ cl_int check_exists_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handl
     if(it->second.num_children <= 0) {
       return error_ref_count(func, handle, OCL_SUB_DEVICE, it->second.refcount);
     }
-    warn_implicitly_retained(func, handle, OCL_SUB_DEVICE);
+    warn_implicitly_retained(func, handle, OCL_SUB_DEVICE, it->second.num_children);
   }
   return CL_SUCCESS;
 }
@@ -336,7 +336,7 @@ cl_int check_exists_no_lock<OCL_MEM>(const trimmed__func__& func, void *handle) 
         if (it->second.num_children <= 0) {
           return error_ref_count(func, handle, t, it->second.refcount);
         }
-        warn_implicitly_retained(func, handle, t);
+        warn_implicitly_retained(func, handle, t, it->second.num_children);
       }
       break;
     default:
