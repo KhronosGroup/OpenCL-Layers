@@ -376,6 +376,26 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateImage3D_wrap(
   });
 }
 
+CL_API_ENTRY cl_mem CL_API_CALL clCreatePipe_wrap(
+  cl_context context,
+  cl_mem_flags flags,
+  cl_uint pipe_packet_size,
+  cl_uint pipe_max_packets,
+  const cl_pipe_properties* properties,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(context, errcode_ret, [&]()
+  {
+    return context->clCreatePipe(
+      flags,
+      pipe_packet_size,
+      pipe_max_packets,
+      properties,
+      errcode_ret
+    );
+  });
+}
+
 CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueue_wrap(
   cl_context context,
   cl_device_id device,
@@ -385,6 +405,22 @@ CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueue_wrap(
   return create_if_valid(context, errcode_ret, [&]()
   {
     return context->clCreateCommandQueue(
+      device,
+      properties,
+      errcode_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueueWithProperties_wrap(
+  cl_context context,
+  cl_device_id device,
+  const cl_queue_properties* properties,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(context, errcode_ret, [&]()
+  {
+    return context->clCreateCommandQueueWithProperties(
       device,
       properties,
       errcode_ret
@@ -508,7 +544,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseCommandQueue_wrap(
 {
   return invoke_if_valid(command_queue, [&]()
   {
-    return command_queue->clRetainCommandQueue();
+    return command_queue->clReleaseCommandQueue();
   });
 }
 
@@ -757,6 +793,20 @@ CL_API_ENTRY cl_sampler CL_API_CALL clCreateSampler_wrap(
       normalized_coords,
       addressing_mode,
       filter_mode,
+      errcode_ret
+    );
+  });
+}
+
+CL_API_ENTRY cl_sampler CL_API_CALL clCreateSamplerWithProperties_wrap(
+  cl_context context,
+  const cl_sampler_properties* sampler_properties,
+  cl_int* errcode_ret)
+{
+  return create_if_valid(context, errcode_ret, [&]()
+  {
+    return context->clCreateSamplerWithProperties(
+      sampler_properties,
       errcode_ret
     );
   });

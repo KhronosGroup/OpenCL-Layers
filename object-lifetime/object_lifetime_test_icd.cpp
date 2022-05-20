@@ -203,13 +203,17 @@ cl_int _cl_device_id::clCreateSubDevices(
       if (num_devices * n > cu_count)
         return CL_INVALID_DEVICE_PARTITION_COUNT;
 
-      std::vector<std::shared_ptr<_cl_device_id>> result(
+      std::vector<std::shared_ptr<_cl_device_id>> result;
+      std::generate_n(
+        std::back_inserter(result),
         num_devices,
-        std::make_shared<_cl_device_id>(
-          _cl_device_id::device_kind::sub,
-          this,
-          n
-        )
+        [n = static_cast<cl_uint>(properties[1]), this]()
+        {
+          return std::make_shared<_cl_device_id>(
+            _cl_device_id::device_kind::sub,
+            this,
+            n);
+        }
       );
       reference(num_devices);
 
@@ -223,7 +227,7 @@ cl_int _cl_device_id::clCreateSubDevices(
       {
         std::transform(
           result.cbegin(),
-          result.cbegin(),
+          result.cend(),
           out_devices,
           [](const std::shared_ptr<_cl_device_id>& dev){ return dev.get(); }
         );
@@ -423,9 +427,11 @@ cl_int _cl_mem::clReleaseMemObject()
   return release();
 }
 
-_cl_command_queue::_cl_command_queue(cl_device_id parent_device, cl_context parent_context)
+_cl_command_queue::_cl_command_queue(cl_device_id parent_device, cl_context parent_context, const cl_queue_properties* first, const cl_queue_properties* last)
   : icd_compatible{}
   , ref_counted_object<cl_command_queue>{ lifetime::object_parents<cl_command_queue>{ parent_device, parent_context } }
+  , _size{ 0 }
+  , _props( first, last )
 {}
 
 cl_int _cl_command_queue::clGetCommandQueueInfo(
@@ -526,7 +532,10 @@ cl_int _cl_command_queue::clEnqueueNDRangeKernel(
     );
 
     if(result.second)
+    {
+      reference();
       *event = result.first->get();
+    }
     else
       std::exit(-1);
   }
@@ -787,9 +796,37 @@ cl_mem _cl_context::clCreateImage3D(
   }
 }
 
+cl_mem _cl_context::clCreatePipe(
+  cl_mem_flags,
+  cl_uint,
+  cl_uint,
+  const cl_pipe_properties*,
+  cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_mem>().insert(
+    std::make_shared<_cl_mem>(
+      nullptr,
+      this,
+      0
+    )
+  );
+
+  if(result.second)
+  {
+    reference();
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
 cl_command_queue _cl_context::clCreateCommandQueue(
   cl_device_id device,
-  cl_command_queue_properties,
+  cl_command_queue_properties properties,
   cl_int* errcode_ret)
 {
   if (std::find(
@@ -807,7 +844,9 @@ cl_command_queue _cl_context::clCreateCommandQueue(
   auto result = lifetime::get_objects<cl_command_queue>().insert(
     std::make_shared<_cl_command_queue>(
       device,
-      this
+      this,
+      &properties,
+      &properties + 1
     )
   );
 
@@ -821,6 +860,122 @@ cl_command_queue _cl_context::clCreateCommandQueue(
   else
   {
     std::exit(-1);
+  }
+}
+
+cl_command_queue _cl_context::clCreateCommandQueueWithProperties(
+  cl_device_id device,
+  const cl_queue_properties* properties,
+  cl_int* errcode_ret)
+{
+  if (std::find(
+    parents.parent_devices.cbegin(),
+    parents.parent_devices.cend(),
+    device
+  ) == parents.parent_devices.cend()
+  )
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_INVALID_DEVICE;
+    return nullptr;
+  }
+
+  std::vector<cl_queue_properties> props;
+  {
+    const cl_queue_properties* it = properties;
+    while(*it != 0)
+      props.push_back(*it++);
+  }
+
+  auto CL_QUEUE_ON_DEVICE_DEFAULT_finder = [](
+    std::vector<cl_queue_properties>::const_iterator first,
+    std::vector<cl_queue_properties>::const_iterator last
+  ) -> bool
+  {
+    auto it = std::find(first, last, CL_QUEUE_PROPERTIES);
+    if (it == last)
+      return false;
+    else
+      return *(++it) & CL_QUEUE_ON_DEVICE_DEFAULT;
+  };
+
+  if (CL_QUEUE_ON_DEVICE_DEFAULT_finder(props.cbegin(), props.cend()))
+  {
+    // From all queues on platform, find one which:
+    //   1. points to the same device AND
+    //   2. is in the same context AND
+    //   3. has the property CL_QUEUE_ON_DEVICE_DEFAULT
+    // If such queue is found, retain and return it
+    // Else create new queue
+    auto it = std::find_if(
+      lifetime::_platform._queues.cbegin(),
+      lifetime::_platform._queues.cend(),
+      [&](const std::shared_ptr<_cl_command_queue>& queue)
+      {
+        bool points_to_same_device = queue->parents.parent_device == device;
+        bool is_in_the_same_context = queue->parents.parent_context == this;
+        bool has_prop_CL_QUEUE_ON_DEVICE_DEFAULT =
+          CL_QUEUE_ON_DEVICE_DEFAULT_finder(queue->_props.cbegin(), queue->_props.cend());
+
+        return points_to_same_device &&
+          is_in_the_same_context &&
+          has_prop_CL_QUEUE_ON_DEVICE_DEFAULT;
+      }
+    );
+
+    if (it != lifetime::_platform._queues.cend())
+    {
+      (*it)->retain();
+      if (errcode_ret)
+        *errcode_ret = CL_SUCCESS;
+      return it->get();
+    }
+    else
+    {
+      auto result = lifetime::get_objects<cl_command_queue>().insert(
+        std::make_shared<_cl_command_queue>(
+          device,
+          this,
+          props.data(),
+          props.data() + props.size()
+        )
+      );
+
+      if (result.second)
+      {
+        reference();
+        if (errcode_ret)
+          *errcode_ret = CL_SUCCESS;
+        return result.first->get();
+      }
+      else
+      {
+        std::exit(-1);
+      }
+    }
+  }
+  else
+  {
+    auto result = lifetime::get_objects<cl_command_queue>().insert(
+      std::make_shared<_cl_command_queue>(
+        device,
+        this,
+        props.data(),
+        props.data() + props.size()
+      )
+    );
+
+    if (result.second)
+    {
+      reference();
+      if (errcode_ret)
+        *errcode_ret = CL_SUCCESS;
+      return result.first->get();
+    }
+    else
+    {
+      std::exit(-1);
+    }
   }
 }
 
@@ -879,6 +1034,29 @@ cl_sampler _cl_context::clCreateSampler(
     cl_addressing_mode,
     cl_filter_mode,
     cl_int* errcode_ret)
+{
+  auto result = lifetime::get_objects<cl_sampler>().insert(
+    std::make_shared<_cl_sampler>(
+      this
+    )
+  );
+
+  if(result.second)
+  {
+    reference();
+    if (errcode_ret)
+      *errcode_ret = CL_SUCCESS;
+    return result.first->get();
+  }
+  else
+  {
+    std::exit(-1);
+  }
+}
+
+cl_sampler _cl_context::clCreateSamplerWithProperties(
+  const cl_sampler_properties*,
+  cl_int* errcode_ret)
 {
   auto result = lifetime::get_objects<cl_sampler>().insert(
     std::make_shared<_cl_sampler>(
@@ -1396,7 +1574,9 @@ void _cl_platform_id::init_dispatch()
   dispatch->clCreateImageWithProperties = clCreateImageWithProperties_wrap;
   dispatch->clCreateImage2D = clCreateImage2D_wrap;
   dispatch->clCreateImage3D = clCreateImage3D_wrap;
+  dispatch->clCreatePipe = clCreatePipe_wrap;
   dispatch->clCreateCommandQueue = clCreateCommandQueue_wrap;
+  dispatch->clCreateCommandQueueWithProperties = clCreateCommandQueueWithProperties_wrap;
   dispatch->clCreateSubBuffer = clCreateSubBuffer_wrap;
   dispatch->clRetainMemObject = clRetainMemObject_wrap;
   dispatch->clReleaseMemObject = clReleaseMemObject_wrap;
@@ -1423,6 +1603,7 @@ void _cl_platform_id::init_dispatch()
   dispatch->clRetainEvent = clRetainEvent_wrap;
   dispatch->clReleaseEvent = clReleaseEvent_wrap;
   dispatch->clCreateSampler = clCreateSampler_wrap;
+  dispatch->clCreateSamplerWithProperties = clCreateSamplerWithProperties_wrap;
   dispatch->clGetSamplerInfo = clGetSamplerInfo_wrap;
   dispatch->clRetainSampler = clRetainSampler_wrap;
   dispatch->clReleaseSampler = clReleaseSampler_wrap;

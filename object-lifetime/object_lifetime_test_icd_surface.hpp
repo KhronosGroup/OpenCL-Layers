@@ -111,10 +111,24 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateImage3D_wrap(
   void* host_ptr,
   cl_int* errcode_ret);
 
+CL_API_ENTRY cl_mem CL_API_CALL clCreatePipe_wrap(
+  cl_context context,
+  cl_mem_flags flags,
+  cl_uint pipe_packet_size,
+  cl_uint pipe_max_packets,
+  const cl_pipe_properties* properties,
+  cl_int* errcode_ret);
+
 CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueue_wrap(
   cl_context context,
   cl_device_id device,
   cl_command_queue_properties properties,
+  cl_int* errcode_ret);
+
+CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueueWithProperties_wrap(
+  cl_context context,
+  cl_device_id device,
+  const cl_queue_properties* properties,
   cl_int* errcode_ret);
 
 CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBuffer_wrap(
@@ -247,6 +261,11 @@ CL_API_ENTRY cl_sampler CL_API_CALL clCreateSampler_wrap(
   cl_bool normalized_coords,
   cl_addressing_mode addressing_mode,
   cl_filter_mode filter_mode,
+  cl_int* errcode_ret);
+
+CL_API_ENTRY cl_sampler CL_API_CALL clCreateSamplerWithProperties_wrap(
+  cl_context context,
+  const cl_sampler_properties* sampler_properties,
   cl_int* errcode_ret);
 
 CL_API_ENTRY cl_int CL_API_CALL clGetSamplerInfo_wrap(

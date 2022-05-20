@@ -280,9 +280,10 @@ struct _cl_command_queue
   , public lifetime::ref_counted_object<cl_command_queue>
 {
   size_t _size;
+  std::vector<cl_queue_properties> _props;
 
   _cl_command_queue() = delete;
-  _cl_command_queue(cl_device_id parent_device, cl_context parent_context);
+  _cl_command_queue(cl_device_id parent_device, cl_context parent_context, const cl_queue_properties* first, const cl_queue_properties* last);
   _cl_command_queue(const _cl_command_queue&) = delete;
   _cl_command_queue(_cl_command_queue&&) = delete;
   ~_cl_command_queue() = default;
@@ -384,9 +385,21 @@ struct _cl_context
     void* host_ptr,
     cl_int* errcode_ret);
 
+  cl_mem clCreatePipe(
+    cl_mem_flags flags,
+    cl_uint pipe_packet_size,
+    cl_uint pipe_max_packets,
+    const cl_pipe_properties* properties,
+    cl_int* errcode_ret);
+
   cl_command_queue clCreateCommandQueue(
     cl_device_id device,
     cl_command_queue_properties properties,
+    cl_int* errcode_ret);
+
+  cl_command_queue clCreateCommandQueueWithProperties(
+    cl_device_id device,
+    const cl_command_queue_properties* properties,
     cl_int* errcode_ret);
 
   cl_program clCreateProgramWithSource(
@@ -402,6 +415,10 @@ struct _cl_context
     cl_bool normalized_coords,
     cl_addressing_mode addressing_mode,
     cl_filter_mode filter_mode,
+    cl_int* errcode_ret);
+
+  cl_sampler clCreateSamplerWithProperties(
+    const cl_sampler_properties* sampler_properties,
     cl_int* errcode_ret);
 };
 
