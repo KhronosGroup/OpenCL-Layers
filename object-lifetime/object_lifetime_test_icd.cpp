@@ -1105,7 +1105,6 @@ cl_int _cl_kernel::clReleaseKernel()
 cl_kernel _cl_kernel::clCloneKernel(
   cl_int* errcode_ret)
 {
-  reference();
   return lifetime::create_or_exit<cl_kernel>(
     errcode_ret,
     parents.parent_program
