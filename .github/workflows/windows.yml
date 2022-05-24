@@ -120,9 +120,7 @@ jobs:
         & cmake `
           --install ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build `
           --prefix ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install `
-          --config Release `
-          -- `
-          -j ${env:NUMBER_OF_PROCESSORS}
+          --config Release
           if ($LASTEXITCODE -ne 0) { throw "Installing OpenCL-Headers failed." }
 
     - name: Build & install OpenCL-ICD-Loader (MSBuild)
