@@ -659,11 +659,36 @@ cl_mem _cl_context::clCreateImageWithProperties(
     const cl_mem_properties*,
     cl_mem_flags,
     const cl_image_format*,
-    const cl_image_desc*,
+    const cl_image_desc* desc,
     void*,
     cl_int* errcode_ret)
 {
   reference();
+  if (desc)
+  {
+    if (desc->buffer)
+    {
+      auto it = std::find_if(
+        lifetime::_platform._mems.cbegin(),
+        lifetime::_platform._mems.cend(),
+        [&](const std::shared_ptr<_cl_mem>& mem)
+        {
+          return mem->parents.parent_context == this;
+        }
+      );
+
+      if (it != lifetime::_platform._mems.cend())
+      {
+        (*it)->implicit_ref_count++;
+        return lifetime::create_or_exit<cl_mem>(
+          errcode_ret,
+          (*it).get(),
+          this,
+          0
+        );
+      }
+    }
+  }
   return lifetime::create_or_exit<cl_mem>(
     errcode_ret,
     nullptr,
