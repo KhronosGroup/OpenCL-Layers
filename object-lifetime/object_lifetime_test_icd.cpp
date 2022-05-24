@@ -168,7 +168,7 @@ cl_int _cl_device_id::clGetDeviceInfo(
       break;
     case CL_DEVICE_REFERENCE_COUNT:
     {
-      cl_uint tmp = CL_OBJECT_REFERENCE_COUNT();
+      cl_uint tmp = kind == device_kind::sub ? CL_OBJECT_REFERENCE_COUNT() : 1;
       std::copy(
         reinterpret_cast<char*>(&tmp),
         reinterpret_cast<char*>(&tmp) + sizeof(tmp),
