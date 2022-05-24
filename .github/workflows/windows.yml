@@ -78,14 +78,18 @@ jobs:
           -B ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build
         if ($LASTEXITCODE -ne 0) { throw "Configuring OpenCL-Headers failed." }
         & cmake `
-          --install ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build `
-          --target ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install `
+          --build ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build `
           --config Release `
           -- `
           /verbosity:minimal `
           /maxCpuCount `
           /noLogo
-        if ($LASTEXITCODE -ne 0) { throw "Building/installing OpenCL-Headers failed." }
+        if ($LASTEXITCODE -ne 0) { throw "Building OpenCL-Headers failed." }
+        & cmake `
+          --install ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build `
+          --prefix ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install `
+          --config Release 
+        if ($LASTEXITCODE -ne 0) { throw "Installing OpenCL-Headers failed." }
 
     - name: Build & install OpenCL-Headers (Ninja Multi-Config)
       if: matrix.GEN == 'Ninja Multi-Config'
@@ -109,11 +113,17 @@ jobs:
           -B ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build
         if ($LASTEXITCODE -ne 0) { throw "Configuring OpenCL-Headers failed." }
         & cmake `
-          --install ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build `
-          --target ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install `
+          --build ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build `
           --config Release `
           -- `
           -j ${env:NUMBER_OF_PROCESSORS}
+        & cmake `
+          --install ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build `
+          --prefix ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install `
+          --config Release `
+          -- `
+          -j ${env:NUMBER_OF_PROCESSORS}
+          if ($LASTEXITCODE -ne 0) { throw "Installing OpenCL-Headers failed." }
 
     - name: Build & install OpenCL-ICD-Loader (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
@@ -134,14 +144,18 @@ jobs:
           -B ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build
         if ($LASTEXITCODE -ne 0) { throw "Configuring OpenCL-ICD-Loader failed." }
         & cmake `
-          --install ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build `
-          --prefix ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install `
+          --build ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build `
           --config Release `
           -- `
           /verbosity:minimal `
           /maxCpuCount `
           /noLogo
-        if ($LASTEXITCODE -ne 0) { throw "Building/installing OpenCL-ICD-Loader failed." }
+        if ($LASTEXITCODE -ne 0) { throw "Building OpenCL-ICD-Loader failed." }
+        & cmake `
+          --install ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build `
+          --prefix ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install `
+          --config Release
+        if ($LASTEXITCODE -ne 0) { throw "Installing OpenCL-ICD-Loader failed." }
 
     - name: Build & install OpenCL-ICD-Loader (Ninja Multi-Config)
       if: matrix.GEN == 'Ninja Multi-Config'
@@ -166,11 +180,16 @@ jobs:
           -B ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build
         if ($LASTEXITCODE -ne 0) { throw "Configuring OpenCL-ICD-Loader failed." }
         & cmake `
-          --install ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build `
-          --prefix ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install `
+          --build ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build `
           --config Release `
           -- `
           -j ${env:NUMBER_OF_PROCESSORS}
+        if ($LASTEXITCODE -ne 0) { throw "Building OpenCL-ICD-Loader failed." }
+        & cmake `
+          --install ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build `
+          --prefix ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install `
+          --config Release
+        if ($LASTEXITCODE -ne 0) { throw "Installing OpenCL-ICD-Loader failed." }
 
     - name: Configure (MSBuild)
       if: matrix.GEN == 'Visual Studio 17 2022'
