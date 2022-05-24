@@ -226,7 +226,7 @@ jobs:
         $CXX_FLAGS = '/W4 /WX /EHsc'
         & cmake `
           -G '${{matrix.GEN}}' `
-          -D CMAKE_MAKE_PROGRAM="${env:NINJA_EXE}" `
+          -D CMAKE_MAKE_PROGRAM="${env:NINJA_ROOT}\ninja.exe" `
           -D OPENCL_LAYERS_BUILD_TESTING=ON `
           -D BUILD_TESTING=ON `
           -D CMAKE_C_FLAGS="${C_FLAGS}" `
