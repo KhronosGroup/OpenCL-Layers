@@ -76,55 +76,69 @@ add_layer_test_exe (TestLeak              leak.cpp)
 add_layer_test_exe (TestNonExistant       non_existant.cpp)
 add_layer_test_exe (TestInvalidType       invalid_type.cpp)
 
-add_layer_test (TestBasicCounting 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/basic_counting.regex"
-)
-
-add_layer_test (TestLifetimeEdgeCases 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/lifetime_edge_cases.regex"
-)
-
-add_layer_test (TestSubBuffer 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/sub_buffer.regex"
-)
-
-add_layer_test (TestPipeline 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/pipeline.regex"
-)
-
-add_layer_test (TestCreateImage 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/create_image.regex"
-)
-
-add_layer_test (TestSubDevice 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/sub_device.regex"
-)
-
-add_layer_test (TestCL200Calls 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cl200_calls.regex"
-)
-
-add_layer_test (TestCloneKernel 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/clone_kernel.regex"
-)
-
-add_layer_test (TestCL300Calls 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cl300_calls.regex"
-)
-
-add_layer_test (TestResurrect 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/resurrect.regex"
-  ALLOW_USING_INACCESSIBLE_OBJECTS
-)
-
-add_layer_test (TestLeak 300
-  REGEX "${CMAKE_CURRENT_SOURCE_DIR}/leak.regex"
-)
-
-add_layer_test (TestNonExistant 300
-  REGEX "${CMAKE_CURRENT_LIST_DIR}/non_existant.regex"
-)
-
-add_layer_test (TestInvalidType 300
-  REGEX "${CMAKE_CURRENT_LIST_DIR}/invalid_type.regex"
-)
+foreach(VER 300 210 120)
+  if (NOT VER EQUAL 120)
+    set(IMPLICIT_COUNT_ARGS REPORT_IMPLICIT_REF_COUNT "")
+  else()
+    set(IMPLICIT_COUNT_ARGS "")
+  endif()
+  foreach(IMPLICIT_COUNT_ARG IN LISTS IMPLICIT_COUNT_ARGS)
+    add_layer_test (TestBasicCounting ${VER}
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/basic_counting.regex"
+      ${IMPLICIT_COUNT_ARG}
+    )
+    add_layer_test (TestSubBuffer ${VER}
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/sub_buffer.regex"
+      ${IMPLICIT_COUNT_ARG}
+    )
+    add_layer_test (TestPipeline ${VER}
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/pipeline.regex"
+      ${IMPLICIT_COUNT_ARG}
+    )
+    add_layer_test (TestCreateImage ${VER}
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/create_image.regex"
+      ${IMPLICIT_COUNT_ARG}
+    )
+    add_layer_test (TestSubDevice ${VER}
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/sub_device.regex"
+      ${IMPLICIT_COUNT_ARG}
+    )
+    add_layer_test (TestLeak ${VER}
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/leak.regex"
+      ${IMPLICIT_COUNT_ARG}
+    )
+    add_layer_test (TestNonExistant ${VER}
+      REGEX "${CMAKE_CURRENT_LIST_DIR}/non_existant.regex"
+      ${IMPLICIT_COUNT_ARG}
+    )
+    add_layer_test (TestInvalidType ${VER}
+      REGEX "${CMAKE_CURRENT_LIST_DIR}/invalid_type.regex"
+      ${IMPLICIT_COUNT_ARG}
+    )
+    add_layer_test (TestLifetimeEdgeCases ${VER}
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/lifetime_edge_cases.regex"
+      ${IMPLICIT_COUNT_ARG}
+    )
+    if(NOT VER EQUAL 120)
+      add_layer_test (TestCloneKernel ${VER}
+        REGEX "${CMAKE_CURRENT_SOURCE_DIR}/clone_kernel.regex"
+        ${IMPLICIT_COUNT_ARG}
+      )
+      add_layer_test (TestCL200Calls ${VER}
+        REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cl200_calls.regex"
+        ${IMPLICIT_COUNT_ARG}
+      )
+    endif()
+    if(NOT VER EQUAL 300)
+      add_layer_test (TestCL300Calls 300
+        REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cl300_calls.regex"
+        ${IMPLICIT_COUNT_ARG}
+      )
+      add_layer_test (TestResurrect 300
+        REGEX "${CMAKE_CURRENT_SOURCE_DIR}/resurrect.regex"
+        ${IMPLICIT_COUNT_ARG}
+        ALLOW_USING_INACCESSIBLE_OBJECTS
+      )
+    endif()
+  endforeach()
+endforeach()
