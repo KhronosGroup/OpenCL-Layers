@@ -299,7 +299,7 @@ jobs:
             & ctest `
               --test-dir ${env:GITHUB_WORKSPACE}\build `
               --build-config ${Config} `
-              --tests-regex $TestsRegex
+              --tests-regex $TestsRegex `
               --output-on-failure `
               --no-tests=error `
               --parallel ${env:NUMBER_OF_PROCESSORS}
@@ -310,7 +310,7 @@ jobs:
           & ctest `
             --test-dir ${env:GITHUB_WORKSPACE}\build `
             --build-config ${Config} `
-            --tests-regex SettingsLocation
+            --tests-regex SettingsLocation `
             --output-on-failure `
             --no-tests=error `
             --parallel ${env:NUMBER_OF_PROCESSORS}
