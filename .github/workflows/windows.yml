@@ -289,12 +289,12 @@ jobs:
           foreach ($Layer in 'PrintLayer','CLObjectLifetimeLayer') { `
             Write-Host "Running CTest on ${Config} for ${Layer}"
             $ICD = switch (${Layer}) { `
-              'PrintLayer'            {"${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build\${Config}\OpenCLDriverStub.dll"} `
+              'PrintLayer'            {""} `
               'CLObjectLifetimeLayer' {"${env:GITHUB_WORKSPACE}\build\bin\${Config}\CLObjectLifetimeICD.dll"} }
             $TestsRegex = switch (${Layer}) { `
               'PrintLayer'            {'PrintLayer'} `
               'CLObjectLifetimeLayer' {'ObjectLifetime'} }
-            Set-ItemProperty -Path ${ICD_REG_PATH}   -Type DWord -Value 0 -Name $ICD
+            if ($ICD) { Set-ItemProperty -Path ${ICD_REG_PATH}   -Type DWord -Value 0 -Name $ICD }
             Set-ItemProperty -Path ${LAYER_REG_PATH} -Type DWord -Value 0 -Name ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
             & ctest `
               --test-dir ${env:GITHUB_WORKSPACE}\build `
@@ -303,8 +303,8 @@ jobs:
               --output-on-failure `
               --no-tests=error `
               --parallel ${env:NUMBER_OF_PROCESSORS}
-            if ($LASTEXITCODE -ne 0) { throw "Testing OpenCL-ICD-Loader in ${Config} failed." }
-            Remove-ItemProperty -Path ${ICD_REG_PATH}   -Name $ICD
+            if ($LASTEXITCODE -ne 0) { throw "Testing ${Layer} in ${Config} failed." }
+            if ($ICD) { Remove-ItemProperty -Path ${ICD_REG_PATH} -Name $ICD }
             Remove-ItemProperty -Path ${LAYER_REG_PATH} -Name ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
           }
           & ctest `
