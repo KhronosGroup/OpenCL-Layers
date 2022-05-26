@@ -282,8 +282,8 @@ jobs:
         $LAYER_REG_PATH = if('${{matrix.BIN}}' -eq 'x86') { `
           'HKLM:\SOFTWARE\WOW6432Node\Khronos\OpenCL\Layers' } else { `
           'HKLM:\SOFTWARE\Khronos\OpenCL\Layers' }
-        New-Item -Type Directory ${ICD_REG_PATH}   -Force | Out-Null
-        New-Item -Type Directory ${LAYER_REG_PATH} -Force | Out-Null
+        New-Item -Type Directory ${ICD_REG_PATH}   -Force
+        New-Item -Type Directory ${LAYER_REG_PATH} -Force
         foreach ($Config in 'Release','Debug') { `
           Copy-Item "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll" "${env:GITHUB_WORKSPACE}\build\bin\${Config}\"
           foreach ($Layer in 'PrintLayer','CLObjectLifetimeLayer') { `
@@ -296,6 +296,8 @@ jobs:
               'CLObjectLifetimeLayer' {'ObjectLifetime'} }
             if ($ICD) { Set-ItemProperty -Path ${ICD_REG_PATH}   -Type DWord -Value 0 -Name $ICD }
             Set-ItemProperty -Path ${LAYER_REG_PATH} -Type DWord -Value 0 -Name ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
+            Test-Path $ICD
+            Test-Path ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
             & ctest `
               --test-dir ${env:GITHUB_WORKSPACE}\build `
               --build-config ${Config} `
