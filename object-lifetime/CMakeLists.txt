@@ -20,7 +20,9 @@ if (LAYERS_BUILD_TESTS)
         object_lifetime_test_icd.hpp
         object_lifetime_test_icd.cpp
         object_lifetime_test_icd_surface.cpp
-        $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:object_lifetime_test_icd.def>
+#       PLATFORM_ID taking a comma-separated list is CMake 3.15
+#       $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:object_lifetime_test_icd.def>
+        $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:object_lifetime_test_icd.def>
         $<$<CXX_COMPILER_ID:GNU>:object_lifetime_test_icd.map>
     )
     target_link_libraries (CLObjectLifetimeICD
