@@ -2,7 +2,7 @@ add_library (PrintLayer SHARED
     icd_print_layer.c
     icd_print_layer.h
     icd_print_layer_generated.c
-    $<$<CXX_COMPILER_ID:MSVC>:icd_print_layer.def>
+    $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:icd_print_layer.def>
     $<$<CXX_COMPILER_ID:GNU>:icd_print_layer.map>
 )
 
