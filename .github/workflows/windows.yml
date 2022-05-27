@@ -287,6 +287,7 @@ jobs:
           'HKLM:\SOFTWARE\Khronos\OpenCL\Layers' }
         foreach ($Config in 'Release','Debug') { `
           Copy-Item "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll" "${env:GITHUB_WORKSPACE}\build\bin\${Config}\"
+          Get-ChildItem ${env:GITHUB_WORKSPACE}\build\bin\${Config}
           foreach ($Layer in 'PrintLayer','CLObjectLifetimeLayer') { `
             Write-Host "Running CTest on ${Config} for ${Layer}"
             $ICD = switch (${Layer}) { `
@@ -298,7 +299,9 @@ jobs:
             if ($ICD) { & $REG ADD HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Vendors /v $ICD /t REG_DWORD /d 0 }
             & $REG ADD HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Layers /v ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll /t REG_DWORD /d 0
             & $REG QUERY HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Vendors
+            Test-Path $ICD
             & $REG QUERY HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Layers
+            Test-Path ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
             & ctest `
               --test-dir ${env:GITHUB_WORKSPACE}\build `
               --build-config ${Config} `
