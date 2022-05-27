@@ -34,7 +34,6 @@ function (add_layer_test TEST_EXE OPENCL_VERSION)
 
     if (ARG_TEST_IMPLICIT_REF_COUNT)
       list (APPEND TEST_ENVIRONMENT REPORT_IMPLICIT_REF_COUNT_TO_USER=1)
-      list (APPEND TEST_ENVIRONMENT ALLOW_USING_INACCESSIBLE_OBJECTS=1)
       list (APPEND TEST_INVOCATION --ref-count-includes-implicit)
       string (APPEND TEST_NAME "-ImplicitRefCount")
     endif ()

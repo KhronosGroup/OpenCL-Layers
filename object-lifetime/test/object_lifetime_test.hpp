@@ -11,10 +11,6 @@
 #include <cstring>
 
 namespace layer_test {
-  // Returns:
-  // -1 if lhs <  rhs
-  //  0 if lhs == rhs
-  //  1 if lhs >  rhs
   bool parseArgs(int argc, char* argv[]);
 
   void setup(int argc,
