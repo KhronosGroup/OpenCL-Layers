@@ -299,8 +299,8 @@ jobs:
               --no-tests=error `
               --parallel ${env:NUMBER_OF_PROCESSORS}
             if ($LASTEXITCODE -ne 0) { throw "Testing ${Layer} in ${Config} failed." }
-            if ($ICD) { Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Vendors -Name $ICD }
-            Remove-ItemProperty -Path HKLM:\SOFTWARE\Khronos\OpenCL\Layers -Name ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
+            if ($ICD) { & $REG DELETE HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Vendors /v $ICD }
+            & $REG DELETE HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Layers /v ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
           }
           & ctest `
             --test-dir ${env:GITHUB_WORKSPACE}\build `
