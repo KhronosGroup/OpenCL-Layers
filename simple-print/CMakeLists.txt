@@ -2,7 +2,9 @@ add_library (PrintLayer SHARED
     icd_print_layer.c
     icd_print_layer.h
     icd_print_layer_generated.c
-    $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:icd_print_layer.def>
+#   PLATFORM_ID taking a comma-separated list is CMake 3.15
+#   $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:icd_print_layer.def>
+$<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:icd_print_layer.def>
     $<$<CXX_COMPILER_ID:GNU>:icd_print_layer.map>
 )
 
