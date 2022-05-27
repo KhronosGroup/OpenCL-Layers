@@ -276,6 +276,31 @@ static cl_platform_id get_device_platform(cl_device_id device) {
   return platform;
 }
 
+// Compute a version for a particular object. The object does not need to be in the `objects` map yet
+// (but any parent does).
+template <object_type T>
+static cl_version derive_object_version(void *handle, void *parent) {
+  (void) handle;
+  if (parent)
+    return objects.at(parent).version;
+  return FALLBACK_VERSION;
+}
+
+template <>
+cl_version derive_object_version<OCL_DEVICE>(void *handle, void *parent) {
+  (void) parent;
+  cl_platform_id platform = get_device_platform((cl_device_id) handle);
+  if (!platform)
+    return FALLBACK_VERSION;
+  return get_platform_version(platform);
+}
+
+template <>
+cl_version derive_object_version<OCL_PLATFORM>(void *handle, void *parent) {
+  (void) parent;
+  return get_platform_version((cl_platform_id) handle);
+}
+
 static void notify_child_released(const trimmed__func__& func, void *parent) {
   // "Recursively" notify all parents if the refcount and the number of children becomes zero.
   // This signals that the object is no longer kept alive by any of its children.
@@ -502,7 +527,7 @@ static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *h
     }
   }
   // Parents should ultimately come from the same platform so it shouldn't matter which one we fetch the version from.
-  cl_version version = parents.size() > 0 ? objects.at(parents[0]).version : FALLBACK_VERSION;
+  cl_version version = derive_object_version<T>(handle, parents.size() > 0 ? parents[0] : nullptr);
   objects.insert({handle, object_record(T, version, 1, std::move(parents))});
   for (void* parent : objects.at(handle).parents) {
     reference_parent(parent);
@@ -518,8 +543,7 @@ cl_int check_creation_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *han
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
     delete_object_record(func, it);
   }
-  cl_platform_id platform = get_device_platform((cl_device_id) handle);
-  cl_version version = platform ? get_platform_version(platform) : FALLBACK_VERSION;
+  cl_version version = derive_object_version<OCL_DEVICE>(handle, nullptr);
   objects.insert({handle, object_record(OCL_DEVICE, version, 0)});
   return result;
 }
@@ -532,7 +556,7 @@ cl_int check_creation_no_lock<OCL_PLATFORM>(const trimmed__func__& func, void *h
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
     delete_object_record(func, it);
   }
-  cl_version version = get_platform_version((cl_platform_id) handle);
+  cl_version version = derive_object_version<OCL_PLATFORM>(handle, nullptr);
   objects.insert({handle, object_record(OCL_PLATFORM, version, 0)});
   return result;
 }
@@ -592,10 +616,18 @@ static cl_int check_creation_list(const trimmed__func__& func, cl_uint num_handl
 
 template <object_type T>
 static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
-                                  void *parent = nullptr) {
+                                  std::vector<void*>&& parents) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
-  cl_version version = parent ? objects.at(parent).version : FALLBACK_VERSION;
+
+  auto insert_handle = [&] {
+    cl_version version = derive_object_version<T>(handle, parents.size() > 0 ? parents[0] : nullptr);
+    objects.insert({handle, object_record(T, version, 0, std::move(parents))});
+    for (void* parent : objects.at(handle).parents) {
+      reference_parent(parent);
+    }
+  };
+
   auto it = objects.find(handle);
   if (it != objects.end()) {
     if (it->second.type != T) {
@@ -603,28 +635,35 @@ static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
         result = error_already_exist(func, handle, it->second.type, it->second.refcount);
         delete_object_record(func, it);
       }
-      objects.insert({handle, object_record(T, version, 0, parent)});
+      insert_handle();
     }
   } else {
-    objects.insert({handle, object_record(T, version, 0, parent)});
-  }
-  if(parent != nullptr) {
-    reference_parent(parent);
+    insert_handle();
   }
   return result;
 }
 
-#define CHECK_ADD_OR_EXISTS(type, handle, parent)                              \
+template <object_type T>
+static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
+                                  void *parent) {
+  if (parent) {
+    return check_add_or_exists<T>(func, handle, std::vector<void*>{parent});
+  } else {
+    return check_add_or_exists<T>(func, handle, std::vector<void*>{});
+  }
+}
+
+#define CHECK_ADD_OR_EXISTS(type, handle, parents)                             \
   do {                                                                         \
-    const cl_int _err = check_add_or_exists<type>(RTRIM_FUNC, handle, parent); \
+    const cl_int _err = check_add_or_exists<type>(RTRIM_FUNC, handle, parents);\
     if (_err != CL_SUCCESS) {                                                  \
       return _err;                                                             \
     }                                                                          \
   } while (false)
 
-#define CHECK_ADD_OR_EXISTS_ERRC(type, handle, parent, errc, return_type)      \
+#define CHECK_ADD_OR_EXISTS_ERRC(type, handle, parents, errc, return_type)     \
   do {                                                                         \
-    *errc = check_add_or_exists<type>(RTRIM_FUNC, handle, parent);             \
+    *errc = check_add_or_exists<type>(RTRIM_FUNC, handle, parents);            \
     if (*errc != CL_SUCCESS) {                                                 \
       return static_cast<return_type>(0);                                      \
     }                                                                          \
@@ -635,7 +674,7 @@ static cl_int check_create_or_exists(const trimmed__func__& func, void* handle,
                                      void *parent = nullptr) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
-  cl_version version = parent ? objects.at(parent).version : FALLBACK_VERSION;
+  cl_version version = derive_object_version<T>(handle, parent);
   auto it = objects.find(handle);
   if (it != objects.end()) {
     if (it->second.type != T) {
@@ -990,6 +1029,19 @@ static void* get_parent(cl_kernel kernel) {
   return NULL;
 }
 
+static void* get_parent(cl_program program) {
+  cl_context parent_context;
+  cl_int res = tdispatch->clGetProgramInfo(
+    program,
+    CL_PROGRAM_CONTEXT,
+    sizeof(parent_context), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
+    &parent_context, NULL);
+  if(res == CL_SUCCESS && parent_context != NULL) {
+    return parent_context;
+  }
+  return NULL;
+}
+
 static std::vector<void*> get_parent_devices(cl_context context) {
   size_t devices_size;
   cl_int res = tdispatch->clGetContextInfo(
@@ -1241,7 +1293,8 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetCommandQueueInfo_wrap(
       else
         CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev, NULL);
     } else if (param_name == CL_QUEUE_CONTEXT) {
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+      cl_context parent = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, parent, get_parent_devices(parent));
     }
   }
   return result;
@@ -1384,7 +1437,8 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetMemObjectInfo_wrap(
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
     if (param_name == CL_MEM_CONTEXT) {
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+      cl_context parent = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, parent, get_parent_devices(parent));
     } else if (param_name == CL_MEM_ASSOCIATED_MEMOBJECT && *(cl_mem *)param_value) {
       cl_mem_object_type t;
       cl_mem mem = *(cl_mem *)param_value;
@@ -1482,9 +1536,12 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetSamplerInfo_wrap(
     param_value_size,
     param_value,
     param_value_size_ret);
-  if (param_value && result == CL_SUCCESS)
-    if (param_name == CL_SAMPLER_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+  if (param_value && result == CL_SUCCESS) {
+    if (param_name == CL_SAMPLER_CONTEXT) {
+      cl_context context = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, context, get_parent_devices(context));
+    }
+  }
   return result;
 }
 
@@ -1584,8 +1641,10 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfo_wrap(
     param_value,
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
-    if (param_name == CL_PROGRAM_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+    if (param_name == CL_PROGRAM_CONTEXT) {
+      cl_context parent = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, parent, get_parent_devices(parent));
+    }
     if (param_name == CL_PROGRAM_DEVICES) {
       for (size_t i = 0; i < *param_value_size_ret/sizeof(cl_device_id); i++) {
         cl_device_id dev = ((cl_device_id *)param_value)[i];
@@ -1699,10 +1758,14 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetKernelInfo_wrap(
     param_value,
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
-    if (param_name == CL_KERNEL_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
-    if (param_name == CL_KERNEL_PROGRAM)
-      CHECK_ADD_OR_EXISTS(OCL_PROGRAM, *(cl_program *)param_value, NULL);
+    if (param_name == CL_KERNEL_CONTEXT) {
+      cl_context parent = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, parent, get_parent_devices(parent));
+    }
+    if (param_name == CL_KERNEL_PROGRAM) {
+      cl_program program = *(cl_program*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_PROGRAM, program, get_parent(program));
+    }
   }
   return result;
 }
@@ -1752,12 +1815,13 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetEventInfo_wrap(
     param_value,
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
-    if (param_name == CL_EVENT_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+    if (param_name == CL_EVENT_CONTEXT) {
+      cl_context parent = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, parent, get_parent_devices(parent));
+    }
     if (param_name == CL_EVENT_COMMAND_QUEUE && *(cl_command_queue *)param_value) {
       cl_command_queue queue = *(cl_command_queue *)param_value;
-      void* parent = get_parent(queue);
-      CHECK_ADD_OR_EXISTS(OCL_COMMAND_QUEUE, queue, parent);
+      CHECK_ADD_OR_EXISTS(OCL_COMMAND_QUEUE, queue, get_parent(queue));
     }
   }
   return result;
@@ -2478,7 +2542,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10BufferKHR_wrap(
     resource,
     errcode_ret);
   if (buffer)
-    CHECK_CREATION_ERRC(OCL_BUFFER, buffer, NULL, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_BUFFER, buffer, context, errcode_ret, cl_mem);
   return buffer;
 }
 
@@ -2497,7 +2561,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10Texture2DKHR_wrap(
     subresource,
     errcode_ret);
   if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, NULL, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, context, errcode_ret, cl_mem);
   return image;
 }
 
@@ -2516,7 +2580,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10Texture3DKHR_wrap(
     subresource,
     errcode_ret);
   if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, NULL, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, context, errcode_ret, cl_mem);
   return image;
 }
 
