@@ -7,11 +7,11 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        VER: [v142, v143, clangcl]
-        EXT: [ON, OFF]
+        VER: [v142] #, v143, clangcl]
+        EXT: [ON] #, OFF]
         GEN: [Visual Studio 17 2022]
         BIN: [x64, x86]
-        STD: [14, 17]
+        STD: [14] #, 17]
         include:
           - VER: v141
             EXT: OFF
@@ -276,6 +276,9 @@ jobs:
     - name: Test
       shell: pwsh
       run: |
+        $REG = if('${{matrix.BIN}}' -eq 'x86') { `
+          "${env:SystemRoot}\Syswow64\reg.exe" } else { `
+          'reg.exe' }
         $ICD_REG_PATH = if('${{matrix.BIN}}' -eq 'x86') { `
           'HKLM:\SOFTWARE\WOW6432Node\Khronos\OpenCL\Vendors' } else { `
           'HKLM:\SOFTWARE\Khronos\OpenCL\Vendors' }
@@ -294,8 +297,8 @@ jobs:
             $TestsRegex = switch (${Layer}) { `
               'PrintLayer'            {'PrintLayer'} `
               'CLObjectLifetimeLayer' {'ObjectLifetime'} }
-            if ($ICD) { Set-ItemProperty -Path ${ICD_REG_PATH}   -Type DWord -Value 0 -Name $ICD }
-            Set-ItemProperty -Path ${LAYER_REG_PATH} -Type DWord -Value 0 -Name ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
+            if ($ICD) { & $REG ADD HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Vendors /v $ICD /t REG_DWORD /d 0 }
+            & $REG ADD HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Layers /v ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll /t REG_DWORD /d 0
             Test-Path $ICD
             Test-Path ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
             & ctest `
