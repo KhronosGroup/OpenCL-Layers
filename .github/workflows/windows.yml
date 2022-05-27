@@ -297,6 +297,7 @@ jobs:
               'CLObjectLifetimeLayer' {'ObjectLifetime'} }
             if ($ICD) { & $REG ADD HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Vendors /v $ICD /t REG_DWORD /d 0 }
             & $REG ADD HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\OpenCL\Layers /v ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll /t REG_DWORD /d 0
+            Get-ChildItem HKLM:\SOFTWARE\Khronos\OpenCL
             & ctest `
               --test-dir ${env:GITHUB_WORKSPACE}\build `
               --build-config ${Config} `
