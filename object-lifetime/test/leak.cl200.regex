@@ -1,0 +1,5 @@
+In clGetMemObjectInfo MEM: [0-9a-fA-FxX]+ was used but it was recently deleted with type: BUFFER
+OpenCL object leaks:
+(EVENT \(([0-9a-fA-FxX]+)\) reference count: 1
+SAMPLER \(([0-9a-fA-FxX]+)\) reference count: 1|SAMPLER \(([0-9a-fA-FxX]+)\) reference count: 1
+EVENT \(([0-9a-fA-FxX]+)\) reference count: 1)

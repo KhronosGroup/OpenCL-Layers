@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <memory>
 #include <vector>
+#include <sstream>
 
 #include <sys/stat.h>
 
@@ -87,25 +88,29 @@ namespace {
 
 struct object_record {
   object_type        type;
+  cl_version         version;
   cl_long            refcount;
   std::vector<void*> parents = {};
   cl_long            num_children = 0;
 
-  object_record(object_type type, cl_long refcount)
+  object_record(object_type type, cl_version version, cl_long refcount)
     : type{type}
+    , version{version}
     , refcount{refcount}
   {
   }
 
-  object_record(object_type type, cl_long refcount, void* parent)
+  object_record(object_type type, cl_version version, cl_long refcount, void* parent)
     : type{type}
+    , version{version}
     , refcount{refcount}
     , parents{parent}
   {
   }
 
-  object_record(object_type type, cl_long refcount, std::vector<void*>&& parents)
+  object_record(object_type type, cl_version version, cl_long refcount, std::vector<void*>&& parents)
     : type{type}
+    , version{version}
     , refcount{refcount}
     , parents(std::move(parents))
   {
@@ -117,6 +122,11 @@ using object_record_map = std::map<void*, object_record>;
 object_record_map objects;
 std::map<void*, std::list<object_record>> deleted_objects;
 std::mutex objects_mutex;
+
+// This version is used for any object for which a proper version could not be inferred.
+// Note that OpenCL 2.0 is the most lenient regarding object lifetime, and allows using
+// objects as long as their internal reference count is larger than 0.
+constexpr const static cl_version FALLBACK_VERSION = CL_MAKE_VERSION(2, 0, 0);
 
 struct stream_deleter {
   void operator()(std::ostream *stream) noexcept {
@@ -156,6 +166,10 @@ layer_settings layer_settings::load() {
 }
 
 layer_settings settings;
+
+static struct _cl_icd_dispatch dispatch = {};
+
+static const struct _cl_icd_dispatch *tdispatch;
 }
 
 static cl_int error_already_exist(const trimmed__func__& func, void *handle, object_type t, cl_long ref_count) {
@@ -211,13 +225,55 @@ static cl_int error_invalid_release(const trimmed__func__& func, void *handle, o
   return settings.transparent ? CL_SUCCESS : object_errors[t];
 }
 
-static void warn_implicitly_retained(const trimmed__func__& func, void *handle, object_type t, cl_long num_children) {
+static cl_int error_implicitly_retained(const trimmed__func__& func, void *handle, object_type t, cl_long num_children) {
   *log_stream << "In " << func << " " <<
                object_type_names[t] <<
                ": " << handle <<
                " used with explicit refcount: 0 and implicit refcount: " <<
                num_children << "\n";
   log_stream->flush();
+  return settings.transparent ? CL_SUCCESS : object_errors[t];
+}
+
+static cl_version get_platform_version(cl_platform_id platform) {
+  size_t version_len;
+  cl_int res;
+  res = tdispatch->clGetPlatformInfo(platform, CL_PLATFORM_VERSION, 0, nullptr, &version_len);
+  if (res != CL_SUCCESS)
+    return FALLBACK_VERSION;
+
+  auto version_str = std::make_unique<char[]>(version_len);
+  res = tdispatch->clGetPlatformInfo(platform, CL_PLATFORM_VERSION, version_len, version_str.get(), nullptr);
+  if (res != CL_SUCCESS)
+    return FALLBACK_VERSION;
+
+  std::stringstream version;
+  version.write(version_str.get(), version_len);
+
+  std::string opencl;
+  cl_uint major, minor;
+  version >> opencl;
+  version >> major;
+  version.get();
+  version >> minor;
+
+  if (version.fail())
+    return FALLBACK_VERSION;
+
+  return CL_MAKE_VERSION(major, minor, 0);
+}
+
+static cl_platform_id get_device_platform(cl_device_id device) {
+  cl_platform_id platform;
+  cl_int res = tdispatch->clGetDeviceInfo(
+    device,
+    CL_DEVICE_PLATFORM,
+    sizeof(cl_platform_id),
+    &platform,
+    nullptr);
+  if (res != CL_SUCCESS)
+    return nullptr;
+  return platform;
 }
 
 static void notify_child_released(const trimmed__func__& func, void *parent) {
@@ -270,6 +326,20 @@ static cl_int release_object(const trimmed__func__& func, object_record_map::ite
   }
   return CL_SUCCESS;
 }
+
+// Check if using an object with only implicit references is fine.
+static cl_int can_use_inaccessible_object(object_record_map::iterator it, bool retain) {
+  cl_version version = it->second.version;
+  // https://github.com/KhronosGroup/OpenCL-Docs/issues/620
+  // In OpenCL 1.1 and 1.2, the object is "destroyed" when refcount hits 0, and so it cannot be
+  // used here.
+  // In OpenCL 2.0, the object is destroyed when the refcount and any internal lifetime tracking hits 0,
+  // so usage is fine at this point.
+  // In OpenCL 2.1, 2.2 and 3.0, the object is inaccessible when refcount hits 0 for all operations
+  // except retain, and so cannot be used here.
+  return !(version <= CL_MAKE_VERSION(1, 2, 0) || (version >= CL_MAKE_VERSION(2, 1, 0) && !retain));
+}
+
 template<object_type T>
 static inline cl_int check_exists_no_lock(const trimmed__func__& func, void *handle) {
   auto it = objects.find(handle);
@@ -281,7 +351,9 @@ static inline cl_int check_exists_no_lock(const trimmed__func__& func, void *han
     if(it->second.num_children <= 0) {
       return error_ref_count(func, handle, T, it->second.refcount);
     }
-    warn_implicitly_retained(func, handle, T, it->second.num_children);
+    if (!can_use_inaccessible_object(it, false)) {
+      return error_implicitly_retained(func, handle, T, it->second.num_children);
+    }
   }
   return CL_SUCCESS;
 }
@@ -313,10 +385,12 @@ cl_int check_exists_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handl
   } else if (it->second.type != OCL_DEVICE && it->second.type != OCL_SUB_DEVICE) {
     return error_invalid_type(func, handle, it->second.type, OCL_DEVICE);
   } else if (it->second.type == OCL_SUB_DEVICE && it->second.refcount <= 0) {
-    if(it->second.num_children <= 0) {
+    if (it->second.num_children <= 0) {
       return error_ref_count(func, handle, OCL_SUB_DEVICE, it->second.refcount);
     }
-    warn_implicitly_retained(func, handle, OCL_SUB_DEVICE, it->second.num_children);
+    if (!can_use_inaccessible_object(it, false)) {
+      return error_implicitly_retained(func, handle, OCL_SUB_DEVICE, it->second.num_children);
+    }
   }
   return CL_SUCCESS;
 }
@@ -336,7 +410,9 @@ cl_int check_exists_no_lock<OCL_MEM>(const trimmed__func__& func, void *handle) 
         if (it->second.num_children <= 0) {
           return error_ref_count(func, handle, t, it->second.refcount);
         }
-        warn_implicitly_retained(func, handle, t, it->second.num_children);
+        if (!can_use_inaccessible_object(it, false)) {
+          return error_implicitly_retained(func, handle, t, it->second.num_children);
+        }
       }
       break;
     default:
@@ -425,7 +501,9 @@ static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *h
       deleted_objects[handle].push_back(it->second);
     }
   }
-  objects.insert({handle, object_record(T, 1, std::move(parents))});
+  // Parents should ultimately come from the same platform so it shouldn't matter which one we fetch the version from.
+  cl_version version = parents.size() > 0 ? objects.at(parents[0]).version : FALLBACK_VERSION;
+  objects.insert({handle, object_record(T, version, 1, std::move(parents))});
   for (void* parent : objects.at(handle).parents) {
     reference_parent(parent);
   }
@@ -440,7 +518,9 @@ cl_int check_creation_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *han
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
     delete_object_record(func, it);
   }
-  objects.insert({handle, object_record(OCL_DEVICE, 0)});
+  cl_platform_id platform = get_device_platform((cl_device_id) handle);
+  cl_version version = platform ? get_platform_version(platform) : FALLBACK_VERSION;
+  objects.insert({handle, object_record(OCL_DEVICE, version, 0)});
   return result;
 }
 
@@ -452,7 +532,8 @@ cl_int check_creation_no_lock<OCL_PLATFORM>(const trimmed__func__& func, void *h
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
     delete_object_record(func, it);
   }
-  objects.insert({handle, object_record(OCL_PLATFORM, 0)});
+  cl_version version = get_platform_version((cl_platform_id) handle);
+  objects.insert({handle, object_record(OCL_PLATFORM, version, 0)});
   return result;
 }
 
@@ -514,6 +595,7 @@ static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
                                   void *parent = nullptr) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
+  cl_version version = parent ? objects.at(parent).version : FALLBACK_VERSION;
   auto it = objects.find(handle);
   if (it != objects.end()) {
     if (it->second.type != T) {
@@ -521,10 +603,10 @@ static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
         result = error_already_exist(func, handle, it->second.type, it->second.refcount);
         delete_object_record(func, it);
       }
-      objects.insert({handle, object_record(T, 0, parent)});
+      objects.insert({handle, object_record(T, version, 0, parent)});
     }
   } else {
-    objects.insert({handle, object_record(T, 0, parent)});
+    objects.insert({handle, object_record(T, version, 0, parent)});
   }
   if(parent != nullptr) {
     reference_parent(parent);
@@ -553,6 +635,7 @@ static cl_int check_create_or_exists(const trimmed__func__& func, void* handle,
                                      void *parent = nullptr) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
+  cl_version version = parent ? objects.at(parent).version : FALLBACK_VERSION;
   auto it = objects.find(handle);
   if (it != objects.end()) {
     if (it->second.type != T) {
@@ -560,13 +643,13 @@ static cl_int check_create_or_exists(const trimmed__func__& func, void* handle,
         result = error_already_exist(func, handle, it->second.type, it->second.refcount);
         delete_object_record(func, it);
       }
-      objects.insert({handle, object_record(T, 1, parent)});
+      objects.insert({handle, object_record(T, version, 1, parent)});
     } else {
       ++it->second.refcount;
       return result;
     }
   } else {
-    objects.insert({handle, object_record(T, 1, parent)});
+    objects.insert({handle, object_record(T, version, 1, parent)});
   }
   if(parent != nullptr) {
     reference_parent(parent);
@@ -650,14 +733,17 @@ static cl_int check_retain(const trimmed__func__& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, T);
-  } else {
-    object_type t = it->second.type;
-    if (t == T) {
-      it->second.refcount += 1;
-    } else {
-      return error_invalid_type(func, handle, t, T);
+  } else if (it->second.type != T) {
+    return error_invalid_type(func, handle, it->second.type, T);
+  } else if (it->second.refcount <= 0) {
+    if (it->second.num_children <= 0) {
+      return error_ref_count(func, handle, T, it->second.num_children);
+    }
+    if (!can_use_inaccessible_object(it, true)) {
+      return error_implicitly_retained(func, handle, T, it->second.num_children);
     }
   }
+  it->second.refcount += 1;
   return CL_SUCCESS;
 }
 
@@ -667,17 +753,18 @@ cl_int check_retain<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_DEVICE);
-  } else {
-    object_type t = it->second.type;
-    switch (t) {
-    case OCL_DEVICE:
-      break;
-    case OCL_SUB_DEVICE:
-      it->second.refcount += 1;
-      break;
-    default:
-      return error_invalid_type(func, handle, t, OCL_DEVICE);
+  } else if (it->second.type != OCL_DEVICE && it->second.type != OCL_SUB_DEVICE) {
+    return error_invalid_type(func, handle, it->second.type, OCL_DEVICE);
+  } else if (it->second.type == OCL_SUB_DEVICE && it->second.refcount <= 0) {
+    if (it->second.num_children <= 0) {
+      return error_ref_count(func, handle, OCL_SUB_DEVICE, it->second.refcount);
     }
+    if (!can_use_inaccessible_object(it, true)) {
+      return error_implicitly_retained(func, handle, OCL_SUB_DEVICE, it->second.num_children);
+    }
+  }
+  if (it->second.type == OCL_SUB_DEVICE) {
+      it->second.refcount += 1;
   }
   return CL_SUCCESS;
 }
@@ -694,6 +781,14 @@ cl_int check_retain<OCL_MEM>(const trimmed__func__& func, void *handle) {
     case OCL_BUFFER:
     case OCL_IMAGE:
     case OCL_PIPE:
+      if (it->second.refcount <= 0) {
+        if (it->second.num_children <= 0) {
+          return error_ref_count(func, handle, t, it->second.refcount);
+        }
+        if (!can_use_inaccessible_object(it, true)) {
+          return error_implicitly_retained(func, handle, t, it->second.num_children);
+        }
+      }
       it->second.refcount += 1;
       break;
     default:
@@ -730,10 +825,6 @@ static void report() {
       return _err;                                                             \
     }                                                                          \
   } while (false)
-
-static struct _cl_icd_dispatch dispatch = {};
-
-static const struct _cl_icd_dispatch *tdispatch;
 
   /* Layer API entry points */
 CL_API_ENTRY cl_int CL_API_CALL

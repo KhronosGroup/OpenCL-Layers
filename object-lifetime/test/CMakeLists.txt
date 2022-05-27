@@ -19,7 +19,7 @@ function (add_layer_test_exe NAME SOURCE)
 endfunction()
 
 function (add_layer_test TEST_EXE OPENCL_VERSION)
-    cmake_parse_arguments(PARSE_ARGV 2 ARG "REPORT_IMPLICIT_REF_COUNT;ALLOW_USING_RELEASED_OBJECTS;ALLOW_USING_INACCESSIBLE_OBJECTS" "REGEX" "")
+    cmake_parse_arguments(PARSE_ARGV 2 ARG "TEST_IMPLICIT_REF_COUNT;TEST_ALLOW_INACCESSIBLE;TEST_ALLOW_RELEASED" "REGEX" "")
 
     set (TEST_ENVIRONMENT
         OPENCL_LAYERS=$<TARGET_FILE:CLObjectLifetimeLayer>
@@ -32,21 +32,22 @@ function (add_layer_test TEST_EXE OPENCL_VERSION)
 
     set (TEST_INVOCATION $<TARGET_FILE:${TEST_EXE}>)
 
-    if (ARG_REPORT_IMPLICIT_REF_COUNT)
+    if (ARG_TEST_IMPLICIT_REF_COUNT)
       list (APPEND TEST_ENVIRONMENT REPORT_IMPLICIT_REF_COUNT_TO_USER=1)
-      list (APPEND TEST_INVOCATION --ref-count-includes-implicit)
-      string (APPEND TEST_NAME "-ReportImplicitRefCount")
-    endif ()
-    if (ARG_ALLOW_USING_RELEASED_OBJECTS)
-      list (APPEND TEST_ENVIRONMENT ALLOW_USING_RELEASED_OBJECTS=1)
-      list (APPEND TEST_INVOCATION --use-released-objects)
-      string (APPEND TEST_NAME "-AllowUsingReleasedObjects")
-    endif()
-    if (ARG_ALLOW_USING_INACCESSIBLE_OBJECTS)
       list (APPEND TEST_ENVIRONMENT ALLOW_USING_INACCESSIBLE_OBJECTS=1)
-      list (APPEND TEST_INVOCATION --use-inaccessible-objects)
-      string (APPEND TEST_NAME "-AllowUsingInaccessibleObjects")
-    endif()
+      list (APPEND TEST_INVOCATION --ref-count-includes-implicit)
+      string (APPEND TEST_NAME "-ImplicitRefCount")
+    endif ()
+
+    if (ARG_TEST_ALLOW_INACCESSIBLE)
+      list (APPEND TEST_ENVIRONMENT ALLOW_USING_INACCESSIBLE_OBJECTS=1)
+      string (APPEND TEST_NAME "-AllowInaccessible")
+    endif ()
+
+    if (ARG_TEST_ALLOW_RELEASED)
+      list (APPEND TEST_ENVIRONMENT ALLOW_USING_RELEASED_OBJECTS=1)
+      string (APPEND TEST_NAME "-AllowReleased")
+    endif ()
 
     set (TEST_LOG "${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}.log")
     list (APPEND TEST_ENVIRONMENT CL_OBJECT_LIFETIME_LOG_FILENAME=${TEST_LOG})
@@ -76,69 +77,82 @@ add_layer_test_exe (TestLeak              leak.cpp)
 add_layer_test_exe (TestNonExistant       non_existant.cpp)
 add_layer_test_exe (TestInvalidType       invalid_type.cpp)
 
-foreach(VER 300 210 120)
-  if (NOT VER EQUAL 120)
-    set(IMPLICIT_COUNT_ARGS REPORT_IMPLICIT_REF_COUNT "")
+function (add_layer_tests OPENCL_VERSION TEST_ARGS)
+  if (OPENCL_VERSION EQUAL 200)
+    set(SPECIFIC_REGEX_EXT "cl200.regex")
   else()
-    set(IMPLICIT_COUNT_ARGS "")
+    set(SPECIFIC_REGEX_EXT "regex")
   endif()
-  foreach(IMPLICIT_COUNT_ARG IN LISTS IMPLICIT_COUNT_ARGS)
-    add_layer_test (TestBasicCounting ${VER}
-      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/basic_counting.regex"
-      ${IMPLICIT_COUNT_ARG}
+
+  add_layer_test (TestBasicCounting ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_SOURCE_DIR}/basic_counting.regex"
+    ${TEST_ARGS}
+  )
+  add_layer_test (TestSubBuffer ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_SOURCE_DIR}/sub_buffer.${SPECIFIC_REGEX_EXT}"
+    ${TEST_ARGS}
+  )
+  add_layer_test (TestPipeline ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_SOURCE_DIR}/pipeline.${SPECIFIC_REGEX_EXT}"
+    ${TEST_ARGS}
+  )
+  add_layer_test (TestCreateImage ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_SOURCE_DIR}/create_image.regex"
+    ${TEST_ARGS}
+  )
+  add_layer_test (TestSubDevice ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_SOURCE_DIR}/sub_device.${SPECIFIC_REGEX_EXT}"
+    ${TEST_ARGS}
+  )
+  add_layer_test (TestLeak ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_SOURCE_DIR}/leak.${SPECIFIC_REGEX_EXT}"
+    ${TEST_ARGS}
+  )
+  add_layer_test (TestNonExistant ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_LIST_DIR}/non_existant.regex"
+    ${TEST_ARGS}
+  )
+  add_layer_test (TestInvalidType ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_LIST_DIR}/invalid_type.regex"
+    ${TEST_ARGS}
+  )
+  add_layer_test (TestLifetimeEdgeCases ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_SOURCE_DIR}/lifetime_edge_cases.${SPECIFIC_REGEX_EXT}"
+    ${TEST_ARGS}
+  )
+  if(OPENCL_VERSION GREATER_EQUAL 200)
+    add_layer_test (TestCL200Calls ${OPENCL_VERSION}
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cl200_calls.regex"
+      ${TEST_ARGS}
     )
-    add_layer_test (TestSubBuffer ${VER}
-      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/sub_buffer.regex"
-      ${IMPLICIT_COUNT_ARG}
+  endif()
+  if(OPENCL_VERSION GREATER_EQUAL 210)
+    add_layer_test (TestCloneKernel ${OPENCL_VERSION}
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/clone_kernel.${SPECIFIC_REGEX_EXT}"
+      ${TEST_ARGS}
     )
-    add_layer_test (TestPipeline ${VER}
-      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/pipeline.regex"
-      ${IMPLICIT_COUNT_ARG}
+    add_layer_test (TestCL300Calls 300
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cl300_calls.regex"
+      ${TEST_ARGS}
     )
-    add_layer_test (TestCreateImage ${VER}
-      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/create_image.regex"
-      ${IMPLICIT_COUNT_ARG}
+    add_layer_test (TestResurrect 300
+      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/resurrect.regex"
+      ${TEST_ARGS} TEST_ALLOW_INACCESSIBLE
     )
-    add_layer_test (TestSubDevice ${VER}
-      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/sub_device.regex"
-      ${IMPLICIT_COUNT_ARG}
-    )
-    add_layer_test (TestLeak ${VER}
-      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/leak.regex"
-      ${IMPLICIT_COUNT_ARG}
-    )
-    add_layer_test (TestNonExistant ${VER}
-      REGEX "${CMAKE_CURRENT_LIST_DIR}/non_existant.regex"
-      ${IMPLICIT_COUNT_ARG}
-    )
-    add_layer_test (TestInvalidType ${VER}
-      REGEX "${CMAKE_CURRENT_LIST_DIR}/invalid_type.regex"
-      ${IMPLICIT_COUNT_ARG}
-    )
-    add_layer_test (TestLifetimeEdgeCases ${VER}
-      REGEX "${CMAKE_CURRENT_SOURCE_DIR}/lifetime_edge_cases.regex"
-      ${IMPLICIT_COUNT_ARG}
-    )
-    if(NOT VER EQUAL 120)
-      add_layer_test (TestCloneKernel ${VER}
-        REGEX "${CMAKE_CURRENT_SOURCE_DIR}/clone_kernel.regex"
-        ${IMPLICIT_COUNT_ARG}
-      )
-      add_layer_test (TestCL200Calls ${VER}
-        REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cl200_calls.regex"
-        ${IMPLICIT_COUNT_ARG}
-      )
-    endif()
-    if(NOT VER EQUAL 300)
-      add_layer_test (TestCL300Calls 300
-        REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cl300_calls.regex"
-        ${IMPLICIT_COUNT_ARG}
-      )
-      add_layer_test (TestResurrect 300
-        REGEX "${CMAKE_CURRENT_SOURCE_DIR}/resurrect.regex"
-        ${IMPLICIT_COUNT_ARG}
-        ALLOW_USING_INACCESSIBLE_OBJECTS
-      )
-    endif()
-  endforeach()
-endforeach()
+  endif()
+endfunction ()
+
+# Note, opencl 1.x tests do not support reporting implicit ref count
+add_layer_tests(120 "")
+add_layer_tests(120 "TEST_ALLOW_RELEASED")
+
+# Note, opencl 2.0 tests require allowing released objects as querying the refcount of
+# objects which are being kept alive only by its children should return a refcount of 0
+# and not return CL_INVALID.
+add_layer_tests(200 "TEST_ALLOW_RELEASED")
+add_layer_tests(200 "TEST_IMPLICIT_REF_COUNT;TEST_ALLOW_RELEASED")
+
+add_layer_tests(300 "")
+add_layer_tests(300 "TEST_IMPLICIT_REF_COUNT")
+add_layer_tests(300 "TEST_ALLOW_RELEASED")
+add_layer_tests(300 "TEST_IMPLICIT_REF_COUNT;TEST_ALLOW_RELEASED")

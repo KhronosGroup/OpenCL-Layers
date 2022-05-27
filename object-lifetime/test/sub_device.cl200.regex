@@ -1,0 +1,9 @@
+In clGetDeviceInfo DEVICE: [0-9a-fA-FxX]+ was used but it was recently deleted with type: SUB_DEVICE
+In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ was used but it was recently deleted with type: CONTEXT
+In clGetDeviceInfo DEVICE: [0-9a-fA-FxX]+ was used but it was recently deleted with type: SUB_DEVICE
+In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ was used but it was recently deleted with type: CONTEXT
+In clGetDeviceInfo DEVICE: [0-9a-fA-FxX]+ was used but it was recently deleted with type: SUB_DEVICE
+In clGetDeviceInfo DEVICE: [0-9a-fA-FxX]+ was used but it was recently deleted with type: SUB_DEVICE
+In clGetDeviceInfo DEVICE: [0-9a-fA-FxX]+ was used but it was recently deleted with type: SUB_DEVICE
+In clGetDeviceInfo DEVICE: [0-9a-fA-FxX]+ was used but it was recently deleted with type: SUB_DEVICE
+In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ was used but it was recently deleted with type: CONTEXT

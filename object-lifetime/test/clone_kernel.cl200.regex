@@ -1,0 +1,4 @@
+In clGetKernelInfo KERNEL: [0-9a-fA-FxX]+ was used but it was recently deleted with type: KERNEL
+In clGetKernelInfo KERNEL: [0-9a-fA-FxX]+ was used but it was recently deleted with type: KERNEL
+In clGetProgramInfo PROGRAM: [0-9a-fA-FxX]+ was used but it was recently deleted with type: PROGRAM
+In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ was used but it was recently deleted with type: CONTEXT

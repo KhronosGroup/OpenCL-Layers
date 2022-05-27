@@ -176,18 +176,12 @@ namespace layer_test {
     if (expected_explicit_count == 0) {
       // If the expected explicit ref count is zero:
       // In OpenCL 1, the object is deallocated and so we should get CL_INVALID.
-      // - If use_released_objects is true, we expect a refcount of zero and CL_SUCCESS.
-      // - use_inaccessible_objects does not apply.
+      // - if ref_count_includes_implicit, it is deallocated when the total refcount hits zero.
       // In OpenCL 2:
       // - If the object still has implicit references, we expect CL_SUCCESS.
-      //   - use_released_objects and use_inaccessible_objects do not apply.
-      // - Otherwise:
-      //   - if use_release_objects is true, we expect CL_SUCCESS and zero references.
-      //   - Else, CL_INVALID.
-      // - use_inaccessible_objects does not apply.
+      // - Otherwise, CL_INVALID.
       // In OpenCL 3, the object may have implicit references, but it is inaccessible and so we should get CL_INVALID.
-      // - If the implicit reference count is zero and use_release_objects is true, we expect CL_SUCCESS and zero references.
-      // - Otherwise if implicit reference count is nonzero and use_inaccessible_objects is true, we expect CL_SUCCESS.
+      // - If implicit reference count is nonzero and use_inaccessible_objects is true, we expect CL_SUCCESS.
       // - Otherwise we expect CL_INVALID.
 
       if (TEST_CONTEXT.version >= CL_MAKE_VERSION(1, 1, 0) && TEST_CONTEXT.version <= CL_MAKE_VERSION(1, 2, 0)) {
@@ -199,6 +193,8 @@ namespace layer_test {
       } else if (TEST_CONTEXT.version == CL_MAKE_VERSION(2, 0, 0)) {
         if (expected_implicit_count > 0 && TEST_CONTEXT.ref_count_includes_implicit) {
           expect_not_destroyed(expected_implicit_count);
+        } else if (expected_implicit_count > 0) {
+          expect_not_destroyed(0);
         } else {
           expect_destroyed();
         }
