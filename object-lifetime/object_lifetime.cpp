@@ -457,8 +457,9 @@ cl_int check_exists_no_lock<OCL_MEM>(const trimmed__func__& func, void *handle) 
 
 #define CHECK_EXISTS_ERRC(type, handle, errc, return_type)                     \
   do {                                                                         \
-    *errc = check_exists<type>(RTRIM_FUNC, handle);                            \
-    if (*errc != CL_SUCCESS) {                                                 \
+    cl_int _errc = check_exists<type>(RTRIM_FUNC, handle);                     \
+    if (_errc != CL_SUCCESS) {                                                 \
+      if (errc != nullptr) *errc = _errc;                                      \
       return static_cast<return_type>(0);                                      \
     }                                                                          \
   } while (false)
@@ -585,8 +586,9 @@ static cl_int check_creation(const trimmed__func__& func, void* handle, void* pa
 
 #define CHECK_CREATION_ERRC(type, handle, parent, errc, return_type)           \
   do {                                                                         \
-    *errc = check_creation<type>(RTRIM_FUNC, handle, parent);                  \
-    if (*errc != CL_SUCCESS) {                                                 \
+    cl_int _errc = check_creation<type>(RTRIM_FUNC, handle, parent);           \
+    if (_errc != CL_SUCCESS) {                                                 \
+      if (errc != nullptr) *errc = _errc;                                      \
       return static_cast<return_type>(0);                                      \
     }                                                                          \
   } while (false)
