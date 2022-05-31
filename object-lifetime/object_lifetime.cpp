@@ -1,3 +1,7 @@
+#ifdef _WIN32
+#define NOMINMAX
+#endif
+
 #include "utils.hpp"
 
 #include <cstdlib>
@@ -2499,7 +2503,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetGLContextInfoKHR_wrap(
     if (param_name == CL_CURRENT_DEVICE_FOR_GL_CONTEXT_KHR && param_value_size_ret != 0)
       CHECK_CREATION(OCL_DEVICE, *(cl_device_id *)param_value, NULL);
     if (param_name == CL_DEVICES_FOR_GL_CONTEXT_KHR) {
-      cl_uint actual_num_devices = std::min(*param_value_size_ret, param_value_size) / sizeof(cl_device_id);
+      cl_uint actual_num_devices = static_cast<cl_uint>(std::min(*param_value_size_ret, param_value_size) / sizeof(cl_device_id));
       if (actual_num_devices > 0)
         CHECK_CREATION_LIST(OCL_DEVICE, actual_num_devices, param_value, NULL);
     }
@@ -3221,7 +3225,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromD3D11KHR_wrap(
     num_entries,
     devices,
     num_devices);
-  cl_uint actual_num_entries = std::min(*num_devices_ret, num_devices);
+  cl_uint actual_num_entries = std::min(*num_devices, num_entries);
   if (devices && result == CL_SUCCESS && actual_num_entries > 0)
     CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
@@ -3374,7 +3378,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromDX9MediaAdapterKHR_wrap
     num_entries,
     devices,
     num_devices);
-  cl_uint actual_num_entries = std::min(*num_devices, num_enties);
+  cl_uint actual_num_entries = std::min(*num_devices, num_entries);
   if (devices && result == CL_SUCCESS && actual_num_entries > 0)
     CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
