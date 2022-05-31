@@ -1083,8 +1083,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetPlatformIDs_wrap(
     num_entries,
     platforms,
     num_platforms);
-  if (platforms && result == CL_SUCCESS && *num_platforms > 0)
-    CHECK_CREATION_LIST(OCL_PLATFORM, *num_platforms, platforms, NULL);
+  cl_uint actual_num_entries = std::min(*num_platforms, num_entries);
+  if (platforms && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_PLATFORM, actual_num_entries, platforms, NULL);
   return result;
 }
 
@@ -1123,8 +1124,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDs_wrap(
     num_entries,
     devices,
     num_devices);
-  if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
+  cl_uint actual_num_entries = std::min(*num_devices, num_entries);
+  if (devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
 }
 
@@ -1712,8 +1714,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgram_wrap(
     num_kernels,
     kernels,
     num_kernels_ret);
+  cl_uint actual_num_entries = std::min(*num_kernels_ret, num_kernels);
   if (kernels && result == CL_SUCCESS && *num_kernels_ret > 0)
-    CHECK_CREATION_LIST(OCL_KERNEL, *num_kernels_ret, kernels, program);
+    CHECK_CREATION_LIST(OCL_KERNEL, actual_num_entries, kernels, program);
   return result;
 }
 
@@ -2495,8 +2498,11 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetGLContextInfoKHR_wrap(
   if (result == CL_SUCCESS && param_value) {
     if (param_name == CL_CURRENT_DEVICE_FOR_GL_CONTEXT_KHR && param_value_size_ret != 0)
       CHECK_CREATION(OCL_DEVICE, *(cl_device_id *)param_value, NULL);
-    if (param_name == CL_DEVICES_FOR_GL_CONTEXT_KHR)
-      CHECK_CREATION_LIST(OCL_DEVICE, (cl_uint)(*param_value_size_ret/sizeof(cl_device_id)), param_value, NULL);
+    if (param_name == CL_DEVICES_FOR_GL_CONTEXT_KHR) {
+      cl_uint actual_num_devices = std::min(*param_value_size_ret, param_value_size) / sizeof(cl_device_id);
+      if (actual_num_devices > 0)
+        CHECK_CREATION_LIST(OCL_DEVICE, actual_num_devices, param_value, NULL);
+    }
   }
   return result;
 }
@@ -2526,8 +2532,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromD3D10KHR_wrap(
     num_entries,
     devices,
     num_devices);
-  if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
+  cl_uint actual_num_entries = std::min(*num_devices, num_entries);
+  if (devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
 }
 
@@ -2840,8 +2847,9 @@ clCreateSubDevicesEXT_wrap(
     num_entries,
     out_devices,
     num_devices);
-  if (out_devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices, out_devices, in_device);
+  cl_uint actual_num_entries = std::min(*num_devices, num_entries);
+  if (out_devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_SUB_DEVICE, actual_num_entries, out_devices, in_device);
   return result;
 }
 
@@ -2896,9 +2904,9 @@ clCreateSubDevices_wrap(
     num_devices,
     out_devices,
     num_devices_ret);
-
-  if (out_devices && result == CL_SUCCESS && *num_devices_ret > 0)
-    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices_ret, out_devices, in_device);
+  cl_uint actual_num_entries = std::min(*num_devices_ret, num_devices);
+  if (out_devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_SUB_DEVICE, actual_num_entries, out_devices, in_device);
   return result;
 }
 
@@ -3213,8 +3221,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromD3D11KHR_wrap(
     num_entries,
     devices,
     num_devices);
-  if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
+  cl_uint actual_num_entries = std::min(*num_devices_ret, num_devices);
+  if (devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
 }
 
@@ -3365,8 +3374,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromDX9MediaAdapterKHR_wrap
     num_entries,
     devices,
     num_devices);
-  if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
+  cl_uint actual_num_entries = std::min(*num_devices, num_enties);
+  if (devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
 }
 
