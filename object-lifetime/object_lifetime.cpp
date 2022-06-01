@@ -598,11 +598,11 @@ static cl_int check_creation(const trimmed__func__& func, void* handle, void* pa
   } while (false)
 
 template <object_type T>
-static cl_int check_creation_list(const trimmed__func__& func, cl_uint num_handles,
+static cl_int check_creation_list(const trimmed__func__& func, size_t num_handles,
                                   void **handles, void *parent = nullptr) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
-  for (cl_uint i = 0; i < num_handles; i++) {
+  for (size_t i = 0; i < num_handles; i++) {
     const cl_int error = check_creation_no_lock<T>(func, handles[i], std::vector<void*>{parent});
     if(error != CL_SUCCESS && result == CL_SUCCESS) {
       result = error;
@@ -1718,9 +1718,8 @@ static CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgram_wrap(
     num_kernels,
     kernels,
     num_kernels_ret);
-  cl_uint actual_num_entries = std::min(*num_kernels_ret, num_kernels);
   if (kernels && result == CL_SUCCESS && *num_kernels_ret > 0)
-    CHECK_CREATION_LIST(OCL_KERNEL, actual_num_entries, kernels, program);
+    CHECK_CREATION_LIST(OCL_KERNEL, *num_kernels_ret, kernels, program);
   return result;
 }
 
@@ -2502,11 +2501,8 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetGLContextInfoKHR_wrap(
   if (result == CL_SUCCESS && param_value) {
     if (param_name == CL_CURRENT_DEVICE_FOR_GL_CONTEXT_KHR && param_value_size_ret != 0)
       CHECK_CREATION(OCL_DEVICE, *(cl_device_id *)param_value, NULL);
-    if (param_name == CL_DEVICES_FOR_GL_CONTEXT_KHR) {
-      cl_uint actual_num_devices = static_cast<cl_uint>(std::min(*param_value_size_ret, param_value_size) / sizeof(cl_device_id));
-      if (actual_num_devices > 0)
-        CHECK_CREATION_LIST(OCL_DEVICE, actual_num_devices, param_value, NULL);
-    }
+    if (param_name == CL_DEVICES_FOR_GL_CONTEXT_KHR && *param_value_size_ret > 0)
+      CHECK_CREATION_LIST(OCL_DEVICE, *param_value_size_ret / sizeof(cl_device_id), param_value, NULL);
   }
   return result;
 }
@@ -2537,7 +2533,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromD3D10KHR_wrap(
     devices,
     num_devices);
   cl_uint actual_num_entries = std::min(*num_devices, num_entries);
-  if (devices && result == CL_SUCCESS && actual_num_entries > 0)
+ if (devices && result == CL_SUCCESS && actual_num_entries > 0)
     CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
 }
@@ -2908,9 +2904,8 @@ clCreateSubDevices_wrap(
     num_devices,
     out_devices,
     num_devices_ret);
-  cl_uint actual_num_entries = std::min(*num_devices_ret, num_devices);
-  if (out_devices && result == CL_SUCCESS && actual_num_entries > 0)
-    CHECK_CREATION_LIST(OCL_SUB_DEVICE, actual_num_entries, out_devices, in_device);
+  if (out_devices && result == CL_SUCCESS && *num_devices_ret > 0)
+    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices_ret, out_devices, in_device);
   return result;
 }
 
