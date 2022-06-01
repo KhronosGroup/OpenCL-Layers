@@ -23,9 +23,9 @@ int main(int argc, char *argv[]) {
 
 
   EXPECT_SUCCESS(clReleaseMemObject(buffer));
-  EXPECT_DESTROYED(buffer);
+  EXPECT_DESTROYED(buffer); // recently deleted with type: BUFFER
 
-  EXPECT_SUCCESS(clReleaseContext(context)); // recently deleted with type: BUFFER
+  EXPECT_SUCCESS(clReleaseContext(context));
   EXPECT_DESTROYED(context); // recently deleted with type: CONTEXT
 
   return layer_test::finalize();
