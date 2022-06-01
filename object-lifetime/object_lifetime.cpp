@@ -6,7 +6,6 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <cassert>
 #include <CL/cl_layer.h>
 #include <mutex>
 #include <tuple>
@@ -280,18 +279,36 @@ static cl_platform_id get_device_platform(cl_device_id device) {
   return platform;
 }
 
+// Fetch the record for an object, and print an error if its not there.
+static object_record_map::iterator find_object_handle(const trimmed__func__& func, void *handle) {
+  auto it = objects.find(handle);
+  if (it == objects.end()) {
+    *log_stream << "In " << func << ": object "
+                << handle
+                << "does not exist. This is likely a bug in the object_lifetime layer.\n";
+    log_stream->flush();
+    return objects.end();
+  }
+  return it;
+}
+
 // Compute a version for a particular object. The object does not need to be in the `objects` map yet
 // (but any parent does).
 template <object_type T>
-static cl_version derive_object_version(void *handle, void *parent) {
+static cl_version derive_object_version(const trimmed__func__& func, void *handle, void *parent) {
   (void) handle;
-  if (parent)
-    return objects.at(parent).version;
+  if (parent) {
+    auto it = find_object_handle(func, parent);
+    if (it != objects.end()) {
+      return it->second.version;
+    }
+  }
   return FALLBACK_VERSION;
 }
 
 template <>
-cl_version derive_object_version<OCL_DEVICE>(void *handle, void *parent) {
+cl_version derive_object_version<OCL_DEVICE>(const trimmed__func__& func, void *handle, void *parent) {
+  (void) func;
   (void) parent;
   cl_platform_id platform = get_device_platform((cl_device_id) handle);
   if (!platform)
@@ -300,7 +317,8 @@ cl_version derive_object_version<OCL_DEVICE>(void *handle, void *parent) {
 }
 
 template <>
-cl_version derive_object_version<OCL_PLATFORM>(void *handle, void *parent) {
+cl_version derive_object_version<OCL_PLATFORM>(const trimmed__func__& func, void *handle, void *parent) {
+  (void) func;
   (void) parent;
   return get_platform_version((cl_platform_id) handle);
 }
@@ -308,8 +326,9 @@ cl_version derive_object_version<OCL_PLATFORM>(void *handle, void *parent) {
 static void notify_child_released(const trimmed__func__& func, void *parent) {
   // "Recursively" notify all parents if the refcount and the number of children becomes zero.
   // This signals that the object is no longer kept alive by any of its children.
-  auto it = objects.find(parent);
-  assert(it != objects.end());
+  auto it = find_object_handle(func, parent);
+  if (it == objects.end())
+    return;
 
   switch (it->second.type) {
     case OCL_PLATFORM:
@@ -328,7 +347,7 @@ static void notify_child_released(const trimmed__func__& func, void *parent) {
     }
   } else if (it->second.num_children < 0) {
     *log_stream << "In " << func << " "
-                << object_type_names[objects.at(parent).type] << ": " << parent
+                << object_type_names[it->second.type] << ": " << parent
                 << " has negative number of children. This is likely a bug in "
                    "the object_lifetime layer.\n";
     log_stream->flush();
@@ -344,7 +363,6 @@ static void delete_object_record(const trimmed__func__& func, object_record_map:
 }
 
 static cl_int release_object(const trimmed__func__& func, object_record_map::iterator it, object_type t) {
-  assert(it != objects.end());
   if (it->second.refcount <= 0) {
     return error_invalid_release(func, it->first, t);
   }
@@ -507,9 +525,10 @@ static cl_int check_exist_list(const trimmed__func__& func, cl_uint num_handles,
     }                                                                          \
   } while (false)
 
-static void reference_parent(void *parent) {
-  auto it = objects.find(parent);
-  assert(it != objects.end());
+static void reference_parent(const trimmed__func__& func, void *parent) {
+  auto it = find_object_handle(func, parent);
+  if (it == objects.end())
+    return;
 
   switch (it->second.type) {
     case OCL_PLATFORM:
@@ -528,41 +547,55 @@ static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *h
   if (it != objects.end()) {
     if (it->second.refcount > 0) {
       result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-      deleted_objects[handle].push_back(it->second);
+      delete_object_record(func, it);
     }
   }
   // Parents should ultimately come from the same platform so it shouldn't matter which one we fetch the version from.
-  cl_version version = derive_object_version<T>(handle, parents.size() > 0 ? parents[0] : nullptr);
-  objects.insert({handle, object_record(T, version, 1, std::move(parents))});
-  for (void* parent : objects.at(handle).parents) {
-    reference_parent(parent);
+  cl_version version = derive_object_version<T>(func, handle, parents.size() > 0 ? parents[0] : nullptr);
+  auto insert_result = objects.insert({handle, object_record(T, version, 1, std::move(parents))});
+  for (void* parent : insert_result.first->second.parents) {
+    reference_parent(func, parent);
   }
   return result;
 }
 
 template<>
 cl_int check_creation_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handle, std::vector<void*>&&) {
+  auto insert_handle = [&] {
+    cl_version version = derive_object_version<OCL_DEVICE>(func, handle, nullptr);
+    objects.insert({handle, object_record(OCL_DEVICE, version, 0)});
+  };
+
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
-  if (it != objects.end() && it->second.type != OCL_DEVICE) {
+  if (it == objects.end()) {
+    insert_handle();
+  } else if (it->second.type != OCL_DEVICE) {
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
     delete_object_record(func, it);
+    insert_handle();
   }
-  cl_version version = derive_object_version<OCL_DEVICE>(handle, nullptr);
-  objects.insert({handle, object_record(OCL_DEVICE, version, 0)});
+
   return result;
 }
 
 template<>
 cl_int check_creation_no_lock<OCL_PLATFORM>(const trimmed__func__& func, void *handle, std::vector<void*>&&) {
+  auto insert_handle = [&] {
+    cl_version version = derive_object_version<OCL_PLATFORM>(func, handle, nullptr);
+    objects.insert({handle, object_record(OCL_PLATFORM, version, 0)});
+  };
+
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
-  if (it != objects.end() && it->second.type != OCL_PLATFORM) {
+  if (it == objects.end()) {
+    insert_handle();
+  } else if (it->second.type != OCL_PLATFORM) {
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
     delete_object_record(func, it);
+    insert_handle();
   }
-  cl_version version = derive_object_version<OCL_PLATFORM>(handle, nullptr);
-  objects.insert({handle, object_record(OCL_PLATFORM, version, 0)});
+
   return result;
 }
 
@@ -623,29 +656,26 @@ static cl_int check_creation_list(const trimmed__func__& func, size_t num_handle
 template <object_type T>
 static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
                                   std::vector<void*>&& parents) {
-  cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
 
   auto insert_handle = [&] {
-    cl_version version = derive_object_version<T>(handle, parents.size() > 0 ? parents[0] : nullptr);
-    objects.insert({handle, object_record(T, version, 0, std::move(parents))});
-    for (void* parent : objects.at(handle).parents) {
-      reference_parent(parent);
+    cl_version version = derive_object_version<T>(func, handle, parents.size() > 0 ? parents[0] : nullptr);
+    auto insert_result = objects.insert({handle, object_record(T, version, 0, std::move(parents))});
+    for (void* parent : insert_result.first->second.parents) {
+      reference_parent(func, parent);
     }
   };
 
+  cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
-  if (it != objects.end()) {
-    if (it->second.type != T) {
-      if (it->second.refcount > 0) {
-        result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-        delete_object_record(func, it);
-      }
-      insert_handle();
-    }
-  } else {
+  if (it == objects.end()) {
+    insert_handle();
+  } else if (it->second.type != T) {
+    result = error_already_exist(func, handle, it->second.type, it->second.refcount);
+    delete_object_record(func, it);
     insert_handle();
   }
+
   return result;
 }
 
@@ -680,25 +710,26 @@ static cl_int check_create_or_exists(const trimmed__func__& func, void* handle,
                                      void *parent = nullptr) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
-  cl_version version = derive_object_version<T>(handle, parent);
-  auto it = objects.find(handle);
-  if (it != objects.end()) {
-    if (it->second.type != T) {
-      if (it->second.refcount > 0) {
-        result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-        delete_object_record(func, it);
-      }
-      objects.insert({handle, object_record(T, version, 1, parent)});
-    } else {
-      ++it->second.refcount;
-      return result;
-    }
-  } else {
+
+  auto insert_handle = [&] {
+    cl_version version = derive_object_version<T>(func, handle, parent);
     objects.insert({handle, object_record(T, version, 1, parent)});
+    if (parent != nullptr) {
+      reference_parent(func, parent);
+    }
+  };
+
+  auto it = objects.find(handle);
+  if (it == objects.end()) {
+    insert_handle();
+  } else if (it->second.type != T) {
+    result = error_already_exist(func, handle, it->second.type, it->second.refcount);
+    delete_object_record(func, it);
+    insert_handle();
+  } else {
+    ++it->second.refcount;
   }
-  if(parent != nullptr) {
-    reference_parent(parent);
-  }
+
   return result;
 }
 
