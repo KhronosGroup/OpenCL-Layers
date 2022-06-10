@@ -4,6 +4,13 @@
 #include <CL/cl.h>
 #include "layers_test.hpp"
 
+#include <iostream>
+#include <cstring>
+#include <future>     // std::future, std::async
+#include <thread>     // std::thread::hardware_concurrency
+#include <iterator>   // std::distance
+#include <vector>     // std::vector
+
 namespace object_lifetime_test {
   struct TestOptions {
     // Whether CL_*_REFERENCE_COUNT reports implicit or explicit reference count.
@@ -190,6 +197,28 @@ namespace object_lifetime_test {
     EXPECT_REF_COUNT(context, 1, 0);
 
     return context;
+  }
+
+  template <typename It, typename F>
+  void parallel_for(
+    const It first,
+    const It last,
+    F&& f)
+  {
+    std::vector<std::future<void>> futures{std::thread::hardware_concurrency()};
+    for (std::size_t i = 0; i < futures.size() ; ++i)
+      futures[i] = std::async(
+        std::launch::async,
+        [=](It begin, It end)
+        {
+          for (It it = begin ; it != end ; ++it)
+            f(*it);
+        },
+        first + (i + 0) * (std::distance(first, last) / futures.size()),
+        first + (i + 1) * (std::distance(first, last) / futures.size())
+      );
+    for (auto& future : futures)
+      future.wait();
   }
 }
 
