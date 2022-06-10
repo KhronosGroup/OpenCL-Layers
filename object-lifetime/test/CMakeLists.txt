@@ -1,3 +1,5 @@
+find_package(Threads REQUIRED)
+
 function (add_layer_test_exe NAME SOURCE)
     add_executable (${NAME} ${SOURCE} object_lifetime_test.cpp)
     target_link_libraries (
@@ -5,6 +7,7 @@ function (add_layer_test_exe NAME SOURCE)
         PRIVATE
             LayersCommon
             OpenCL::OpenCL
+            Threads::Threads
     )
 
     set_target_properties (${NAME}
@@ -55,7 +58,7 @@ function (add_layer_test TEST_EXE OPENCL_VERSION)
         NAME ${TEST_NAME}
         COMMAND "${CMAKE_COMMAND}"
             "-DCOMMAND=${TEST_INVOCATION}"
-            -DEXTRA_OUTPUT=${TEST_LOG}
+            "-DEXTRA_OUTPUT=${TEST_LOG}"
             -DEXPECTED_EXTRA_OUTPUT=${ARG_REGEX}
             -P ${CMAKE_CURRENT_LIST_DIR}/object_lifetime_test.cmake
     )
@@ -75,6 +78,8 @@ add_layer_test_exe (TestResurrect         resurrect.cpp)
 add_layer_test_exe (TestLeak              leak.cpp)
 add_layer_test_exe (TestNonExistant       non_existant.cpp)
 add_layer_test_exe (TestInvalidType       invalid_type.cpp)
+add_layer_test_exe (TestBasicCountingPar  basic_counting_parallel.cpp)
+add_layer_test_exe (TestCrossCountingPar  cross_counting_parallel.cpp)
 
 function (add_layer_tests OPENCL_VERSION TEST_ARGS)
   if (OPENCL_VERSION EQUAL 200)
@@ -85,6 +90,14 @@ function (add_layer_tests OPENCL_VERSION TEST_ARGS)
 
   add_layer_test (TestBasicCounting ${OPENCL_VERSION}
     REGEX "${CMAKE_CURRENT_SOURCE_DIR}/basic_counting.regex"
+    ${TEST_ARGS}
+  )
+  add_layer_test (TestBasicCountingPar ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_SOURCE_DIR}/basic_counting_parallel.regex"
+    ${TEST_ARGS}
+  )
+  add_layer_test (TestCrossCountingPar ${OPENCL_VERSION}
+    REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cross_counting_parallel.regex"
     ${TEST_ARGS}
   )
   add_layer_test (TestSubBuffer ${OPENCL_VERSION}

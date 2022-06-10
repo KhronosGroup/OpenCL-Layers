@@ -3,11 +3,14 @@
 
 #include <type_traits>  // std::remove_pointer_t
 #include <algorithm>    // std::find_if
+#include <mutex>        // std::lock_guard
 
 template <typename T, typename F>
 cl_int invoke_if_valid(T cl_object, F&& f, bool retain = false)
 {
   using namespace lifetime;
+
+  std::lock_guard<std::recursive_mutex> lock{lifetime::get_mutex<T>()};
 
   auto it = std::find_if(
     get_objects<T>().cbegin(),
@@ -42,6 +45,8 @@ template <typename T, typename F>
 auto create_if_valid(T cl_object, cl_int* err, F&& f) -> decltype(f())
 {
   using namespace lifetime;
+
+  std::lock_guard<std::recursive_mutex> lock{lifetime::get_mutex<T>()};
 
   auto it = std::find_if(
     get_objects<T>().cbegin(),

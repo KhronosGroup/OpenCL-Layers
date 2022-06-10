@@ -12,6 +12,7 @@
 #include <map>          // std::map<std::string, void*> _extensions
 #include <set>          // std::set<std::shared_ptr<_cl_object>> _objects
 #include <utility>      // std::make_pair
+#include <mutex>        // std::mutex
 
 namespace lifetime
 {
@@ -86,8 +87,8 @@ namespace lifetime
 
   template <typename Object> struct ref_counted_object
   {
-    cl_uint ref_count;
-    cl_uint implicit_ref_count;
+    cl_uint ref_count,
+            implicit_ref_count;
     object_parents<Object> parents;
 
     ref_counted_object(object_parents<Object> parents);
@@ -562,6 +563,8 @@ struct _cl_platform_id
   std::set<std::shared_ptr<_cl_event>> _events;
   std::set<std::shared_ptr<_cl_sampler>> _samplers;
 
+  std::recursive_mutex _global_mutex;
+
   _cl_platform_id();
   _cl_platform_id(const _cl_platform_id&) = delete;
   _cl_platform_id(_cl_platform_id&&) = delete;
@@ -599,4 +602,6 @@ namespace lifetime
   template <> inline std::set<std::shared_ptr<_cl_kernel>>& get_objects<cl_kernel>() { return _platform._kernels; }
   template <> inline std::set<std::shared_ptr<_cl_event>>& get_objects<cl_event>() { return _platform._events; }
   template <> inline std::set<std::shared_ptr<_cl_sampler>>& get_objects<cl_sampler>() { return _platform._samplers; }
+
+  template <typename T> std::recursive_mutex& get_mutex() { return _platform._global_mutex; }
 }

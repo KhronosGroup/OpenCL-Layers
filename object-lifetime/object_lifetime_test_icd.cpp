@@ -218,41 +218,32 @@ cl_int _cl_device_id::clCreateSubDevices(
     case CL_DEVICE_PARTITION_EQUALLY:
     {
       cl_uint n = static_cast<cl_uint>(properties[1]);
-      if (num_devices * n > cu_count)
+      cl_uint ret_count = cu_count / n;
+      if (num_devices < ret_count)
         return CL_INVALID_DEVICE_PARTITION_COUNT;
 
-      std::vector<std::shared_ptr<_cl_device_id>> result;
-      std::generate_n(
-        std::back_inserter(result),
-        num_devices,
-        [n = static_cast<cl_uint>(properties[1]), this]()
-        {
-          return std::make_shared<_cl_device_id>(
-            _cl_device_id::device_kind::sub,
-            this,
-            n);
-        }
-      );
-      reference(num_devices);
-
       if (num_devices_ret)
-        *num_devices_ret = static_cast<cl_uint>(result.size());
+        *num_devices_ret = ret_count;
 
-      if (out_devices && num_devices < result.size())
+      if (out_devices && num_devices < ret_count)
         return CL_INVALID_VALUE;
 
       if (out_devices)
       {
-        std::transform(
-          result.cbegin(),
-          result.cend(),
+        std::generate_n(
           out_devices,
-          [](const std::shared_ptr<_cl_device_id>& dev){ return dev.get(); }
+          num_devices,
+          [n = static_cast<cl_uint>(properties[1]), this]()
+          {
+            return lifetime::create_or_exit<cl_device_id>(
+              nullptr,
+              _cl_device_id::device_kind::sub,
+              this,
+              n);
+          }
         );
+        reference(ret_count);
       }
-
-      for (const auto& dev : result)
-        lifetime::get_objects<cl_device_id>().insert(dev);
 
       return CL_SUCCESS;
       break;
@@ -576,8 +567,8 @@ cl_int _cl_context::clGetContextInfo(
     }
     case CL_CONTEXT_DEVICES:
       std::copy(
-        reinterpret_cast<char*>(&(*parents.parent_devices.begin())),
-        reinterpret_cast<char*>(&(*parents.parent_devices.end())),
+        reinterpret_cast<char*>(parents.parent_devices.data()),
+        reinterpret_cast<char*>(parents.parent_devices.data()) + parents.parent_devices.size() * sizeof(cl_device_id),
         std::back_inserter(result));
       break;
     default:
@@ -669,15 +660,15 @@ cl_mem _cl_context::clCreateImageWithProperties(
     if (desc->buffer)
     {
       auto it = std::find_if(
-        lifetime::_platform._mems.cbegin(),
-        lifetime::_platform._mems.cend(),
+        lifetime::get_objects<cl_mem>().cbegin(),
+        lifetime::get_objects<cl_mem>().cend(),
         [&](const std::shared_ptr<_cl_mem>& mem)
         {
           return mem->parents.parent_context == this;
         }
       );
 
-      if (it != lifetime::_platform._mems.cend())
+      if (it != lifetime::get_objects<cl_mem>().cend())
       {
         (*it)->implicit_ref_count++;
         return lifetime::create_or_exit<cl_mem>(
@@ -823,8 +814,8 @@ cl_command_queue _cl_context::clCreateCommandQueueWithProperties(
     // If such queue is found, retain and return it
     // Else create new queue
     auto it = std::find_if(
-      lifetime::_platform._queues.cbegin(),
-      lifetime::_platform._queues.cend(),
+      lifetime::get_objects<cl_command_queue>().cbegin(),
+      lifetime::get_objects<cl_command_queue>().cend(),
       [&](const std::shared_ptr<_cl_command_queue>& queue)
       {
         bool points_to_same_device = queue->parents.parent_device == device;
@@ -838,7 +829,7 @@ cl_command_queue _cl_context::clCreateCommandQueueWithProperties(
       }
     );
 
-    if (it != lifetime::_platform._queues.cend())
+    if (it != lifetime::get_objects<cl_command_queue>().cend())
     {
       (*it)->retain();
       if (errcode_ret)
@@ -859,26 +850,14 @@ cl_command_queue _cl_context::clCreateCommandQueueWithProperties(
   }
   else
   {
-    auto result = lifetime::get_objects<cl_command_queue>().insert(
-      std::make_shared<_cl_command_queue>(
-        device,
-        this,
-        props.data(),
-        props.data() + props.size()
-      )
+    reference();
+    return lifetime::create_or_exit<cl_command_queue>(
+      errcode_ret,
+      device,
+      this,
+      props.data(),
+      props.data() + props.size()
     );
-
-    if (result.second)
-    {
-      reference();
-      if (errcode_ret)
-        *errcode_ret = CL_SUCCESS;
-      return result.first->get();
-    }
-    else
-    {
-      std::exit(-1);
-    }
   }
 }
 
@@ -1336,6 +1315,7 @@ _cl_platform_id::_cl_platform_id()
   , _kernels{}
   , _events{}
   , _samplers{}
+  , _global_mutex{}
 {
   init_dispatch();
 
@@ -1518,8 +1498,8 @@ cl_int _cl_platform_id::clGetDeviceIDs(
   if (num_devices)
     *num_devices = asking_for_custom ?
       static_cast<cl_uint>(std::count_if(
-        _devices.cbegin(),
-        _devices.cend(),
+        lifetime::get_objects<cl_device_id>().cbegin(),
+        lifetime::get_objects<cl_device_id>().cend(),
         [](const std::shared_ptr<_cl_device_id>& dev)
         {
           return dev->kind == _cl_device_id::device_kind::root;
@@ -1530,8 +1510,8 @@ cl_int _cl_platform_id::clGetDeviceIDs(
   {
     std::vector<std::shared_ptr<_cl_device_id>> result;
     std::copy_if(
-      _devices.cbegin(),
-      _devices.cend(),
+      lifetime::get_objects<cl_device_id>().cbegin(),
+      lifetime::get_objects<cl_device_id>().cend(),
       std::back_inserter(result),
       [](const std::shared_ptr<_cl_device_id>& dev)
       {

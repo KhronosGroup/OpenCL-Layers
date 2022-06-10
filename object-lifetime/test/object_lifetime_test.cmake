@@ -21,8 +21,10 @@ if(EXTRA_OUTPUT)
     file(READ "${EXTRA_OUTPUT}"          OUTPUT_FILE)
     file(READ "${EXPECTED_EXTRA_OUTPUT}" EXPECTED_FILE)
 
-    if(NOT "${OUTPUT_FILE}" MATCHES "^${EXPECTED_FILE}$")
-        message(FATAL_ERROR "Mismatch in output: ${OUTPUT_FILE}, expected: ${EXPECTED_FILE}")
+    if(EXPECTED_FILE) # More friendly towards empty regexes
+        if(NOT "${OUTPUT_FILE}" MATCHES "^${EXPECTED_FILE}$")
+            message(FATAL_ERROR "Mismatch in output: ${OUTPUT_FILE}, expected: ${EXPECTED_FILE}")
+        endif()
     endif()
 
     file(REMOVE "${EXTRA_OUTPUT}")
