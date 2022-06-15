@@ -491,6 +491,11 @@ struct _cl_program
   cl_kernel clCreateKernel(
     const char* kernel_name,
     cl_int* errcode_ret);
+
+  cl_int clCreateKernelsInProgram(
+    cl_uint num_kernels,
+    cl_kernel* kernels,
+    cl_uint* num_kernels_ret);
 };
 
 struct _cl_kernel

@@ -657,6 +657,22 @@ CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel_wrap(
   });
 }
 
+CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgram_wrap(
+  cl_program program,
+  cl_uint num_kernels,
+  cl_kernel* kernels,
+  cl_uint* num_kernels_ret)
+{
+  return invoke_if_valid(program, [&]()
+  {
+    return program->clCreateKernelsInProgram(
+      num_kernels,
+      kernels,
+      num_kernels_ret
+    );
+  });
+}
+
 CL_API_ENTRY cl_int CL_API_CALL clSetKernelArg_wrap(
   cl_kernel kernel,
   cl_uint arg_index,
