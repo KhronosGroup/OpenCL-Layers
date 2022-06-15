@@ -2564,7 +2564,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromD3D10KHR_wrap(
     devices,
     num_devices);
   cl_uint actual_num_entries = std::min(*num_devices, num_entries);
- if (devices && result == CL_SUCCESS && actual_num_entries > 0)
+  if (devices && result == CL_SUCCESS && actual_num_entries > 0)
     CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
 }
