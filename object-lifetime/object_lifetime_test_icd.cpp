@@ -1029,6 +1029,52 @@ cl_kernel _cl_program::clCreateKernel(
   );
 }
 
+cl_int _cl_program::clCreateKernelsInProgram(
+  cl_uint num_kernels,
+  cl_kernel* kernels,
+  cl_uint* num_kernels_ret)
+{
+  // The proper counting of kernels requires a C compiler. kernel entry points
+  // may be declared/defined both, they may be '__kernel' or 'kernel' and be
+  // subjected to the preprocessor.
+  static constexpr cl_uint kernel_count = 3;
+
+  if (num_kernels_ret)
+    *num_kernels_ret = kernel_count;
+
+  if (kernels && num_kernels < kernel_count)
+    return CL_INVALID_VALUE;
+
+  if(kernels)
+  {
+    std::vector<std::shared_ptr<_cl_kernel>> result;
+    std::generate_n(
+      std::back_inserter(result),
+      3,
+      [=](){ return std::make_shared<_cl_kernel>(this); }
+    );
+
+    std::copy(
+      result.cbegin(),
+      result.cend(),
+      std::inserter(
+        lifetime::get_objects<cl_kernel>(),
+        lifetime::get_objects<cl_kernel>().end()
+      )
+    );
+
+    std::transform(
+      result.cbegin(),
+      result.cend(),
+      kernels,
+      [](const std::shared_ptr<_cl_kernel>& kernel){ return kernel.get(); }
+    );
+    reference(kernel_count);
+  }
+
+  return CL_SUCCESS;
+}
+
 _cl_kernel::_cl_kernel(const cl_program parent_program)
   : icd_compatible{}
   , ref_counted_object<cl_kernel>{ lifetime::object_parents<cl_kernel>{ parent_program } }
@@ -1402,6 +1448,7 @@ void _cl_platform_id::init_dispatch()
   dispatch->clRetainProgram = clRetainProgram_wrap;
   dispatch->clReleaseProgram = clReleaseProgram_wrap;
   dispatch->clCreateKernel = clCreateKernel_wrap;
+  dispatch->clCreateKernelsInProgram = clCreateKernelsInProgram_wrap;
   dispatch->clSetKernelArg = clSetKernelArg_wrap;
   dispatch->clCloneKernel = clCloneKernel_wrap;
   dispatch->clGetKernelInfo = clGetKernelInfo_wrap;
