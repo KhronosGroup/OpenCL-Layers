@@ -21,8 +21,16 @@ int main()
 {
     cl_int CL_err = CL_SUCCESS;
     cl_uint numPlatforms = 0;
-
+#if defined(_WIN32)
+    size_t var_size;
+    errno_t err = getenv_s(&var_size, NULL, 0, "OPENCL_LAYERS");
+    if(var_size == 0 || err != 0) return -1;
+    char* var = (char*)malloc(var_size);
+    err = getenv_s(&var_size, var, var_size, "OPENCL_LAYERS");
+    if (err != 0) return -1;
+#else
     char* var = getenv("OPENCL_LAYERS");
+#endif
     if(var != NULL) printf("OPENCL_LAYERS: %s\n", var);
 
     CL_err = clGetPlatformIDs(0, NULL, &numPlatforms);

@@ -1,6 +1,8 @@
 add_library (CLObjectLifetimeLayer SHARED
     object_lifetime.cpp
-    $<$<CXX_COMPILER_ID:MSVC>:object_lifetime.def>
+#   PLATFORM_ID taking a comma-separated list is CMake 3.15
+#   $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:object_lifetime.def>
+    $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:object_lifetime.def>
     $<$<CXX_COMPILER_ID:GNU>:object_lifetime.map>
 )
 
@@ -10,36 +12,32 @@ if (NOT WIN32 AND NOT APPLE)
     set_target_properties (CLObjectLifetimeLayer PROPERTIES LINK_FLAGS "-Wl,--version-script -Wl,${CMAKE_CURRENT_SOURCE_DIR}/object_lifetime.map")
 endif ()
 
-if (OPENCL_LAYERS_BUILD_TESTING AND OFF) # Temporarily disable tests
-    add_executable (CLObjectLifetimeLayerTest object_lifetime_test.c)
-
-    target_link_libraries (CLObjectLifetimeLayerTest
-        PRIVATE
-            LayersCommon
-            OpenCL::OpenCL
-    )
-
-    add_test (
-        NAME CLObjectLifetimeLayerTest
-        COMMAND "${CMAKE_COMMAND}"
-            -DCOMMAND=$<TARGET_FILE:CLObjectLifetimeLayerTest>
-            -DEXPECTED_OUTPUT=${CMAKE_CURRENT_LIST_DIR}/object_lifetime_test_expected.regex
-            -DEXTRA_OUTPUT=${CMAKE_CURRENT_BINARY_DIR}/CLObjectLifetimeLayerTest.log
-            -DEXPECTED_EXTRA_OUTPUT=${CMAKE_CURRENT_SOURCE_DIR}/expected_layer_log.regex
-            -P ${CMAKE_CURRENT_LIST_DIR}/object_lifetime_test.cmake
-    )
-    set(TEST_ENVIRONMENT
-            OPENCL_LAYERS=$<TARGET_FILE:CLObjectLifetimeLayer>
-            OPENCL_OBJECT_LIFETIME_TRANSPARENT=1
-            OPENCL_OBJECT_LIFETIME_LOG_SINK=file
-            OPENCL_OBJECT_LIFETIME_LOG_FILENAME=CLObjectLifetimeLayerTest.log)
-    set_tests_properties (CLObjectLifetimeLayerTest
-        PROPERTIES ENVIRONMENT "${TEST_ENVIRONMENT}"
-    )
-endif ()
-
 set (INSTALL_TARGETS CLObjectLifetimeLayer)
 set (BUILD_TARGETS ${INSTALL_TARGETS})
+
+if (LAYERS_BUILD_TESTS)
+    add_library (CLObjectLifetimeICD SHARED
+        object_lifetime_test_icd.hpp
+        object_lifetime_test_icd.cpp
+        object_lifetime_test_icd_surface.cpp
+#       PLATFORM_ID taking a comma-separated list is CMake 3.15
+#       $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:object_lifetime_test_icd.def>
+        $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:object_lifetime_test_icd.def>
+        $<$<CXX_COMPILER_ID:GNU>:object_lifetime_test_icd.map>
+    )
+    target_link_libraries (CLObjectLifetimeICD
+        PRIVATE
+            LayersCommon
+            LayersUtils
+            OpenCL::Headers
+    )
+
+    add_subdirectory (test)
+endif ()
+
+list (APPEND BUILD_TARGETS
+    CLObjectLifetimeICD
+)
 
 set_target_properties (${BUILD_TARGETS}
     PROPERTIES

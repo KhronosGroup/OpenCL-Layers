@@ -1,3 +1,7 @@
+#ifdef _WIN32
+#define NOMINMAX
+#endif
+
 #include "utils.hpp"
 
 #include <cstdlib>
@@ -12,8 +16,8 @@
 #include <fstream>
 #include <algorithm>
 #include <memory>
-
-#include <cstdlib>
+#include <vector>
+#include <sstream>
 
 #include <sys/stat.h>
 
@@ -86,15 +90,46 @@ static inline trimmed__func__ rtrim(const char* s) {
 namespace {
 
 struct object_record {
-  object_type type;
-  cl_long     refcount;
-  void*       parent = nullptr;
-  cl_long     num_children = 0;
+  object_type        type;
+  cl_version         version;
+  cl_long            refcount;
+  std::vector<void*> parents = {};
+  cl_long            num_children = 0;
+
+  object_record(object_type type, cl_version version, cl_long refcount)
+    : type{type}
+    , version{version}
+    , refcount{refcount}
+  {
+  }
+
+  object_record(object_type type, cl_version version, cl_long refcount, void* parent)
+    : type{type}
+    , version{version}
+    , refcount{refcount}
+    , parents{parent}
+  {
+  }
+
+  object_record(object_type type, cl_version version, cl_long refcount, std::vector<void*>&& parents)
+    : type{type}
+    , version{version}
+    , refcount{refcount}
+    , parents(std::move(parents))
+  {
+  }
 };
 
-std::map<void*, object_record> objects;
+using object_record_map = std::map<void*, object_record>;
+
+object_record_map objects;
 std::map<void*, std::list<object_record>> deleted_objects;
 std::mutex objects_mutex;
+
+// This version is used for any object for which a proper version could not be inferred.
+// Note that OpenCL 2.0 is the most lenient regarding object lifetime, and allows using
+// objects as long as their internal reference count is larger than 0.
+constexpr const static cl_version FALLBACK_VERSION = CL_MAKE_VERSION(2, 0, 0);
 
 struct stream_deleter {
   void operator()(std::ostream *stream) noexcept {
@@ -134,6 +169,10 @@ layer_settings layer_settings::load() {
 }
 
 layer_settings settings;
+
+static struct _cl_icd_dispatch dispatch = {};
+
+static const struct _cl_icd_dispatch *tdispatch;
 }
 
 static cl_int error_already_exist(const trimmed__func__& func, void *handle, object_type t, cl_long ref_count) {
@@ -161,7 +200,7 @@ static cl_int error_invalid_type(const trimmed__func__& func, void *handle, obje
                " was used whereas function expects: " <<
                object_type_names[expect] << "\n";
   log_stream->flush();
-  return settings.transparent ? CL_SUCCESS : object_errors[t];
+  return settings.transparent ? CL_SUCCESS : object_errors[expect];
 }
 
 static cl_int error_does_not_exist(const trimmed__func__& func, void *handle, object_type t) {
@@ -189,6 +228,165 @@ static cl_int error_invalid_release(const trimmed__func__& func, void *handle, o
   return settings.transparent ? CL_SUCCESS : object_errors[t];
 }
 
+static cl_int error_implicitly_retained(const trimmed__func__& func, void *handle, object_type t, cl_long num_children) {
+  *log_stream << "In " << func << " " <<
+               object_type_names[t] <<
+               ": " << handle <<
+               " used with explicit refcount: 0 and implicit refcount: " <<
+               num_children << "\n";
+  log_stream->flush();
+  return settings.transparent ? CL_SUCCESS : object_errors[t];
+}
+
+static cl_version get_platform_version(cl_platform_id platform) {
+  size_t version_len;
+  cl_int res;
+  res = tdispatch->clGetPlatformInfo(platform, CL_PLATFORM_VERSION, 0, nullptr, &version_len);
+  if (res != CL_SUCCESS)
+    return FALLBACK_VERSION;
+
+  auto version_str = std::make_unique<char[]>(version_len);
+  res = tdispatch->clGetPlatformInfo(platform, CL_PLATFORM_VERSION, version_len, version_str.get(), nullptr);
+  if (res != CL_SUCCESS)
+    return FALLBACK_VERSION;
+
+  std::stringstream version;
+  version.write(version_str.get(), version_len);
+
+  std::string opencl;
+  cl_uint major, minor;
+  version >> opencl;
+  version >> major;
+  version.get();
+  version >> minor;
+
+  if (version.fail())
+    return FALLBACK_VERSION;
+
+  return CL_MAKE_VERSION(major, minor, 0);
+}
+
+static cl_platform_id get_device_platform(cl_device_id device) {
+  cl_platform_id platform;
+  cl_int res = tdispatch->clGetDeviceInfo(
+    device,
+    CL_DEVICE_PLATFORM,
+    sizeof(cl_platform_id),
+    &platform,
+    nullptr);
+  if (res != CL_SUCCESS)
+    return nullptr;
+  return platform;
+}
+
+// Fetch the record for an object, and print an error if its not there.
+static object_record_map::iterator find_object_handle(const trimmed__func__& func, void *handle) {
+  auto it = objects.find(handle);
+  if (it == objects.end()) {
+    *log_stream << "In " << func << ": object "
+                << handle
+                << "does not exist. This is likely a bug in the object_lifetime layer.\n";
+    log_stream->flush();
+    return objects.end();
+  }
+  return it;
+}
+
+// Compute a version for a particular object. The object does not need to be in the `objects` map yet
+// (but any parent does).
+template <object_type T>
+static cl_version derive_object_version(const trimmed__func__& func, void *handle, void *parent) {
+  (void) handle;
+  if (parent) {
+    auto it = find_object_handle(func, parent);
+    if (it != objects.end()) {
+      return it->second.version;
+    }
+  }
+  return FALLBACK_VERSION;
+}
+
+template <>
+cl_version derive_object_version<OCL_DEVICE>(const trimmed__func__& func, void *handle, void *parent) {
+  (void) func;
+  (void) parent;
+  cl_platform_id platform = get_device_platform((cl_device_id) handle);
+  if (!platform)
+    return FALLBACK_VERSION;
+  return get_platform_version(platform);
+}
+
+template <>
+cl_version derive_object_version<OCL_PLATFORM>(const trimmed__func__& func, void *handle, void *parent) {
+  (void) func;
+  (void) parent;
+  return get_platform_version((cl_platform_id) handle);
+}
+
+static void notify_child_released(const trimmed__func__& func, void *parent) {
+  // "Recursively" notify all parents if the refcount and the number of children becomes zero.
+  // This signals that the object is no longer kept alive by any of its children.
+  auto it = find_object_handle(func, parent);
+  if (it == objects.end())
+    return;
+
+  switch (it->second.type) {
+    case OCL_PLATFORM:
+    case OCL_DEVICE:
+      return;
+    default:
+      break;
+  }
+
+  --it->second.num_children;
+  if (it->second.refcount == 0 && it->second.num_children == 0) {
+    deleted_objects[parent].push_back(std::move(it->second));
+    objects.erase(it);
+    for (void* grandparent : deleted_objects[parent].back().parents) {
+      notify_child_released(func, grandparent);
+    }
+  } else if (it->second.num_children < 0) {
+    *log_stream << "In " << func << " "
+                << object_type_names[it->second.type] << ": " << parent
+                << " has negative number of children. This is likely a bug in "
+                   "the object_lifetime layer.\n";
+    log_stream->flush();
+  }
+}
+
+static void delete_object_record(const trimmed__func__& func, object_record_map::iterator it) {
+  for (void* parent : it->second.parents) {
+    notify_child_released(func, parent);
+  }
+  deleted_objects[it->first].push_back(std::move(it->second));
+  objects.erase(it);
+}
+
+static cl_int release_object(const trimmed__func__& func, object_record_map::iterator it, object_type t) {
+  if (it->second.refcount <= 0) {
+    return error_invalid_release(func, it->first, t);
+  }
+
+  --it->second.refcount;
+  if (it->second.refcount == 0 && it->second.num_children == 0) {
+    delete_object_record(func, it);
+  }
+  return CL_SUCCESS;
+}
+
+// Check if using an object with only implicit references is fine.
+static cl_int can_use_inaccessible_object(object_record_map::iterator it, bool retain) {
+  cl_version version = it->second.version;
+  // https://github.com/KhronosGroup/OpenCL-Docs/issues/620
+  // In OpenCL 1.1 and 1.2, the object is "destroyed" when refcount hits 0, and so it cannot be
+  // used here.
+  // In OpenCL 2.0, the object is destroyed when the refcount and any internal lifetime tracking hits 0,
+  // so usage is fine at this point.
+  // In OpenCL 2.1, 2.2 and 3.0, the object is inaccessible when refcount hits 0 for all operations
+  // except retain, and so cannot be used here.
+  return !(version <= CL_MAKE_VERSION(1, 2, 0) || (version >= CL_MAKE_VERSION(2, 1, 0) && !retain));
+}
+
 template<object_type T>
 static inline cl_int check_exists_no_lock(const trimmed__func__& func, void *handle) {
   auto it = objects.find(handle);
@@ -200,7 +398,9 @@ static inline cl_int check_exists_no_lock(const trimmed__func__& func, void *han
     if(it->second.num_children <= 0) {
       return error_ref_count(func, handle, T, it->second.refcount);
     }
-    // TODO: Warn object only kept alive only by its children
+    if (!can_use_inaccessible_object(it, false)) {
+      return error_implicitly_retained(func, handle, T, it->second.num_children);
+    }
   }
   return CL_SUCCESS;
 }
@@ -232,11 +432,12 @@ cl_int check_exists_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handl
   } else if (it->second.type != OCL_DEVICE && it->second.type != OCL_SUB_DEVICE) {
     return error_invalid_type(func, handle, it->second.type, OCL_DEVICE);
   } else if (it->second.type == OCL_SUB_DEVICE && it->second.refcount <= 0) {
-    if(it->second.num_children <= 0) {
+    if (it->second.num_children <= 0) {
       return error_ref_count(func, handle, OCL_SUB_DEVICE, it->second.refcount);
     }
-    // TODO: Warn object only kept alive only by its children
-    // TODO: Devices can be kept alive by contexts, which is not yet tracked
+    if (!can_use_inaccessible_object(it, false)) {
+      return error_implicitly_retained(func, handle, OCL_SUB_DEVICE, it->second.num_children);
+    }
   }
   return CL_SUCCESS;
 }
@@ -256,7 +457,9 @@ cl_int check_exists_no_lock<OCL_MEM>(const trimmed__func__& func, void *handle) 
         if (it->second.num_children <= 0) {
           return error_ref_count(func, handle, t, it->second.refcount);
         }
-        // TODO: Warn object only kept alive only by its children
+        if (!can_use_inaccessible_object(it, false)) {
+          return error_implicitly_retained(func, handle, t, it->second.num_children);
+        }
       }
       break;
     default:
@@ -276,8 +479,9 @@ cl_int check_exists_no_lock<OCL_MEM>(const trimmed__func__& func, void *handle) 
 
 #define CHECK_EXISTS_ERRC(type, handle, errc, return_type)                     \
   do {                                                                         \
-    *errc = check_exists<type>(RTRIM_FUNC, handle);                            \
-    if (*errc != CL_SUCCESS) {                                                 \
+    cl_int _errc = check_exists<type>(RTRIM_FUNC, handle);                     \
+    if (_errc != CL_SUCCESS) {                                                 \
+      if (errc != nullptr) *errc = _errc;                                      \
       return static_cast<return_type>(0);                                      \
     }                                                                          \
   } while (false)
@@ -321,51 +525,92 @@ static cl_int check_exist_list(const trimmed__func__& func, cl_uint num_handles,
     }                                                                          \
   } while (false)
 
+static void reference_parent(const trimmed__func__& func, void *parent) {
+  auto it = find_object_handle(func, parent);
+  if (it == objects.end())
+    return;
+
+  switch (it->second.type) {
+    case OCL_PLATFORM:
+    case OCL_DEVICE:
+      return;
+    default:
+      ++it->second.num_children;
+      break;
+  }
+}
+
 template<object_type T>
-static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *handle, void* parent = nullptr) {
+static inline cl_int check_creation_no_lock(const trimmed__func__& func, void *handle, std::vector<void*>&& parents = {}) {
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
   if (it != objects.end()) {
     if (it->second.refcount > 0) {
       result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-      deleted_objects[handle].push_back(it->second);
+      delete_object_record(func, it);
     }
   }
-  objects[handle] =  object_record{T, 1, parent};
-  if(parent != nullptr) {
-    ++objects[parent].num_children;
+  // Parents should ultimately come from the same platform so it shouldn't matter which one we fetch the version from.
+  cl_version version = derive_object_version<T>(func, handle, parents.size() > 0 ? parents[0] : nullptr);
+  auto insert_result = objects.insert({handle, object_record(T, version, 1, std::move(parents))});
+  for (void* parent : insert_result.first->second.parents) {
+    reference_parent(func, parent);
   }
   return result;
 }
 
 template<>
-cl_int check_creation_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handle, void*) {
+cl_int check_creation_no_lock<OCL_DEVICE>(const trimmed__func__& func, void *handle, std::vector<void*>&&) {
+  auto insert_handle = [&] {
+    cl_version version = derive_object_version<OCL_DEVICE>(func, handle, nullptr);
+    objects.insert({handle, object_record(OCL_DEVICE, version, 0)});
+  };
+
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
-  if (it != objects.end() && it->second.type != OCL_DEVICE) {
+  if (it == objects.end()) {
+    insert_handle();
+  } else if (it->second.type != OCL_DEVICE) {
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-    deleted_objects[handle].push_back(it->second);
+    delete_object_record(func, it);
+    insert_handle();
   }
-  objects[handle] = object_record{OCL_DEVICE, 0};
+
   return result;
 }
 
 template<>
-cl_int check_creation_no_lock<OCL_PLATFORM>(const trimmed__func__& func, void *handle, void*) {
+cl_int check_creation_no_lock<OCL_PLATFORM>(const trimmed__func__& func, void *handle, std::vector<void*>&&) {
+  auto insert_handle = [&] {
+    cl_version version = derive_object_version<OCL_PLATFORM>(func, handle, nullptr);
+    objects.insert({handle, object_record(OCL_PLATFORM, version, 0)});
+  };
+
   cl_int result = CL_SUCCESS;
   auto it = objects.find(handle);
-  if (it != objects.end() && it->second.type != OCL_PLATFORM) {
+  if (it == objects.end()) {
+    insert_handle();
+  } else if (it->second.type != OCL_PLATFORM) {
     result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-    deleted_objects[handle].push_back(it->second);
+    delete_object_record(func, it);
+    insert_handle();
   }
-  objects[handle] = object_record{OCL_PLATFORM, 0};
+
   return result;
 }
 
 template<object_type T>
-static cl_int check_creation(const trimmed__func__& func, void *handle, void* parent) {
+static cl_int check_creation(const trimmed__func__& func, void *handle, std::vector<void*>&& parents) {
   std::lock_guard<std::mutex> g{objects_mutex};
-  return check_creation_no_lock<T>(func, handle, parent);
+  return check_creation_no_lock<T>(func, handle, std::move(parents));
+}
+
+template<object_type T>
+static cl_int check_creation(const trimmed__func__& func, void* handle, void* parent) {
+  if (parent)
+    return check_creation<T>(func, handle, std::vector<void*>{parent});
+  else
+    return check_creation<T>(func, handle, std::vector<void*>{});
 }
 
 #define CHECK_CREATION(type, handle, parent)                                   \
@@ -378,19 +623,20 @@ static cl_int check_creation(const trimmed__func__& func, void *handle, void* pa
 
 #define CHECK_CREATION_ERRC(type, handle, parent, errc, return_type)           \
   do {                                                                         \
-    *errc = check_creation<type>(RTRIM_FUNC, handle, parent);                  \
-    if (*errc != CL_SUCCESS) {                                                 \
+    cl_int _errc = check_creation<type>(RTRIM_FUNC, handle, parent);           \
+    if (_errc != CL_SUCCESS) {                                                 \
+      if (errc != nullptr) *errc = _errc;                                      \
       return static_cast<return_type>(0);                                      \
     }                                                                          \
   } while (false)
 
 template <object_type T>
-static cl_int check_creation_list(const trimmed__func__& func, cl_uint num_handles,
+static cl_int check_creation_list(const trimmed__func__& func, size_t num_handles,
                                   void **handles, void *parent = nullptr) {
   cl_int result = CL_SUCCESS;
   std::lock_guard<std::mutex> g{objects_mutex};
-  for (cl_uint i = 0; i < num_handles; i++) {
-    const cl_int error = check_creation_no_lock<T>(func, handles[i], parent);
+  for (size_t i = 0; i < num_handles; i++) {
+    const cl_int error = check_creation_no_lock<T>(func, handles[i], std::vector<void*>{parent});
     if(error != CL_SUCCESS && result == CL_SUCCESS) {
       result = error;
     }
@@ -409,56 +655,91 @@ static cl_int check_creation_list(const trimmed__func__& func, cl_uint num_handl
 
 template <object_type T>
 static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
-                                  void *parent = nullptr) {
-  cl_int result = CL_SUCCESS;
+                                  std::vector<void*>&& parents) {
   std::lock_guard<std::mutex> g{objects_mutex};
-  auto it = objects.find(handle);
-  if (it != objects.end()) {
-    if (it->second.type != T) {
-      if (it->second.refcount > 0) {
-        result = error_already_exist(func, handle, it->second.type, it->second.refcount);
-        deleted_objects[handle].push_back(it->second);
-      }
-      objects[handle] = object_record{T, 0, parent};
+
+  auto insert_handle = [&] {
+    cl_version version = derive_object_version<T>(func, handle, parents.size() > 0 ? parents[0] : nullptr);
+    auto insert_result = objects.insert({handle, object_record(T, version, 0, std::move(parents))});
+    for (void* parent : insert_result.first->second.parents) {
+      reference_parent(func, parent);
     }
-  } else {
-    objects[handle] = object_record{T, 0, parent};
+  };
+
+  cl_int result = CL_SUCCESS;
+  auto it = objects.find(handle);
+  if (it == objects.end()) {
+    insert_handle();
+  } else if (it->second.type != T) {
+    result = error_already_exist(func, handle, it->second.type, it->second.refcount);
+    delete_object_record(func, it);
+    insert_handle();
   }
-  if(parent != nullptr) {
-    ++objects[parent].num_children;
-  }
+
   return result;
 }
 
-#define CHECK_ADD_OR_EXISTS(type, handle, parent)                              \
+template <object_type T>
+static cl_int check_add_or_exists(const trimmed__func__& func, void *handle,
+                                  void *parent) {
+  if (parent) {
+    return check_add_or_exists<T>(func, handle, std::vector<void*>{parent});
+  } else {
+    return check_add_or_exists<T>(func, handle, std::vector<void*>{});
+  }
+}
+
+#define CHECK_ADD_OR_EXISTS(type, handle, parents)                             \
   do {                                                                         \
-    const cl_int _err = check_add_or_exists<type>(RTRIM_FUNC, handle, parent); \
+    const cl_int _err = check_add_or_exists<type>(RTRIM_FUNC, handle, parents);\
     if (_err != CL_SUCCESS) {                                                  \
       return _err;                                                             \
     }                                                                          \
   } while (false)
 
-static void notify_child_released(const trimmed__func__& func, void *parent) {
-  // "Recursively" notify all parents if the refcount and the number of children becomes zero.
-  // This signals that the object is no longer kept alive by any of its children.
-  while (parent != nullptr) {
-    --objects[parent].num_children;
+#define CHECK_ADD_OR_EXISTS_ERRC(type, handle, parents, errc, return_type)     \
+  do {                                                                         \
+    *errc = check_add_or_exists<type>(RTRIM_FUNC, handle, parents);            \
+    if (*errc != CL_SUCCESS) {                                                 \
+      return static_cast<return_type>(0);                                      \
+    }                                                                          \
+  } while (false)
 
-    if (objects[parent].refcount == 0 && objects[parent].num_children == 0) {
-      // Propagate "release notification" to parent object
-      parent = objects[parent].parent;
-    } else if (objects[parent].num_children <= 0) {
-      *log_stream << "In " << func << " "
-                  << object_type_names[objects[parent].type] << ": " << parent
-                  << "has negative number of children. This is likely a bug in "
-                     "the object_lifetime layer.\n";
-      log_stream->flush();
-      parent = nullptr;
-    } else {
-      parent = nullptr;
+template <object_type T>
+static cl_int check_create_or_exists(const trimmed__func__& func, void* handle,
+                                     void *parent = nullptr) {
+  cl_int result = CL_SUCCESS;
+  std::lock_guard<std::mutex> g{objects_mutex};
+
+  auto insert_handle = [&] {
+    cl_version version = derive_object_version<T>(func, handle, parent);
+    objects.insert({handle, object_record(T, version, 1, parent)});
+    if (parent != nullptr) {
+      reference_parent(func, parent);
     }
+  };
+
+  auto it = objects.find(handle);
+  if (it == objects.end()) {
+    insert_handle();
+  } else if (it->second.type != T) {
+    result = error_already_exist(func, handle, it->second.type, it->second.refcount);
+    delete_object_record(func, it);
+    insert_handle();
+  } else {
+    ++it->second.refcount;
   }
+
+  return result;
 }
+
+#define CHECK_CREATE_OR_EXISTS_ERRC(type, handle, parent, errc, return_type)   \
+  do {                                                                         \
+    *errc = check_create_or_exists<type>(RTRIM_FUNC, handle, parent);          \
+    if (*errc != CL_SUCCESS) {                                                 \
+      return static_cast<return_type>(0);                                      \
+    }                                                                          \
+  } while (false)
 
 template<object_type T>
 static cl_int check_release(const trimmed__func__& func, void *handle) {
@@ -469,18 +750,11 @@ static cl_int check_release(const trimmed__func__& func, void *handle) {
   } else {
     object_type t = it->second.type;
     if (t == T) {
-      it->second.refcount -= 1;
-      if (it->second.refcount < 0) {
-        return error_invalid_release(func, handle, T);
-      }
+      return release_object(func, it, t);
     } else {
       return error_invalid_type(func, handle, t, T);
     }
   }
-  if (it->second.refcount == 0) {
-    notify_child_released(func, it->second.parent);
-  }
-  return CL_SUCCESS;
 }
 
 template<>
@@ -493,19 +767,13 @@ cl_int check_release<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
     object_type t = it->second.type;
     switch (t) {
     case OCL_DEVICE:
-      break;
+      return CL_SUCCESS;
     case OCL_SUB_DEVICE:
-      it->second.refcount -= 1;
-      if (it->second.refcount < 0) {
-        return error_invalid_release(func, handle, OCL_SUB_DEVICE);
-      }
-      break;
+      return release_object(func, it, OCL_SUB_DEVICE);
     default:
       return error_invalid_type(func, handle, t, OCL_DEVICE);
     }
   }
-  // Devices do not have parent objects
-  return CL_SUCCESS;
 }
 
 template<>
@@ -520,22 +788,11 @@ cl_int check_release<OCL_MEM>(const trimmed__func__& func, void *handle) {
     case OCL_BUFFER:
     case OCL_IMAGE:
     case OCL_PIPE:
-      it->second.refcount -= 1;
-      if (it->second.refcount == 0) {
-        deleted_objects[handle].push_back(it->second);
-        objects.erase(it);
-      } else if (it->second.refcount < 0) {
-        return error_invalid_release(func, handle, t);
-      }
-      break;
+      return release_object(func, it, t);
     default:
       return error_invalid_type(func, handle, t, OCL_MEM);
     }
   }
-  if (it->second.refcount == 0) {
-    notify_child_released(func, it->second.parent);
-  }
-  return CL_SUCCESS;
 }
 
 #define CHECK_RELEASE(type, handle)                                            \
@@ -552,14 +809,17 @@ static cl_int check_retain(const trimmed__func__& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, T);
-  } else {
-    object_type t = it->second.type;
-    if (t == T) {
-      it->second.refcount += 1;
-    } else {
-      return error_invalid_type(func, handle, t, T);
+  } else if (it->second.type != T) {
+    return error_invalid_type(func, handle, it->second.type, T);
+  } else if (it->second.refcount <= 0) {
+    if (it->second.num_children <= 0) {
+      return error_ref_count(func, handle, T, it->second.num_children);
+    }
+    if (!can_use_inaccessible_object(it, true)) {
+      return error_implicitly_retained(func, handle, T, it->second.num_children);
     }
   }
+  it->second.refcount += 1;
   return CL_SUCCESS;
 }
 
@@ -569,17 +829,18 @@ cl_int check_retain<OCL_DEVICE>(const trimmed__func__& func, void *handle) {
   auto it = objects.find(handle);
   if (it == objects.end()) {
     return error_does_not_exist(func, handle, OCL_DEVICE);
-  } else {
-    object_type t = it->second.type;
-    switch (t) {
-    case OCL_DEVICE:
-      break;
-    case OCL_SUB_DEVICE:
-      it->second.refcount += 1;
-      break;
-    default:
-      return error_invalid_type(func, handle, t, OCL_DEVICE);
+  } else if (it->second.type != OCL_DEVICE && it->second.type != OCL_SUB_DEVICE) {
+    return error_invalid_type(func, handle, it->second.type, OCL_DEVICE);
+  } else if (it->second.type == OCL_SUB_DEVICE && it->second.refcount <= 0) {
+    if (it->second.num_children <= 0) {
+      return error_ref_count(func, handle, OCL_SUB_DEVICE, it->second.refcount);
     }
+    if (!can_use_inaccessible_object(it, true)) {
+      return error_implicitly_retained(func, handle, OCL_SUB_DEVICE, it->second.num_children);
+    }
+  }
+  if (it->second.type == OCL_SUB_DEVICE) {
+      it->second.refcount += 1;
   }
   return CL_SUCCESS;
 }
@@ -596,6 +857,14 @@ cl_int check_retain<OCL_MEM>(const trimmed__func__& func, void *handle) {
     case OCL_BUFFER:
     case OCL_IMAGE:
     case OCL_PIPE:
+      if (it->second.refcount <= 0) {
+        if (it->second.num_children <= 0) {
+          return error_ref_count(func, handle, t, it->second.refcount);
+        }
+        if (!can_use_inaccessible_object(it, true)) {
+          return error_implicitly_retained(func, handle, t, it->second.num_children);
+        }
+      }
       it->second.refcount += 1;
       break;
     default:
@@ -632,10 +901,6 @@ static void report() {
       return _err;                                                             \
     }                                                                          \
   } while (false)
-
-static struct _cl_icd_dispatch dispatch = {};
-
-static const struct _cl_icd_dispatch *tdispatch;
 
   /* Layer API entry points */
 CL_API_ENTRY cl_int CL_API_CALL
@@ -714,6 +979,19 @@ static cl_platform_id context_properties_get_platform(const cl_context_propertie
   return platform;
 }
 
+static bool queue_properties_is_on_device_default(const cl_queue_properties *properties) {
+  if (properties == NULL)
+    return false;
+  bool on_device_default = false;
+  constexpr const cl_uint flags = CL_QUEUE_ON_DEVICE_DEFAULT;
+  for (const cl_queue_properties *property = properties; properties[0]; properties += 2) {
+    if (property[0] == CL_QUEUE_PROPERTIES) {
+      on_device_default = (((cl_command_queue_properties) property[1]) & flags) == flags;
+    }
+  }
+  return on_device_default;
+}
+
 static inline cl_device_id get_parent_device(cl_device_id dev) {
   cl_device_id parent;
   cl_int res;
@@ -766,7 +1044,7 @@ static void* get_parent(cl_event event) {
   cl_context parent_context;
   cl_int res = tdispatch->clGetEventInfo(
     event,
-    CL_QUEUE_CONTEXT,
+    CL_EVENT_CONTEXT,
     sizeof(parent_context), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
     &parent_context, NULL);
   if(res == CL_SUCCESS && parent_context != NULL) {
@@ -776,16 +1054,53 @@ static void* get_parent(cl_event event) {
 }
 
 static void* get_parent(cl_kernel kernel) {
-  cl_context parent_context;
+  cl_program parent_program;
   cl_int res = tdispatch->clGetKernelInfo(
     kernel,
-    CL_QUEUE_CONTEXT,
+    CL_KERNEL_PROGRAM,
+    sizeof(parent_program), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
+    &parent_program, NULL);
+  if(res == CL_SUCCESS && parent_program != NULL) {
+    return parent_program;
+  }
+  return NULL;
+}
+
+static void* get_parent(cl_program program) {
+  cl_context parent_context;
+  cl_int res = tdispatch->clGetProgramInfo(
+    program,
+    CL_PROGRAM_CONTEXT,
     sizeof(parent_context), // NOLINT(bugprone-sizeof-expression) the size of the pointer is meant here
     &parent_context, NULL);
   if(res == CL_SUCCESS && parent_context != NULL) {
     return parent_context;
   }
   return NULL;
+}
+
+static std::vector<void*> get_parent_devices(cl_context context) {
+  size_t devices_size;
+  cl_int res = tdispatch->clGetContextInfo(
+    context,
+    CL_CONTEXT_DEVICES,
+    0,
+    NULL,
+    &devices_size);
+  if (res != CL_SUCCESS) {
+    return {};
+  };
+  std::vector<void*> devices(devices_size / sizeof(cl_device_id));
+  res = tdispatch->clGetContextInfo(
+    context,
+    CL_CONTEXT_DEVICES,
+    devices_size,
+    (void*)devices.data(),
+    NULL);
+  if (res != CL_SUCCESS) {
+    return {};
+  }
+  return devices;
 }
 
   /* OpenCL 1.0 */
@@ -803,8 +1118,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetPlatformIDs_wrap(
     num_entries,
     platforms,
     num_platforms);
-  if (platforms && result == CL_SUCCESS && *num_platforms > 0)
-    CHECK_CREATION_LIST(OCL_PLATFORM, *num_platforms, platforms, NULL);
+  cl_uint actual_num_entries = std::min(*num_platforms, num_entries);
+  if (platforms && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_PLATFORM, actual_num_entries, platforms, NULL);
   return result;
 }
 
@@ -843,8 +1159,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDs_wrap(
     num_entries,
     devices,
     num_devices);
-  if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
+  cl_uint actual_num_entries = std::min(*num_devices, num_entries);
+  if (devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
 }
 
@@ -884,7 +1201,7 @@ static CL_API_ENTRY cl_context CL_API_CALL clCreateContext_wrap(
     errcode_ret);
 
   if (context)
-    CHECK_CREATION_ERRC(OCL_CONTEXT, context, NULL, errcode_ret, cl_context);
+    CHECK_CREATION_ERRC(OCL_CONTEXT, context, std::vector<void*>((void**)devices, (void**)(devices + num_devices)), errcode_ret, cl_context);
   return context;
 }
 
@@ -905,7 +1222,7 @@ static CL_API_ENTRY cl_context CL_API_CALL clCreateContextFromType_wrap(
     errcode_ret);
 
   if (context)
-    CHECK_CREATION_ERRC(OCL_CONTEXT, context, NULL, errcode_ret, cl_context);
+    CHECK_CREATION_ERRC(OCL_CONTEXT, context, get_parent_devices(context), errcode_ret, cl_context);
   return context;
 }
 
@@ -933,7 +1250,7 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetContextInfo_wrap(
     size_t* param_value_size_ret)
 {
   CHECK_EXISTS(OCL_CONTEXT, context);
-  
+
   cl_int result;
   size_t param_value_size_ret_force;
   if (param_name == CL_CONTEXT_DEVICES && param_value && !param_value_size_ret)
@@ -1015,7 +1332,8 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetCommandQueueInfo_wrap(
       else
         CHECK_ADD_OR_EXISTS(OCL_DEVICE, dev, NULL);
     } else if (param_name == CL_QUEUE_CONTEXT) {
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+      cl_context parent = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, parent, get_parent_devices(parent));
     }
   }
   return result;
@@ -1158,7 +1476,8 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetMemObjectInfo_wrap(
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
     if (param_name == CL_MEM_CONTEXT) {
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+      cl_context parent = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, parent, get_parent_devices(parent));
     } else if (param_name == CL_MEM_ASSOCIATED_MEMOBJECT && *(cl_mem *)param_value) {
       cl_mem_object_type t;
       cl_mem mem = *(cl_mem *)param_value;
@@ -1256,9 +1575,12 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetSamplerInfo_wrap(
     param_value_size,
     param_value,
     param_value_size_ret);
-  if (param_value && result == CL_SUCCESS)
-    if (param_name == CL_SAMPLER_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+  if (param_value && result == CL_SUCCESS) {
+    if (param_name == CL_SAMPLER_CONTEXT) {
+      cl_context context = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, context, get_parent_devices(context));
+    }
+  }
   return result;
 }
 
@@ -1358,8 +1680,10 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfo_wrap(
     param_value,
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
-    if (param_name == CL_PROGRAM_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+    if (param_name == CL_PROGRAM_CONTEXT) {
+      cl_context parent = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, parent, get_parent_devices(parent));
+    }
     if (param_name == CL_PROGRAM_DEVICES) {
       for (size_t i = 0; i < *param_value_size_ret/sizeof(cl_device_id); i++) {
         cl_device_id dev = ((cl_device_id *)param_value)[i];
@@ -1473,10 +1797,14 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetKernelInfo_wrap(
     param_value,
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
-    if (param_name == CL_KERNEL_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
-    if (param_name == CL_KERNEL_PROGRAM)
-      CHECK_ADD_OR_EXISTS(OCL_PROGRAM, *(cl_program *)param_value, NULL);
+    if (param_name == CL_KERNEL_CONTEXT) {
+      cl_context parent = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, parent, get_parent_devices(parent));
+    }
+    if (param_name == CL_KERNEL_PROGRAM) {
+      cl_program program = *(cl_program*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_PROGRAM, program, get_parent(program));
+    }
   }
   return result;
 }
@@ -1526,12 +1854,13 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetEventInfo_wrap(
     param_value,
     param_value_size_ret);
   if (param_value && result == CL_SUCCESS) {
-    if (param_name == CL_EVENT_CONTEXT)
-      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, *(cl_context *)param_value, NULL);
+    if (param_name == CL_EVENT_CONTEXT) {
+      cl_context parent = *(cl_context*) param_value;
+      CHECK_ADD_OR_EXISTS(OCL_CONTEXT, parent, get_parent_devices(parent));
+    }
     if (param_name == CL_EVENT_COMMAND_QUEUE && *(cl_command_queue *)param_value) {
       cl_command_queue queue = *(cl_command_queue *)param_value;
-      void* parent = get_parent(queue);
-      CHECK_ADD_OR_EXISTS(OCL_COMMAND_QUEUE, queue, parent);
+      CHECK_ADD_OR_EXISTS(OCL_COMMAND_QUEUE, queue, get_parent(queue));
     }
   }
   return result;
@@ -2203,8 +2532,8 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetGLContextInfoKHR_wrap(
   if (result == CL_SUCCESS && param_value) {
     if (param_name == CL_CURRENT_DEVICE_FOR_GL_CONTEXT_KHR && param_value_size_ret != 0)
       CHECK_CREATION(OCL_DEVICE, *(cl_device_id *)param_value, NULL);
-    if (param_name == CL_DEVICES_FOR_GL_CONTEXT_KHR)
-      CHECK_CREATION_LIST(OCL_DEVICE, (cl_uint)(*param_value_size_ret/sizeof(cl_device_id)), param_value, NULL);
+    if (param_name == CL_DEVICES_FOR_GL_CONTEXT_KHR && *param_value_size_ret > 0)
+      CHECK_CREATION_LIST(OCL_DEVICE, *param_value_size_ret / sizeof(cl_device_id), param_value, NULL);
   }
   return result;
 }
@@ -2234,8 +2563,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromD3D10KHR_wrap(
     num_entries,
     devices,
     num_devices);
-  if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
+  cl_uint actual_num_entries = std::min(*num_devices, num_entries);
+  if (devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
 }
 
@@ -2252,7 +2582,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10BufferKHR_wrap(
     resource,
     errcode_ret);
   if (buffer)
-    CHECK_CREATION_ERRC(OCL_BUFFER, buffer, NULL, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_BUFFER, buffer, context, errcode_ret, cl_mem);
   return buffer;
 }
 
@@ -2271,7 +2601,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10Texture2DKHR_wrap(
     subresource,
     errcode_ret);
   if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, NULL, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, context, errcode_ret, cl_mem);
   return image;
 }
 
@@ -2290,7 +2620,7 @@ static CL_API_ENTRY cl_mem CL_API_CALL clCreateFromD3D10Texture3DKHR_wrap(
     subresource,
     errcode_ret);
   if (image)
-    CHECK_CREATION_ERRC(OCL_IMAGE, image, NULL, errcode_ret, cl_mem);
+    CHECK_CREATION_ERRC(OCL_IMAGE, image, context, errcode_ret, cl_mem);
   return image;
 }
 
@@ -2548,8 +2878,9 @@ clCreateSubDevicesEXT_wrap(
     num_entries,
     out_devices,
     num_devices);
-  if (out_devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices, in_device, out_devices);
+  cl_uint actual_num_entries = std::min(*num_devices, num_entries);
+  if (out_devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_SUB_DEVICE, actual_num_entries, out_devices, in_device);
   return result;
 }
 
@@ -2604,9 +2935,8 @@ clCreateSubDevices_wrap(
     num_devices,
     out_devices,
     num_devices_ret);
-
   if (out_devices && result == CL_SUCCESS && *num_devices_ret > 0)
-    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices_ret, in_device, out_devices);
+    CHECK_CREATION_LIST(OCL_SUB_DEVICE, *num_devices_ret, out_devices, in_device);
   return result;
 }
 
@@ -2921,8 +3251,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromD3D11KHR_wrap(
     num_entries,
     devices,
     num_devices);
-  if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
+  cl_uint actual_num_entries = std::min(*num_devices, num_entries);
+  if (devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
 }
 
@@ -3073,8 +3404,9 @@ static CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsFromDX9MediaAdapterKHR_wrap
     num_entries,
     devices,
     num_devices);
-  if (devices && result == CL_SUCCESS && *num_devices > 0)
-    CHECK_CREATION_LIST(OCL_DEVICE, *num_devices, devices, NULL);
+  cl_uint actual_num_entries = std::min(*num_devices, num_entries);
+  if (devices && result == CL_SUCCESS && actual_num_entries > 0)
+    CHECK_CREATION_LIST(OCL_DEVICE, actual_num_entries, devices, NULL);
   return result;
 }
 
@@ -3222,8 +3554,13 @@ static CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueueWithPropert
     device,
     properties,
     errcode_ret);
-  if (command_queue)
-    CHECK_CREATION_ERRC(OCL_COMMAND_QUEUE, command_queue, context, errcode_ret, cl_command_queue);
+  if (command_queue) {
+    if (queue_properties_is_on_device_default(properties)) {
+      CHECK_CREATE_OR_EXISTS_ERRC(OCL_COMMAND_QUEUE, command_queue, context, errcode_ret, cl_command_queue);
+    } else {
+      CHECK_CREATION_ERRC(OCL_COMMAND_QUEUE, command_queue, context, errcode_ret, cl_command_queue);
+    }
+  }
   return command_queue;
 }
 

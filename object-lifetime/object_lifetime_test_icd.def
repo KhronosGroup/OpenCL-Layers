@@ -1,0 +1,4 @@
+EXPORTS
+clGetExtensionFunctionAddress
+clIcdGetPlatformIDsKHR
+clGetPlatformInfo
