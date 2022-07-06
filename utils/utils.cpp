@@ -12,6 +12,7 @@
 #include <string>
 
 #include <iostream>
+#include <sstream>
 
 #include <sys/stat.h>
 
@@ -19,6 +20,7 @@
 #include <windows.h>
 #include <stdlib.h> // _dupenv_s
 #endif
+
 namespace ocl_layer_utils {
 
 namespace detail {
@@ -248,4 +250,21 @@ void settings_parser::get_filename(const char *option_name, std::string &out) co
   });
 }
 
+cl_version parse_cl_version_string(const char* version_str, cl_version* parsed_version) {
+  std::stringstream ss;
+  ss << version_str;
+
+  std::string opencl;
+  cl_uint major, minor;
+  ss >> opencl;
+  ss >> major;
+  ss.get();
+  ss >> minor;
+
+  if (ss.fail())
+    return false;
+
+  *parsed_version = CL_MAKE_VERSION(major, minor, 0);
+  return true;
+}
 } // namespace ocl_layer_utils

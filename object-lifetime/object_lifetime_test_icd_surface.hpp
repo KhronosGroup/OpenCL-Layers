@@ -208,12 +208,6 @@ CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel_wrap(
   const char* kernel_name,
   cl_int* errcode_ret);
 
-CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgram_wrap(
-  cl_program program,
-  cl_uint num_kernels,
-  cl_kernel* kernels,
-  cl_uint* num_kernels_ret);
-
 CL_API_ENTRY cl_int CL_API_CALL clSetKernelArg_wrap(
   cl_kernel kernel,
   cl_uint arg_index,
@@ -286,6 +280,54 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainSampler_wrap(
 
 CL_API_ENTRY cl_int CL_API_CALL clReleaseSampler_wrap(
   cl_sampler sampler);
+
+CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillBuffer_wrap(
+  cl_command_queue command_queue,
+    cl_mem buffer,
+    const void* pattern,
+    size_t pattern_size,
+    size_t offset,
+    size_t size,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event);
+
+CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageToBuffer_wrap(
+    cl_command_queue command_queue,
+    cl_mem src_image,
+    cl_mem dst_buffer,
+    const size_t* src_origin,
+    const size_t* region,
+    size_t dst_offset,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event);
+
+CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImage_wrap(
+    cl_command_queue command_queue,
+    cl_mem src_image,
+    cl_mem dst_image,
+    const size_t* src_origin,
+    const size_t* dst_origin,
+    const size_t* region,
+    cl_uint num_events_in_wait_list,
+    const cl_event* event_wait_list,
+    cl_event* event);
+
+CL_API_ENTRY cl_int CL_API_CALL clGetSupportedImageFormats_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    cl_mem_object_type image_type,
+    cl_uint num_entries,
+    cl_image_format* image_formats,
+    cl_uint* num_image_formats);
+
+CL_API_ENTRY cl_int CL_API_CALL clGetImageInfo_wrap(
+    cl_mem image,
+    cl_image_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret);
 
 // Loader hooks
 

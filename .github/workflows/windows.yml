@@ -12,17 +12,21 @@ jobs:
         GEN: [Visual Studio 17 2022]
         BIN: [x64, x86]
         STD: [14, 17]
-        include:
-          - VER: v141
-            EXT: OFF
-            GEN: Ninja Multi-Config
-            BIN: x64
-            STD: 14
+        # TODO: Re-enable v141 check. Track down compiler error causing cl.exe to exhaust runner memory
+        # D:\a\OpenCL-Layers\OpenCL-Layers\build\param-verification\res.cpp(2250): fatal error C1060: compiler is out of heap space
+        #include:
+        #  - VER: v141
+        #    EXT: OFF
+        #    GEN: Ninja Multi-Config
+        #    BIN: x64
+        #    STD: 14
     env:
       NINJA_URL: https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip
       NINJA_ROOT: C:\Tools\Ninja
       VS_ROOT: 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
-      UseMultiToolTask: true # Better parallel MSBuild execution
+      UseMultiToolTask: 'true'                # Better parallel MSBuild execution
+      EnforceProcessCountAcrossBuilds: 'true' # -=-
+      MultiProcMaxCount: '3'                  # -=-
 
     steps:
     - name: Checkout OpenCL-Layers
@@ -286,26 +290,44 @@ jobs:
         New-Item -Type Directory ${LAYER_REG_PATH} -Force | Out-Null
         foreach ($Config in 'Release','Debug') { `
           Copy-Item "${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install\bin\OpenCL.dll" "${env:GITHUB_WORKSPACE}\build\bin\${Config}\"
-          foreach ($Layer in 'PrintLayer','CLObjectLifetimeLayer') { `
+          foreach ($Layer in 'PrintLayer','CLObjectLifetimeLayer','CLParamVerificationLayer','CLParamVerificationLayerObjectValidityOnly') { `
+            $LayerPriority = 0
             Write-Host "Running CTest on ${Config} for ${Layer}"
             $ICD = switch (${Layer}) { `
-              'PrintLayer'            {""} `
-              'CLObjectLifetimeLayer' {"${env:GITHUB_WORKSPACE}\build\bin\${Config}\CLObjectLifetimeICD.dll"} }
+              'PrintLayer'                                 {""} `
+              'CLObjectLifetimeLayer'                      {"${env:GITHUB_WORKSPACE}\build\bin\${Config}\CLObjectLifetimeICD.dll"} `
+              'CLParamVerificationLayer'                   {"${env:GITHUB_WORKSPACE}\build\bin\${Config}\CLObjectLifetimeICD.dll"} `
+              'CLParamVerificationLayerObjectValidityOnly' {"${env:GITHUB_WORKSPACE}\build\bin\${Config}\CLObjectLifetimeICD.dll"} }
             $TestsRegex = switch (${Layer}) { `
-              'PrintLayer'            {'PrintLayer'} `
-              'CLObjectLifetimeLayer' {'ObjectLifetime'} }
-            if ($ICD) { Set-ItemProperty -Path ${ICD_REG_PATH}   -Type DWord -Value 0 -Name $ICD }
-            Set-ItemProperty -Path ${LAYER_REG_PATH} -Type DWord -Value 0 -Name ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
+              'PrintLayer'                                 {'PrintLayer'} `
+              'CLObjectLifetimeLayer'                      {'ObjectLifetime'} `
+              'CLParamVerificationLayer'                   {'ParamVerification'} `
+              'CLParamVerificationLayerObjectValidityOnly' {'ObjectValidity'} }
+            $ExcludeRegex = switch (${Layer}) { `
+              'PrintLayer'                                 {''} `
+              'CLObjectLifetimeLayer'                      {''} `
+              'CLParamVerificationLayer'                   {'ObjectValidity'} `
+              'CLParamVerificationLayerObjectValidityOnly' {''} }
+            $LayersToReg = switch (${Layer}) { `
+              'PrintLayer'                                 {"${Layer}"} `
+              'CLObjectLifetimeLayer'                      {"${Layer}"} `
+              'CLParamVerificationLayer'                   {"${Layer}"} `
+              'CLParamVerificationLayerObjectValidityOnly' {"CLObjectLifetimeLayer;CLParamVerificationLayer"} }
+            if ($ICD) { Set-ItemProperty -Path ${ICD_REG_PATH} -Type DWord -Value 0 -Name $ICD }
+            foreach ($BaseName in ${LayersToReg}.Split(';')) { `
+              Set-ItemProperty -Path ${LAYER_REG_PATH} -Type DWord -Value ($LayerPriority++) -Name ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${BaseName}.dll }
             & ctest `
               --test-dir ${env:GITHUB_WORKSPACE}\build `
               --build-config ${Config} `
               --tests-regex $TestsRegex `
+              $(if ($ExcludeRegex) {'--exclude-regex',"${ExcludeRegex}"}) `
               --output-on-failure `
               --no-tests=error `
               --parallel ${env:NUMBER_OF_PROCESSORS}
             if ($LASTEXITCODE -ne 0) { throw "Testing ${Layer} in ${Config} failed." }
             if ($ICD) { Remove-ItemProperty -Path ${ICD_REG_PATH} -Name $ICD }
-            Remove-ItemProperty -Path ${LAYER_REG_PATH} -Name ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${Layer}.dll
+            foreach ($BaseName in ${LayersToReg}.Split(';')) { `
+              Remove-ItemProperty -Path ${LAYER_REG_PATH} -Name ${env:GITHUB_WORKSPACE}\build\bin\${Config}\${BaseName}.dll }
           }
           & ctest `
             --test-dir ${env:GITHUB_WORKSPACE}\build `

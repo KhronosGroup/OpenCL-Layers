@@ -6,9 +6,9 @@
 int main(int argc, char *argv[]) {
   cl_platform_id platform;
   cl_device_id device;
-  layer_test::setup(argc, argv, CL_MAKE_VERSION(1, 2, 0), platform, device);
+  object_lifetime_test::setup(argc, argv, CL_MAKE_VERSION(1, 2, 0), platform, device);
 
-  cl_context context = layer_test::createContext(platform, device);
+  cl_context context = object_lifetime_test::createContext(platform, device);
 
   constexpr const cl_uint num_sub_devices = 2;
   constexpr const cl_uint num_sub_sub_devices_per_sub_device = 2;
@@ -24,18 +24,18 @@ int main(int argc, char *argv[]) {
     EXPECT_SUCCESS(clGetDeviceInfo(device, CL_DEVICE_PARTITION_PROPERTIES, size, properties.get(), nullptr));
 
     if (std::find(properties.get(), properties.get() + len, CL_DEVICE_PARTITION_EQUALLY) == properties.get() + len) {
-      LAYER_TEST_LOG() << "test device does not support CL_DEVICE_PARTITION_EQUALLY" << std::endl;
-      layer_test::TEST_CONTEXT.fail();
-      return layer_test::finalize();
+      LAYERS_TEST_LOG() << "test device does not support CL_DEVICE_PARTITION_EQUALLY" << std::endl;
+      object_lifetime_test::TEST_CONTEXT.fail();
+      return object_lifetime_test::finalize();
     }
   }
 
   cl_uint num_cus;
   EXPECT_SUCCESS(clGetDeviceInfo(device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(cl_uint), &num_cus, nullptr));
   if (num_cus < min_cus) {
-    LAYER_TEST_LOG() << "test device does not have enough compute units" << std::endl;
-    layer_test::TEST_CONTEXT.fail();
-    return layer_test::finalize();
+    LAYERS_TEST_LOG() << "test device does not have enough compute units" << std::endl;
+    object_lifetime_test::TEST_CONTEXT.fail();
+    return object_lifetime_test::finalize();
   }
 
   cl_uint num_sub_cus = num_cus / num_sub_devices;
@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
 
   {
     // Check that device dependencies keep the device alive.
-    cl_context context1 = layer_test::createContext(platform, sub_sub_devices[1]);
+    cl_context context1 = object_lifetime_test::createContext(platform, sub_sub_devices[1]);
     EXPECT_SUCCESS(clReleaseDevice(sub_sub_devices[1]));
     EXPECT_REF_COUNT(sub_sub_devices[1], 0, 1); // used with implicit refcount: 1
 
@@ -149,6 +149,6 @@ int main(int argc, char *argv[]) {
   EXPECT_SUCCESS(clReleaseContext(context));
   EXPECT_DESTROYED(context); // recently destroyed with type: CONTEXT
 
-  return layer_test::finalize();
+  return object_lifetime_test::finalize();
 }
 

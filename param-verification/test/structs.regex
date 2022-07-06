@@ -1,0 +1,10 @@
+In clCreateImage: values specified in image_format are not valid. Returning NULL, \*errcode_ret = CL_INVALID_IMAGE_FORMAT_DESCRIPTOR.
+In clCreateImage: values specified in image_format are not valid. Returning NULL, \*errcode_ret = CL_INVALID_IMAGE_FORMAT_DESCRIPTOR.
+In clCreateImage: values specified in image_desc are not valid. Returning NULL, \*errcode_ret = CL_INVALID_IMAGE_DESCRIPTOR.
+In clCreateImage: values specified in image_desc are not valid. Returning NULL, \*errcode_ret = CL_INVALID_IMAGE_DESCRIPTOR.
+In clCreateImage: values specified in image_desc are not valid. Returning NULL, \*errcode_ret = CL_INVALID_IMAGE_DESCRIPTOR.
+In clCreateImage: values specified in image_desc are not valid. Returning NULL, \*errcode_ret = CL_INVALID_IMAGE_DESCRIPTOR.
+In clCreateImage: values specified in image_desc are not valid. Returning NULL, \*errcode_ret = CL_INVALID_IMAGE_DESCRIPTOR.
+In clCreateImage: values specified in image_desc are not valid. Returning NULL, \*errcode_ret = CL_INVALID_IMAGE_DESCRIPTOR.
+In clCreateImage: a 2D image is created from a 2D image object but image descriptors are not compatible. Returning NULL, \*errcode_ret = CL_INVALID_IMAGE_FORMAT_DESCRIPTOR.
+In clEnqueueCopyImage: src_image and dst_image do not use the same image format. Returning CL_IMAGE_FORMAT_MISMATCH.

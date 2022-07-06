@@ -1,0 +1,7 @@
+In clCreateImage: values specified in flags are not valid. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clCreateImage: values specified in flags are not compatible. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clCreateImage: host_ptr is NULL and CL_MEM_USE_HOST_PTR or CL_MEM_COPY_HOST_PTR are set in flags. Returning NULL, \*errcode_ret = CL_INVALID_HOST_PTR.
+In clCreateImage: host_ptr is not NULL but CL_MEM_COPY_HOST_PTR or CL_MEM_USE_HOST_PTR are not set in flags. Returning NULL, \*errcode_ret = CL_INVALID_HOST_PTR.
+In clCreateSubBuffer: the value specified in buffer_create_type is not valid. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clCreateSubBuffer: buffer was created with CL_MEM_READ_ONLY but flags specifies CL_MEM_READ_WRITE or CL_MEM_WRITE_ONLY. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clGetContextInfo: param_name is not valid. Returning CL_INVALID_VALUE.

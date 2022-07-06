@@ -4,16 +4,16 @@ int main(int argc, char *argv[]) {
   cl_platform_id platform;
   cl_device_id device;
   cl_int status;
-  layer_test::setup(argc, argv, CL_MAKE_VERSION(1, 1, 0), platform, device);
+  object_lifetime_test::setup(argc, argv, CL_MAKE_VERSION(1, 1, 0), platform, device);
 
-  cl_context context = layer_test::createContext(platform, device);
+  cl_context context = object_lifetime_test::createContext(platform, device);
 
   cl_command_queue queue = clCreateCommandQueue(context, device, 0, &status);
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(context, 1, 1);
   EXPECT_REF_COUNT(queue, 1, 0);
 
-  const char* source = "kernel void test_kernel(sampler_t sampler) {} kernel void test(int* a) {a[0] = 0;} kernel void test1 (int* b) {b[0] = 1;}";
+  const char* source = "kernel void test_kernel(sampler_t sampler) {}";
   size_t length = strlen(source);
   cl_program program = clCreateProgramWithSource(context,
                                                  1,
@@ -45,16 +45,6 @@ int main(int argc, char *argv[]) {
   EXPECT_SUCCESS(status);
   EXPECT_REF_COUNT(kernel, 1, 0);
   EXPECT_REF_COUNT(program, 2, 1);
-
-  std::vector<cl_kernel> kernels;
-  cl_uint num_kernels;
-  status = clCreateKernelsInProgram(program, 0, nullptr, &num_kernels);
-  EXPECT_SUCCESS(status);
-  kernels.resize(num_kernels);
-  status = clCreateKernelsInProgram(program, static_cast<cl_uint>(kernels.size()), kernels.data(), nullptr);
-  EXPECT_SUCCESS(status);
-  EXPECT_REF_COUNT(program, 2, 1 + num_kernels);
-  for (auto kern : kernels) EXPECT_REF_COUNT(kern, 1, 0);
 
   cl_event top_of_pipe = clCreateUserEvent(context, &status);
   EXPECT_SUCCESS(status);
@@ -97,11 +87,6 @@ int main(int argc, char *argv[]) {
   EXPECT_SUCCESS(clReleaseKernel(kernel));
   EXPECT_SUCCESS(clReleaseKernel(kernel));
   EXPECT_DESTROYED(kernel); // recently deleted with type: KERNEL
-  for (auto kern : kernels)
-  {
-    EXPECT_SUCCESS(clReleaseKernel(kern));
-    EXPECT_DESTROYED(kern); // recently deleted with type: KERNEL
-  }
 
   EXPECT_SUCCESS(clReleaseProgram(program));
   EXPECT_REF_COUNT(program, 1, 0);
@@ -118,6 +103,6 @@ int main(int argc, char *argv[]) {
   EXPECT_DESTROYED(bottom_of_pipe); // recently deleted with type: EVENT
   EXPECT_DESTROYED(context); // recently deleted with type: CONTEXT
 
-  return layer_test::finalize();
+  return object_lifetime_test::finalize();
 }
 

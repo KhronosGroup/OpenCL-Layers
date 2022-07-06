@@ -12,13 +12,13 @@
 #include <map>          // std::map<std::string, void*> _extensions
 #include <set>          // std::set<std::shared_ptr<_cl_object>> _objects
 #include <utility>      // std::make_pair
-#include <mutex>        // std::mutex
 
 namespace lifetime
 {
   extern bool report_implicit_ref_count_to_user,
               allow_using_released_objects,
-              allow_using_inaccessible_objects;
+              allow_using_inaccessible_objects,
+              always_return_success;
 
   template <typename T> cl_int CL_INVALID();
   template <> inline cl_int CL_INVALID<cl_platform_id>() { return CL_INVALID_PLATFORM; }
@@ -87,8 +87,8 @@ namespace lifetime
 
   template <typename Object> struct ref_counted_object
   {
-    cl_uint ref_count,
-            implicit_ref_count;
+    cl_uint ref_count;
+    cl_uint implicit_ref_count;
     object_parents<Object> parents;
 
     ref_counted_object(object_parents<Object> parents);
@@ -247,10 +247,32 @@ struct _cl_mem
   : public lifetime::icd_compatible
   , public lifetime::ref_counted_object<cl_mem>
 {
-  size_t _size;
+  cl_mem_object_type _type;
+  cl_mem_flags _flags;
+  union {
+    struct {
+      size_t origin;
+      size_t size;
+    } buffer;
+    struct {
+      cl_image_format format;
+      cl_image_desc desc;
+    } image;
+  } _properties;
 
   _cl_mem() = delete;
-  _cl_mem(cl_mem mem_parent, cl_context context_parent, size_t size);
+  _cl_mem(cl_mem mem_parent,
+          cl_context context_parent,
+          cl_mem_object_type type,
+          cl_mem_flags flags,
+          size_t origin,
+          size_t size);
+  _cl_mem(cl_mem mem_parent,
+          cl_context context_parent,
+          cl_mem_object_type type,
+          cl_mem_flags flags,
+          cl_image_format image_format,
+          cl_image_desc image_desc);
   _cl_mem(const _cl_mem&) = delete;
   _cl_mem(_cl_mem&&) = delete;
   ~_cl_mem() = default;
@@ -274,6 +296,12 @@ struct _cl_mem
   cl_int clRetainMemObject();
 
   cl_int clReleaseMemObject();
+
+  cl_int clGetImageInfo(
+    cl_image_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret);
 };
 
 struct _cl_command_queue
@@ -421,6 +449,13 @@ struct _cl_context
   cl_sampler clCreateSamplerWithProperties(
     const cl_sampler_properties* sampler_properties,
     cl_int* errcode_ret);
+
+  cl_int clGetSupportedImageFormats(
+    cl_mem_flags flags,
+    cl_mem_object_type image_type,
+    cl_uint num_entries,
+    cl_image_format* image_formats,
+    cl_uint* num_image_formats);
 };
 
 struct _cl_program
@@ -455,11 +490,6 @@ struct _cl_program
   cl_kernel clCreateKernel(
     const char* kernel_name,
     cl_int* errcode_ret);
-
-  cl_int clCreateKernelsInProgram(
-    cl_uint num_kernels,
-    cl_kernel* kernels,
-    cl_uint* num_kernels_ret);
 };
 
 struct _cl_kernel
@@ -568,8 +598,6 @@ struct _cl_platform_id
   std::set<std::shared_ptr<_cl_event>> _events;
   std::set<std::shared_ptr<_cl_sampler>> _samplers;
 
-  std::recursive_mutex _global_mutex;
-
   _cl_platform_id();
   _cl_platform_id(const _cl_platform_id&) = delete;
   _cl_platform_id(_cl_platform_id&&) = delete;
@@ -607,6 +635,4 @@ namespace lifetime
   template <> inline std::set<std::shared_ptr<_cl_kernel>>& get_objects<cl_kernel>() { return _platform._kernels; }
   template <> inline std::set<std::shared_ptr<_cl_event>>& get_objects<cl_event>() { return _platform._events; }
   template <> inline std::set<std::shared_ptr<_cl_sampler>>& get_objects<cl_sampler>() { return _platform._samplers; }
-
-  template <typename T> std::recursive_mutex& get_mutex() { return _platform._global_mutex; }
 }

@@ -1,8 +1,5 @@
 In clGetContextInfo CONTEXT: [0-9a-fA-FxX]+ used with explicit refcount: 0 and implicit refcount: 4
 In clGetKernelInfo KERNEL: [0-9a-fA-FxX]+ was used but it was recently deleted with type: KERNEL
-In clGetKernelInfo KERNEL: [0-9a-fA-FxX]+ was used but it was recently deleted with type: KERNEL
-In clGetKernelInfo KERNEL: [0-9a-fA-FxX]+ was used but it was recently deleted with type: KERNEL
-In clGetKernelInfo KERNEL: [0-9a-fA-FxX]+ was used but it was recently deleted with type: KERNEL
 In clGetProgramInfo PROGRAM: [0-9a-fA-FxX]+ was used but it was recently deleted with type: PROGRAM
 In clGetSamplerInfo SAMPLER: [0-9a-fA-FxX]+ was used but it was recently deleted with type: SAMPLER
 In clGetCommandQueueInfo COMMAND_QUEUE: [0-9a-fA-FxX]+ was used but it was recently deleted with type: COMMAND_QUEUE

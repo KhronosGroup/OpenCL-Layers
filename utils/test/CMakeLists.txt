@@ -1,0 +1,3 @@
+add_library(LayersTest INTERFACE)
+target_include_directories(LayersTest INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(LayersTest INTERFACE LayersCommon LayersUtils)

@@ -1,0 +1,3 @@
+In clCreateCommandQueue: device is not associated with context. Returning NULL, \*errcode_ret = CL_INVALID_DEVICE.
+In clEnqueueCopyImageToBuffer: context associated with command_queue and dst_buffer are not the same. Returning CL_INVALID_CONTEXT.
+In clEnqueueCopyImageToBuffer: the context associated with command_queue and events in event_wait_list are not the same. Returning CL_INVALID_CONTEXT.

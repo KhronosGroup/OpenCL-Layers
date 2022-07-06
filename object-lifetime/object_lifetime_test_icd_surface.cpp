@@ -3,14 +3,11 @@
 
 #include <type_traits>  // std::remove_pointer_t
 #include <algorithm>    // std::find_if
-#include <mutex>        // std::lock_guard
 
 template <typename T, typename F>
 cl_int invoke_if_valid(T cl_object, F&& f, bool retain = false)
 {
   using namespace lifetime;
-
-  std::lock_guard<std::recursive_mutex> lock{lifetime::get_mutex<T>()};
 
   auto it = std::find_if(
     get_objects<T>().cbegin(),
@@ -21,13 +18,15 @@ cl_int invoke_if_valid(T cl_object, F&& f, bool retain = false)
     }
   );
 
+  cl_int result;
   if (it != get_objects<T>().cend())
     if ((*it)->is_valid(retain))
-      return f();
+      result = f();
     else
-      return CL_INVALID<T>();
+      result = CL_INVALID<T>();
   else
-    return CL_INVALID<T>();
+    result = CL_INVALID<T>();
+  return always_return_success ? CL_SUCCESS : result;
 }
 
 template<typename F>
@@ -35,18 +34,18 @@ cl_int invoke_if_valid(cl_platform_id platform, F&& f)
 {
   using namespace lifetime;
 
+  cl_int result;
   if (platform == &_platform)
-    return f();
+    result = f();
   else
-    return CL_INVALID<cl_platform_id>();
+    result = CL_INVALID<cl_platform_id>();
+  return always_return_success ? CL_SUCCESS : result;
 }
 
 template <typename T, typename F>
 auto create_if_valid(T cl_object, cl_int* err, F&& f) -> decltype(f())
 {
   using namespace lifetime;
-
-  std::lock_guard<std::recursive_mutex> lock{lifetime::get_mutex<T>()};
 
   auto it = std::find_if(
     get_objects<T>().cbegin(),
@@ -59,17 +58,22 @@ auto create_if_valid(T cl_object, cl_int* err, F&& f) -> decltype(f())
 
   if (it != get_objects<T>().cend())
     if ((*it)->is_valid(false))
-      return f();
+    {
+      auto object = f();
+      if (always_return_success && err != nullptr)
+        *err = CL_SUCCESS;
+      return object;
+    }
     else
     {
       if (err != nullptr)
-        *err = CL_INVALID<T>();
+        *err = always_return_success ? CL_SUCCESS : CL_INVALID<T>();
       return nullptr;
     }
   else
   {
     if (err != nullptr)
-      *err = CL_INVALID<T>();
+      *err = always_return_success ? CL_SUCCESS : CL_INVALID<T>();
     return nullptr;
   }
 }
@@ -80,11 +84,16 @@ auto create_if_valid(cl_platform_id platform, cl_int* err, F&& f) -> decltype(f(
   using namespace lifetime;
 
   if (platform == &_platform)
-    return f();
+  {
+    auto object = f();
+    if (always_return_success && err != nullptr)
+      *err = CL_SUCCESS;
+    return object;
+  }
   else
   {
     if (err != nullptr)
-      *err = CL_INVALID<cl_platform_id>();
+      *err = always_return_success ? CL_SUCCESS : CL_INVALID<cl_platform_id>();
     return nullptr;
   }
 }
@@ -643,22 +652,6 @@ CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel_wrap(
   });
 }
 
-CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgram_wrap(
-  cl_program program,
-  cl_uint num_kernels,
-  cl_kernel* kernels,
-  cl_uint* num_kernels_ret)
-{
-  return invoke_if_valid(program, [&]()
-  {
-    return program->clCreateKernelsInProgram(
-      num_kernels,
-      kernels,
-      num_kernels_ret
-    );
-  });
-}
-
 CL_API_ENTRY cl_int CL_API_CALL clSetKernelArg_wrap(
   cl_kernel kernel,
   cl_uint arg_index,
@@ -778,7 +771,7 @@ CL_API_ENTRY cl_int CL_API_CALL clWaitForEvents_wrap(
       );
     });
   else
-    return CL_INVALID_EVENT;
+    return lifetime::always_return_success ? CL_SUCCESS : CL_INVALID_EVENT;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clRetainEvent_wrap(
@@ -870,6 +863,84 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseSampler_wrap(
   });
 }
 
+CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillBuffer_wrap(
+  cl_command_queue command_queue,
+    cl_mem,
+    const void*,
+    size_t,
+    size_t,
+    size_t,
+    cl_uint,
+    const cl_event*,
+    cl_event*)
+{
+  return invoke_if_valid(command_queue, [&]()
+  {
+    return CL_SUCCESS;
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageToBuffer_wrap(
+    cl_command_queue command_queue,
+    cl_mem,
+    cl_mem,
+    const size_t*,
+    const size_t*,
+    size_t,
+    cl_uint,
+    const cl_event*,
+    cl_event*)
+{
+  return invoke_if_valid(command_queue, [&]()
+  {
+    return CL_SUCCESS;
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImage_wrap(
+    cl_command_queue command_queue,
+    cl_mem,
+    cl_mem,
+    const size_t*,
+    const size_t*,
+    const size_t*,
+    cl_uint,
+    const cl_event*,
+    cl_event*)
+{
+  return invoke_if_valid(command_queue, [&]()
+  {
+    return CL_SUCCESS;
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clGetImageInfo_wrap(
+    cl_mem image,
+    cl_image_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret)
+{
+  return invoke_if_valid(image, [&]()
+  {
+    return image->clGetImageInfo(param_name, param_value_size, param_value, param_value_size_ret);
+  });
+}
+
+CL_API_ENTRY cl_int CL_API_CALL clGetSupportedImageFormats_wrap(
+    cl_context context,
+    cl_mem_flags flags,
+    cl_mem_object_type image_type,
+    cl_uint num_entries,
+    cl_image_format* image_formats,
+    cl_uint* num_image_formats)
+{
+  return invoke_if_valid(context, [&]()
+  {
+    return context->clGetSupportedImageFormats(flags, image_type, num_entries, image_formats, num_image_formats);
+  });
+}
+
 // Loader hooks
 
 CL_API_ENTRY void* CL_API_CALL clGetExtensionFunctionAddress(
@@ -900,7 +971,7 @@ clIcdGetPlatformIDsKHR(
       (platforms && num_entries <= 0) ||
       (!platforms && num_entries >= 1))
   {
-    return CL_INVALID_VALUE;
+    return always_return_success ? CL_SUCCESS : CL_INVALID_VALUE;
   }
 
   if (platforms && num_entries == plat_count)

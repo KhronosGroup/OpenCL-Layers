@@ -1,0 +1,9 @@
+In clCreateSubBuffer: the size field of the cl_buffer_region structure passed in buffer_create_info is 0. Returning NULL, \*errcode_ret = CL_INVALID_BUFFER_SIZE.
+In clCreateSubBuffer: the region specified by the cl_buffer_region structure passed in buffer_create_info is out of bounds in buffer. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clCreateSubBuffer: the region specified by the cl_buffer_region structure passed in buffer_create_info is out of bounds in buffer. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clCreateSubBuffer: the region specified by the cl_buffer_region structure passed in buffer_create_info is out of bounds in buffer. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clEnqueueCopyImage: wrong origin or region values for 2D image or 1D image array src_image. Returning CL_INVALID_VALUE.
+In clEnqueueCopyImage: some region array element is 0. Returning CL_INVALID_VALUE.
+In clEnqueueCopyImage: the region being read specified by origin and region is out of bounds for 2D image src_image. Returning CL_INVALID_VALUE.
+In clEnqueueCopyImage: the region being read specified by origin and region is out of bounds for 2D image src_image. Returning CL_INVALID_VALUE.
+In clEnqueueCopyImage: the region being read specified by origin and region is out of bounds for 2D image dst_image. Returning CL_INVALID_VALUE.

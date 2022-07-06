@@ -1,11 +1,14 @@
 #include "object_lifetime_test_icd.hpp"
 #include "object_lifetime_test_icd_surface.hpp"
 
+#include <algorithm>
+
 namespace lifetime
 {
   bool report_implicit_ref_count_to_user,
        allow_using_released_objects,
-       allow_using_inaccessible_objects;
+       allow_using_inaccessible_objects,
+       always_return_success;
 
   void object_parents<cl_device_id>::notify()
   {
@@ -181,6 +184,85 @@ cl_int _cl_device_id::clGetDeviceInfo(
         reinterpret_cast<char*>(&numeric_version) + sizeof(numeric_version),
         std::back_inserter(result));
       break;
+    case CL_DEVICE_AVAILABLE:
+    {
+      cl_bool available = CL_TRUE;
+      std::copy(
+        reinterpret_cast<char*>(&available),
+        reinterpret_cast<char*>(&available) + sizeof(available),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_DEVICE_MAX_MEM_ALLOC_SIZE:
+    {
+      cl_ulong max_mem_alloc_size = 0x1000; // Arbitrary value
+      std::copy(
+        reinterpret_cast<char*>(&max_mem_alloc_size),
+        reinterpret_cast<char*>(&max_mem_alloc_size) + sizeof(max_mem_alloc_size),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_DEVICE_MEM_BASE_ADDR_ALIGN:
+    {
+      cl_uint align = 16;
+      std::copy(
+        reinterpret_cast<char*>(&align),
+        reinterpret_cast<char*>(&align) + sizeof(align),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_DEVICE_IMAGE_SUPPORT:
+    {
+      cl_bool support = true;
+      std::copy(
+        reinterpret_cast<char*>(&support),
+        reinterpret_cast<char*>(&support) + sizeof(support),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_DEVICE_IMAGE2D_MAX_WIDTH:
+    case CL_DEVICE_IMAGE2D_MAX_HEIGHT:
+    case CL_DEVICE_IMAGE3D_MAX_WIDTH:
+    case CL_DEVICE_IMAGE3D_MAX_HEIGHT:
+    case CL_DEVICE_IMAGE3D_MAX_DEPTH:
+    case CL_DEVICE_IMAGE_MAX_BUFFER_SIZE:
+    case CL_DEVICE_IMAGE_MAX_ARRAY_SIZE:
+    {
+      size_t max_size = 4096;
+      std::copy(
+        reinterpret_cast<char*>(&max_size),
+        reinterpret_cast<char*>(&max_size) + sizeof(max_size),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_DEVICE_QUEUE_ON_DEVICE_MAX_SIZE:
+    case CL_DEVICE_QUEUE_ON_DEVICE_PREFERRED_SIZE:
+    {
+      cl_uint max_size = 256 * 1024;
+      std::copy(
+        reinterpret_cast<char*>(&max_size),
+        reinterpret_cast<char*>(&max_size) + sizeof(max_size),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_DEVICE_DEVICE_ENQUEUE_CAPABILITIES:
+    {
+      cl_device_device_enqueue_capabilities caps = CL_DEVICE_QUEUE_SUPPORTED | CL_DEVICE_QUEUE_REPLACEABLE_DEFAULT;
+      std::copy(
+        reinterpret_cast<char*>(&caps),
+        reinterpret_cast<char*>(&caps) + sizeof(caps),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_DEVICE_GENERIC_ADDRESS_SPACE_SUPPORT:
+    {
+      cl_bool support = CL_TRUE;
+      std::copy(
+        reinterpret_cast<char*>(&support),
+        reinterpret_cast<char*>(&support) + sizeof(support),
+        std::back_inserter(result));
+      break;
+    }
     default:
       return CL_INVALID_VALUE;
   }
@@ -218,32 +300,41 @@ cl_int _cl_device_id::clCreateSubDevices(
     case CL_DEVICE_PARTITION_EQUALLY:
     {
       cl_uint n = static_cast<cl_uint>(properties[1]);
-      cl_uint ret_count = cu_count / n;
-      if (num_devices < ret_count)
+      if (num_devices * n > cu_count)
         return CL_INVALID_DEVICE_PARTITION_COUNT;
 
-      if (num_devices_ret)
-        *num_devices_ret = ret_count;
+      std::vector<std::shared_ptr<_cl_device_id>> result;
+      std::generate_n(
+        std::back_inserter(result),
+        num_devices,
+        [n = static_cast<cl_uint>(properties[1]), this]()
+        {
+          return std::make_shared<_cl_device_id>(
+            _cl_device_id::device_kind::sub,
+            this,
+            n);
+        }
+      );
+      reference(num_devices);
 
-      if (out_devices && num_devices < ret_count)
+      if (num_devices_ret)
+        *num_devices_ret = static_cast<cl_uint>(result.size());
+
+      if (out_devices && num_devices < result.size())
         return CL_INVALID_VALUE;
 
       if (out_devices)
       {
-        std::generate_n(
+        std::transform(
+          result.cbegin(),
+          result.cend(),
           out_devices,
-          num_devices,
-          [n = static_cast<cl_uint>(properties[1]), this]()
-          {
-            return lifetime::create_or_exit<cl_device_id>(
-              nullptr,
-              _cl_device_id::device_kind::sub,
-              this,
-              n);
-          }
+          [](const std::shared_ptr<_cl_device_id>& dev){ return dev.get(); }
         );
-        reference(ret_count);
       }
+
+      for (const auto& dev : result)
+        lifetime::get_objects<cl_device_id>().insert(dev);
 
       return CL_SUCCESS;
       break;
@@ -310,14 +401,36 @@ cl_context _cl_device_id::clCreateContext(
   );
 }
 
-_cl_mem::_cl_mem(cl_mem mem_parent, cl_context context_parent, size_t size)
+_cl_mem::_cl_mem(cl_mem mem_parent,
+                 cl_context context_parent,
+                 cl_mem_object_type type,
+                 cl_mem_flags flags,
+                 size_t origin,
+                 size_t size)
   : icd_compatible{}
   , ref_counted_object<cl_mem>{ lifetime::object_parents<cl_mem>{ mem_parent, context_parent } }
-  , _size{ size }
-{}
+  , _type{ type }
+  , _flags{ flags }
+{
+  _properties.buffer = { origin, size };
+}
+
+_cl_mem::_cl_mem(cl_mem mem_parent,
+                 cl_context context_parent,
+                 cl_mem_object_type type,
+                 cl_mem_flags flags,
+                 cl_image_format format,
+                 cl_image_desc desc)
+  : icd_compatible{}
+  , ref_counted_object<cl_mem>{ lifetime::object_parents<cl_mem>{ mem_parent, context_parent } }
+  , _type{ type }
+  , _flags{ flags }
+{
+  _properties.image = { format, desc };
+}
 
 cl_mem _cl_mem::clCreateSubBuffer(
-  cl_mem_flags,
+  cl_mem_flags flags,
   cl_buffer_create_type buffer_create_type,
   const void* buffer_create_info,
   cl_int* errcode_ret)
@@ -330,10 +443,17 @@ cl_mem _cl_mem::clCreateSubBuffer(
     return nullptr;
   }
 
+  if (_type != CL_MEM_OBJECT_BUFFER)
+  {
+    if (errcode_ret)
+      *errcode_ret = CL_INVALID_VALUE;
+    return nullptr;
+  }
+
   const cl_buffer_region* region_info =
     reinterpret_cast<const cl_buffer_region*>(buffer_create_info);
 
-  if (region_info->origin + region_info->size > this->_size)
+  if (region_info->origin + region_info->size > this->_properties.buffer.size)
   {
     if (errcode_ret)
       *errcode_ret = CL_INVALID_BUFFER_SIZE;
@@ -345,8 +465,63 @@ cl_mem _cl_mem::clCreateSubBuffer(
     errcode_ret,
     this,
     parents.parent_context,
+    CL_MEM_OBJECT_BUFFER,
+    flags,
+    region_info->origin,
     region_info->size
   );
+}
+
+static size_t image_format_size(cl_image_format format)
+{
+  size_t channels;
+  switch (format.image_channel_order)
+  {
+    case CL_R:
+    case CL_A:
+    case CL_DEPTH:
+    case CL_LUMINANCE:
+    case CL_INTENSITY:
+      channels = 1;
+      break;
+    case CL_RG:
+    case CL_RA:
+    case CL_Rx:
+      channels = 2;
+      break;
+    case CL_RGB:
+    case CL_RGx:
+      channels = 3;
+      break;
+    default:
+      channels = 4;
+      break;
+  }
+
+  size_t type_size;
+  switch (format.image_channel_data_type)
+  {
+    case CL_SNORM_INT8:
+    case CL_UNORM_INT8:
+    case CL_SIGNED_INT8:
+    case CL_UNSIGNED_INT8:
+      type_size = 1;
+      break;
+    case CL_SNORM_INT16:
+    case CL_UNORM_INT16:
+    case CL_UNORM_SHORT_555:
+    case CL_UNORM_SHORT_565:
+    case CL_SIGNED_INT16:
+    case CL_UNSIGNED_INT16:
+    case CL_HALF_FLOAT:
+      type_size = 2;
+      break;
+    default:
+      type_size = 4;
+      break;
+  }
+
+  return type_size * channels;
 }
 
 cl_int _cl_mem::clGetMemObjectInfo(
@@ -363,9 +538,30 @@ cl_int _cl_mem::clGetMemObjectInfo(
   {
     case CL_MEM_SIZE:
     {
+      size_t size;
+      if (_type == CL_MEM_OBJECT_BUFFER)
+      {
+        size = _properties.buffer.size;
+      }
+      else
+      {
+        size = image_format_size(_properties.image.format)
+             * _properties.image.desc.image_array_size
+             * _properties.image.desc.image_depth;
+        if (_properties.image.desc.image_slice_pitch)
+          size *= _properties.image.desc.image_slice_pitch;
+        else
+        {
+          size *= _properties.image.desc.image_height;
+          if (_properties.image.desc.image_row_pitch)
+            size *= _properties.image.desc.image_row_pitch;
+          else
+            size *= _properties.image.desc.image_width;
+        }
+      }
       std::copy(
-        reinterpret_cast<char*>(&_size),
-        reinterpret_cast<char*>(&_size) + sizeof(_size),
+        reinterpret_cast<char*>(&size),
+        reinterpret_cast<char*>(&size) + sizeof(size),
         std::back_inserter(result));
       break;
     }
@@ -381,6 +577,38 @@ cl_int _cl_mem::clGetMemObjectInfo(
       std::copy(
         reinterpret_cast<char*>(&tmp),
         reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_MEM_OFFSET:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&_properties.buffer.origin),
+        reinterpret_cast<char*>(&_properties.buffer.origin) + sizeof(_properties.buffer.origin),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_MEM_TYPE:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&_type),
+        reinterpret_cast<char*>(&_type) + sizeof(_type),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_MEM_FLAGS:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&_flags),
+        reinterpret_cast<char*>(&_flags) + sizeof(_flags),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_MEM_ASSOCIATED_MEMOBJECT:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&parents.parent_mem),
+        reinterpret_cast<char*>(&parents.parent_mem) + sizeof(parents.parent_mem),
         std::back_inserter(result));
       break;
     }
@@ -412,6 +640,88 @@ cl_int _cl_mem::clReleaseMemObject()
   return release();
 }
 
+cl_int _cl_mem::clGetImageInfo(
+    cl_image_info param_name,
+    size_t param_value_size,
+    void* param_value,
+    size_t* param_value_size_ret)
+{
+  if (param_value_size == 0 && param_value != NULL)
+    return CL_INVALID_VALUE;
+
+  if (_type == CL_MEM_OBJECT_BUFFER || _type == CL_MEM_OBJECT_PIPE)
+    return CL_INVALID_VALUE;
+
+  std::vector<char> result;
+  switch(param_name)
+  {
+    case CL_IMAGE_FORMAT:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&_properties.image.format),
+        reinterpret_cast<char*>(&_properties.image.format) + sizeof(_properties.image.format),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_IMAGE_WIDTH:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&_properties.image.desc.image_width),
+        reinterpret_cast<char*>(&_properties.image.desc.image_width) + sizeof(_properties.image.desc.image_width),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_IMAGE_HEIGHT:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&_properties.image.desc.image_height),
+        reinterpret_cast<char*>(&_properties.image.desc.image_height) + sizeof(_properties.image.desc.image_height),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_IMAGE_DEPTH:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&_properties.image.desc.image_depth),
+        reinterpret_cast<char*>(&_properties.image.desc.image_depth) + sizeof(_properties.image.desc.image_depth),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_IMAGE_ARRAY_SIZE:
+    {
+      std::copy(
+        reinterpret_cast<char*>(&_properties.image.desc.image_array_size),
+        reinterpret_cast<char*>(&_properties.image.desc.image_array_size) + sizeof(_properties.image.desc.image_array_size),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_IMAGE_ELEMENT_SIZE:
+    {
+      size_t element_size = image_format_size(_properties.image.format);
+      std::copy(
+        reinterpret_cast<char*>(&element_size),
+        reinterpret_cast<char*>(&element_size) + sizeof(element_size),
+        std::back_inserter(result));
+      break;
+    }
+    default:
+      return CL_INVALID_VALUE;
+  }
+
+  if (param_value_size_ret)
+    *param_value_size_ret = result.size();
+
+  if (param_value_size && param_value_size < result.size())
+    return CL_INVALID_VALUE;
+
+  if (param_value)
+  {
+    std::copy(result.begin(), result.end(), static_cast<char*>(param_value));
+  }
+
+  return CL_SUCCESS;
+}
+
 _cl_command_queue::_cl_command_queue(cl_device_id parent_device, cl_context parent_context, const cl_queue_properties* first, const cl_queue_properties* last)
   : icd_compatible{}
   , ref_counted_object<cl_command_queue>{ lifetime::object_parents<cl_command_queue>{ parent_device, parent_context } }
@@ -439,8 +749,8 @@ cl_int _cl_command_queue::clGetCommandQueueInfo(
       break;
     case CL_QUEUE_DEVICE:
       std::copy(
-        reinterpret_cast<char*>(&parents.parent_context),
-        reinterpret_cast<char*>(&parents.parent_context) + sizeof(parents.parent_context),
+        reinterpret_cast<char*>(&parents.parent_device),
+        reinterpret_cast<char*>(&parents.parent_device) + sizeof(parents.parent_device),
         std::back_inserter(result));
       break;
     case CL_QUEUE_REFERENCE_COUNT:
@@ -449,6 +759,20 @@ cl_int _cl_command_queue::clGetCommandQueueInfo(
       std::copy(
         reinterpret_cast<char*>(&tmp),
         reinterpret_cast<char*>(&tmp) + sizeof(tmp),
+        std::back_inserter(result));
+      break;
+    }
+    case CL_QUEUE_PROPERTIES:
+    {
+       cl_command_queue_properties props = 0;
+       auto it = std::find(_props.cbegin(), _props.cend(), CL_QUEUE_PROPERTIES);
+       if (it != _props.cend())
+       {
+         props = *(++it);
+       }
+       std::copy(
+        reinterpret_cast<char*>(&props),
+        reinterpret_cast<char*>(&props) + sizeof(props),
         std::back_inserter(result));
       break;
     }
@@ -568,7 +892,7 @@ cl_int _cl_context::clGetContextInfo(
     case CL_CONTEXT_DEVICES:
       std::copy(
         reinterpret_cast<char*>(parents.parent_devices.data()),
-        reinterpret_cast<char*>(parents.parent_devices.data()) + parents.parent_devices.size() * sizeof(cl_device_id),
+        reinterpret_cast<char*>(parents.parent_devices.data() + parents.parent_devices.size()),
         std::back_inserter(result));
       break;
     default:
@@ -600,7 +924,7 @@ cl_int _cl_context::clReleaseContext()
 }
 
 cl_mem _cl_context::clCreateBuffer(
-  cl_mem_flags,
+  cl_mem_flags flags,
   size_t size,
   void*,
   cl_int* errcode_ret)
@@ -610,13 +934,16 @@ cl_mem _cl_context::clCreateBuffer(
     errcode_ret,
     nullptr,
     this,
+    CL_MEM_OBJECT_BUFFER,
+    flags,
+    0,
     size
   );
 }
 
 cl_mem _cl_context::clCreateBufferWithProperties(
   const cl_mem_properties*,
-  cl_mem_flags,
+  cl_mem_flags flags,
   size_t size,
   void*,
   cl_int* errcode_ret)
@@ -626,14 +953,17 @@ cl_mem _cl_context::clCreateBufferWithProperties(
     errcode_ret,
     nullptr,
     this,
+    CL_MEM_OBJECT_BUFFER,
+    flags,
+    0,
     size
   );
 }
 
 cl_mem _cl_context::clCreateImage(
-  cl_mem_flags,
-  const cl_image_format*,
-  const cl_image_desc*,
+  cl_mem_flags flags,
+  const cl_image_format* format,
+  const cl_image_desc* desc,
   void*,
   cl_int* errcode_ret)
 {
@@ -642,14 +972,17 @@ cl_mem _cl_context::clCreateImage(
     errcode_ret,
     nullptr,
     this,
-    0
+    desc->image_type,
+    flags,
+    *format,
+    *desc
   );
 }
 
 cl_mem _cl_context::clCreateImageWithProperties(
     const cl_mem_properties*,
-    cl_mem_flags,
-    const cl_image_format*,
+    cl_mem_flags flags,
+    const cl_image_format* format,
     const cl_image_desc* desc,
     void*,
     cl_int* errcode_ret)
@@ -660,22 +993,25 @@ cl_mem _cl_context::clCreateImageWithProperties(
     if (desc->buffer)
     {
       auto it = std::find_if(
-        lifetime::get_objects<cl_mem>().cbegin(),
-        lifetime::get_objects<cl_mem>().cend(),
+        lifetime::_platform._mems.cbegin(),
+        lifetime::_platform._mems.cend(),
         [&](const std::shared_ptr<_cl_mem>& mem)
         {
           return mem->parents.parent_context == this;
         }
       );
 
-      if (it != lifetime::get_objects<cl_mem>().cend())
+      if (it != lifetime::_platform._mems.cend())
       {
         (*it)->implicit_ref_count++;
         return lifetime::create_or_exit<cl_mem>(
           errcode_ret,
           (*it).get(),
           this,
-          0
+          desc->image_type,
+          flags,
+          *format,
+          *desc
         );
       }
     }
@@ -684,16 +1020,19 @@ cl_mem _cl_context::clCreateImageWithProperties(
     errcode_ret,
     nullptr,
     this,
-    0
+    desc->image_type,
+    flags,
+    *format,
+    *desc
   );
 }
 
 cl_mem _cl_context::clCreateImage2D(
-  cl_mem_flags,
-  const cl_image_format*,
-  size_t,
-  size_t,
-  size_t,
+  cl_mem_flags flags,
+  const cl_image_format* format,
+  size_t width,
+  size_t height,
+  size_t row_pitch,
   void*,
   cl_int* errcode_ret)
 {
@@ -702,18 +1041,32 @@ cl_mem _cl_context::clCreateImage2D(
     errcode_ret,
     nullptr,
     this,
-    0
+    CL_MEM_OBJECT_IMAGE2D,
+    flags,
+    *format,
+    cl_image_desc{
+      CL_MEM_OBJECT_IMAGE2D,
+      width,
+      height,
+      1,
+      1,
+      row_pitch,
+      0,
+      0,
+      0,
+      { nullptr }
+    }
   );
 }
 
 cl_mem _cl_context::clCreateImage3D(
-  cl_mem_flags,
-  const cl_image_format*,
-  size_t,
-  size_t,
-  size_t,
-  size_t,
-  size_t,
+  cl_mem_flags flags,
+  const cl_image_format* format,
+  size_t width,
+  size_t height,
+  size_t depth,
+  size_t row_pitch,
+  size_t slice_pitch,
   void*,
   cl_int* errcode_ret)
 {
@@ -722,12 +1075,26 @@ cl_mem _cl_context::clCreateImage3D(
     errcode_ret,
     nullptr,
     this,
-    0
+    CL_MEM_OBJECT_IMAGE3D,
+    flags,
+    *format,
+    cl_image_desc{
+      CL_MEM_OBJECT_IMAGE2D,
+      width,
+      height,
+      depth,
+      1,
+      row_pitch,
+      slice_pitch,
+      0,
+      0,
+      { nullptr }
+    }
   );
 }
 
 cl_mem _cl_context::clCreatePipe(
-  cl_mem_flags,
+  cl_mem_flags flags,
   cl_uint,
   cl_uint,
   const cl_pipe_properties*,
@@ -738,6 +1105,9 @@ cl_mem _cl_context::clCreatePipe(
     errcode_ret,
     nullptr,
     this,
+    CL_MEM_OBJECT_PIPE,
+    flags,
+    0,
     0
   );
 }
@@ -814,8 +1184,8 @@ cl_command_queue _cl_context::clCreateCommandQueueWithProperties(
     // If such queue is found, retain and return it
     // Else create new queue
     auto it = std::find_if(
-      lifetime::get_objects<cl_command_queue>().cbegin(),
-      lifetime::get_objects<cl_command_queue>().cend(),
+      lifetime::_platform._queues.cbegin(),
+      lifetime::_platform._queues.cend(),
       [&](const std::shared_ptr<_cl_command_queue>& queue)
       {
         bool points_to_same_device = queue->parents.parent_device == device;
@@ -829,7 +1199,7 @@ cl_command_queue _cl_context::clCreateCommandQueueWithProperties(
       }
     );
 
-    if (it != lifetime::get_objects<cl_command_queue>().cend())
+    if (it != lifetime::_platform._queues.cend())
     {
       (*it)->retain();
       if (errcode_ret)
@@ -850,14 +1220,26 @@ cl_command_queue _cl_context::clCreateCommandQueueWithProperties(
   }
   else
   {
-    reference();
-    return lifetime::create_or_exit<cl_command_queue>(
-      errcode_ret,
-      device,
-      this,
-      props.data(),
-      props.data() + props.size()
+    auto result = lifetime::get_objects<cl_command_queue>().insert(
+      std::make_shared<_cl_command_queue>(
+        device,
+        this,
+        props.data(),
+        props.data() + props.size()
+      )
     );
+
+    if (result.second)
+    {
+      reference();
+      if (errcode_ret)
+        *errcode_ret = CL_SUCCESS;
+      return result.first->get();
+    }
+    else
+    {
+      std::exit(-1);
+    }
   }
 }
 
@@ -909,6 +1291,79 @@ cl_sampler _cl_context::clCreateSamplerWithProperties(
     errcode_ret,
     this
   );
+}
+
+cl_int _cl_context::clGetSupportedImageFormats(
+  cl_mem_flags flags,
+  cl_mem_object_type image_type,
+  cl_uint num_entries,
+  cl_image_format* image_formats,
+  cl_uint* num_image_formats)
+{
+  (void) flags;
+  (void) image_type;
+
+  if (num_entries == 0 && image_formats != nullptr)
+    return CL_INVALID_VALUE;
+
+  std::vector<cl_image_format> supported_formats =
+  {
+    { CL_R,     CL_UNORM_INT8 },
+    { CL_R,     CL_UNORM_INT8 },
+    { CL_R,     CL_UNORM_INT16 },
+    { CL_R,     CL_SNORM_INT8 },
+    { CL_R,     CL_SNORM_INT16 },
+    { CL_R,     CL_SIGNED_INT8 },
+    { CL_R,     CL_SIGNED_INT16 },
+    { CL_R,     CL_SIGNED_INT32 },
+    { CL_R,     CL_UNSIGNED_INT8 },
+    { CL_R,     CL_UNSIGNED_INT16 },
+    { CL_R,     CL_UNSIGNED_INT32 },
+    { CL_R,     CL_HALF_FLOAT },
+    { CL_R,     CL_FLOAT },
+    { CL_DEPTH, CL_UNORM_INT16 },
+    { CL_DEPTH, CL_FLOAT },
+    { CL_RG,    CL_UNORM_INT8 },
+    { CL_RG,    CL_UNORM_INT16 },
+    { CL_RG,    CL_SNORM_INT8 },
+    { CL_RG,    CL_SNORM_INT16 },
+    { CL_RG,    CL_SIGNED_INT8 },
+    { CL_RG,    CL_SIGNED_INT16 },
+    { CL_RG,    CL_SIGNED_INT32 },
+    { CL_RG,    CL_UNSIGNED_INT8 },
+    { CL_RG,    CL_UNSIGNED_INT16 },
+    { CL_RG,    CL_UNSIGNED_INT32 },
+    { CL_RG,    CL_HALF_FLOAT },
+    { CL_RG,    CL_FLOAT },
+    { CL_RGBA,  CL_UNORM_INT8 },
+    { CL_RGBA,  CL_UNORM_INT16 },
+    { CL_RGBA,  CL_SNORM_INT8 },
+    { CL_RGBA,  CL_SNORM_INT16 },
+    { CL_RGBA,  CL_SIGNED_INT8 },
+    { CL_RGBA,  CL_SIGNED_INT16 },
+    { CL_RGBA,  CL_SIGNED_INT32 },
+    { CL_RGBA,  CL_UNSIGNED_INT8 },
+    { CL_RGBA,  CL_UNSIGNED_INT16 },
+    { CL_RGBA,  CL_UNSIGNED_INT32 },
+    { CL_RGBA,  CL_HALF_FLOAT },
+    { CL_RGBA,  CL_FLOAT },
+    { CL_BGRA,  CL_UNORM_INT8 },
+    { CL_sRGBA, CL_UNORM_INT8 },
+  };
+
+  if (num_image_formats)
+    *num_image_formats = static_cast<cl_uint>(supported_formats.size());
+
+  if (image_formats)
+  {
+    std::copy(
+      supported_formats.begin(),
+      supported_formats.begin() + std::min(static_cast<size_t>(num_entries), supported_formats.size()),
+      image_formats
+    );
+  }
+
+  return CL_SUCCESS;
 }
 
 _cl_program::_cl_program(
@@ -986,8 +1441,8 @@ cl_int _cl_program::clGetProgramInfo(
     }
     case CL_PROGRAM_DEVICES:
       std::copy(
-        reinterpret_cast<char*>(&(*parents.parent_devices.begin())),
-        reinterpret_cast<char*>(&(*parents.parent_devices.end())),
+        reinterpret_cast<char*>(parents.parent_devices.data()),
+        reinterpret_cast<char*>(parents.parent_devices.data() + parents.parent_devices.size()),
         std::back_inserter(result));
       break;
     default:
@@ -1027,52 +1482,6 @@ cl_kernel _cl_program::clCreateKernel(
     errcode_ret,
     this
   );
-}
-
-cl_int _cl_program::clCreateKernelsInProgram(
-  cl_uint num_kernels,
-  cl_kernel* kernels,
-  cl_uint* num_kernels_ret)
-{
-  // The proper counting of kernels requires a C compiler. kernel entry points
-  // may be declared/defined both, they may be '__kernel' or 'kernel' and be
-  // subjected to the preprocessor.
-  static constexpr cl_uint kernel_count = 3;
-
-  if (num_kernels_ret)
-    *num_kernels_ret = kernel_count;
-
-  if (kernels && num_kernels < kernel_count)
-    return CL_INVALID_VALUE;
-
-  if(kernels)
-  {
-    std::vector<std::shared_ptr<_cl_kernel>> result;
-    std::generate_n(
-      std::back_inserter(result),
-      3,
-      [=](){ return std::make_shared<_cl_kernel>(this); }
-    );
-
-    std::copy(
-      result.cbegin(),
-      result.cend(),
-      std::inserter(
-        lifetime::get_objects<cl_kernel>(),
-        lifetime::get_objects<cl_kernel>().end()
-      )
-    );
-
-    std::transform(
-      result.cbegin(),
-      result.cend(),
-      kernels,
-      [](const std::shared_ptr<_cl_kernel>& kernel){ return kernel.get(); }
-    );
-    reference(kernel_count);
-  }
-
-  return CL_SUCCESS;
 }
 
 _cl_kernel::_cl_kernel(const cl_program parent_program)
@@ -1361,7 +1770,6 @@ _cl_platform_id::_cl_platform_id()
   , _kernels{}
   , _events{}
   , _samplers{}
-  , _global_mutex{}
 {
   init_dispatch();
 
@@ -1410,6 +1818,14 @@ _cl_platform_id::_cl_platform_id()
   else
     allow_using_inaccessible_objects = false;
 
+  std::string ALWAYS_RETURN_SUCCESS;
+  if (ocl_layer_utils::detail::get_environment("ALWAYS_RETURN_SUCCESS", ALWAYS_RETURN_SUCCESS))
+  {
+    always_return_success = true;
+  }
+  else
+    always_return_success = false;
+
   _devices.insert(std::make_shared<_cl_device_id>(_cl_device_id::device_kind::root));
 }
 
@@ -1448,7 +1864,6 @@ void _cl_platform_id::init_dispatch()
   dispatch->clRetainProgram = clRetainProgram_wrap;
   dispatch->clReleaseProgram = clReleaseProgram_wrap;
   dispatch->clCreateKernel = clCreateKernel_wrap;
-  dispatch->clCreateKernelsInProgram = clCreateKernelsInProgram_wrap;
   dispatch->clSetKernelArg = clSetKernelArg_wrap;
   dispatch->clCloneKernel = clCloneKernel_wrap;
   dispatch->clGetKernelInfo = clGetKernelInfo_wrap;
@@ -1465,6 +1880,11 @@ void _cl_platform_id::init_dispatch()
   dispatch->clGetSamplerInfo = clGetSamplerInfo_wrap;
   dispatch->clRetainSampler = clRetainSampler_wrap;
   dispatch->clReleaseSampler = clReleaseSampler_wrap;
+  dispatch->clEnqueueFillBuffer = clEnqueueFillBuffer_wrap;
+  dispatch->clEnqueueCopyImageToBuffer = clEnqueueCopyImageToBuffer_wrap;
+  dispatch->clEnqueueCopyImage = clEnqueueCopyImage_wrap;
+  dispatch->clGetSupportedImageFormats = clGetSupportedImageFormats_wrap;
+  dispatch->clGetImageInfo = clGetImageInfo_wrap;
 }
 
 cl_int _cl_platform_id::clGetPlatformInfo(
@@ -1545,8 +1965,8 @@ cl_int _cl_platform_id::clGetDeviceIDs(
   if (num_devices)
     *num_devices = asking_for_custom ?
       static_cast<cl_uint>(std::count_if(
-        lifetime::get_objects<cl_device_id>().cbegin(),
-        lifetime::get_objects<cl_device_id>().cend(),
+        _devices.cbegin(),
+        _devices.cend(),
         [](const std::shared_ptr<_cl_device_id>& dev)
         {
           return dev->kind == _cl_device_id::device_kind::root;
@@ -1557,8 +1977,8 @@ cl_int _cl_platform_id::clGetDeviceIDs(
   {
     std::vector<std::shared_ptr<_cl_device_id>> result;
     std::copy_if(
-      lifetime::get_objects<cl_device_id>().cbegin(),
-      lifetime::get_objects<cl_device_id>().cend(),
+      _devices.cbegin(),
+      _devices.cend(),
       std::back_inserter(result),
       [](const std::shared_ptr<_cl_device_id>& dev)
       {

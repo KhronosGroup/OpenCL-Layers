@@ -1,0 +1,630 @@
+// Extensions
+
+// 2.11
+
+<command>
+    <proto><type>cl_int</type>                                  <name>clIcdGetPlatformIDsKHR</name></proto>
+    <param><type>cl_uint</type>                                 <name>num_entries</name></param>
+    <param><type>cl_platform_id</type>*                         <name>platforms</name></param>
+    <param><type>cl_uint</type>*                                <name>num_platforms</name></param>
+
+    <if>
+        <or>
+            <and>
+                <eq>
+                    <name>num_entries</name>                    <literal>0</literal>
+                </eq>
+                <neq>
+                    <name>platforms</name>                      <literal>NULL</literal>
+                </neq>
+            </and>
+            <and>
+                <eq>
+                    <name>platforms</name>                      <literal>NULL</literal>
+                </eq>
+                <eq>
+                    <name>num_platforms</name>                  <literal>NULL</literal>
+                </eq>
+            </and>
+        </or>
+    </if>
+    <then>
+        <name>clIcdGetPlatformIDsKHR</name>                     <value>CL_INVALID_VALUE</value>
+    </then>
+    <if> // not covered by standard
+        <and>
+            <neq>
+                <name>platforms</name>                          <literal>NULL</literal>
+            </neq>
+            <array_len_ls>
+                <name>platforms</name>                          <name>num_entries</name>
+            </array_len_ls>
+        </and>
+    </if>
+    <then>
+        <name>clIcdGetPlatformIDsKHR</name>                     <value>CL_INVALID_VALUE</value>
+    </then>
+</command>
+
+// 10.6
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_int</type>                                  <name>clGetGLContextInfoKHR</name></proto>
+    <param>const <type>cl_context_properties</type>*            <name>properties</name></param>
+    <param><type>cl_gl_context_info</type>                      <name>param_name</name></param>
+    <param><type>size_t</type>                                  <name>param_value_size</name></param>
+    <param><type>void</type>*                                   <name>param_value</name></param>
+    <param><type>size_t</type>*                                 <name>param_value_size_ret</name></param>
+
+    <if>
+        <and>
+            <from version="1.1"/>
+            <list_violation name="properties"/> // TODO - see the spec
+        </and>
+    </if>
+    <then>
+        <name>clGetGLContextInfoKHR</name>                      <value>CL_INVALID_VALUE</value>
+    </then>
+</command>
+
+// 11.3
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_mem</type>                                  <name>clCreateFromGLBuffer</name></proto>
+    <param><type>cl_context</type>                              <name>context</name></param>
+    <param><type>cl_mem_flags</type>                            <name>flags</name></param>
+    <param><type>cl_GLuint</type>                               <name>bufobj</name></param>
+    <param><type>int</type>*                                    <name>errcode_ret</name></param>
+
+    <if>
+        <not>
+            <or>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_WRITE</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_ONLY</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_WRITE_ONLY</literal>
+                </bit_and>
+            </or>
+        </not>
+    </if>
+    <then>
+        <name>clCreateFromGLBuffer</name>                       <value>NULL</value>
+        <name>errcode_ret</name>                                <value>CL_INVALID_VALUE</value>
+    </then>
+</command>
+
+// 11.4
+
+<command suffix="CL_API_SUFFIX__VERSION_1_2">
+    <proto><type>cl_mem</type>                                  <name>clCreateFromGLTexture</name></proto>
+    <param><type>cl_context</type>                              <name>context</name></param>
+    <param><type>cl_mem_flags</type>                            <name>flags</name></param>
+    <param><type>cl_GLenum</type>                               <name>texture_target</name></param>
+    <param><type>cl_GLint</type>                                <name>miplevel</name></param>
+    <param><type>cl_GLuint</type>                               <name>texture</name></param>
+    <param><type>cl_int</type>*                                 <name>errcode_ret</name></param>
+
+    <if>
+        <not>
+            <or>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_WRITE</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_ONLY</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_WRITE_ONLY</literal>
+                </bit_and>
+            </or>
+        </not>
+    </if>
+    <then>
+        <name>clCreateFromGLTexture</name>                      <value>NULL</value>
+        <name>errcode_ret</name>                                <value>CL_INVALID_VALUE</value>
+    </then>
+    <if>
+        <and>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_1D</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_1D_ARRAY</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_BUFFER</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_2D</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_2D_ARRAY</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_3D</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_CUBE_MAP_POSITIVE_X</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_CUBE_MAP_POSITIVE_Y</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_CUBE_MAP_POSITIVE_Z</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_CUBE_MAP_NEGATIVE_X</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_CUBE_MAP_NEGATIVE_Y</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_CUBE_MAP_NEGATIVE_Z</literal>
+            </neq>
+            <neq>
+                <name>texture_target</name>                     <literal>GL_TEXTURE_RECTANGLE</literal>
+            </neq>
+        </and>
+    </if>
+    <then>
+        <name>clCreateFromGLTexture</name>                      <value>NULL</value>
+        <name>errcode_ret</name>                                <value>CL_INVALID_VALUE</value>
+    </then>
+</command>
+
+// 11.5
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_mem</type>                                  <name>clCreateFromGLRenderbuffer</name></proto>
+    <param><type>cl_context</type>                              <name>context</name></param>
+    <param><type>cl_mem_flags</type>                            <name>flags</name></param>
+    <param><type>cl_GLuint</type>                               <name>renderbuffer</name></param>
+    <param><type>cl_int</type>*                                 <name>errcode_ret</name></param>
+
+    <if>
+        <not>
+            <or>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_WRITE</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_ONLY</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_WRITE_ONLY</literal>
+                </bit_and>
+            </or>
+        </not>
+    </if>
+    <then>
+        <name>clCreateFromGLRenderbuffer</name>                 <value>NULL</value>
+        <name>errcode_ret</name>                                <value>CL_INVALID_VALUE</value>
+    </then>
+</command>
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_int</type>                                  <name>clGetGLObjectInfo</name></proto>
+    <param><type>cl_mem</type>                                  <name>memobj</name></param>
+    <param><type>cl_gl_object_type</type>*                      <name>gl_object_type</name></param>
+    <param><type>cl_GLuint</type>*                              <name>gl_object_name</name></param>
+</command>
+
+// 11.6
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_int</type>                                  <name>clGetGLTextureInfo</name></proto>
+    <param><type>cl_mem</type>                                  <name>memobj</name></param>
+    <param><type>cl_gl_texture_info</type>                      <name>param_name</name></param>
+    <param><type>size_t</type>                                  <name>param_value_size</name></param>
+    <param><type>void</type>*                                   <name>param_value</name></param>
+    <param><type>size_t</type>*                                 <name>param_value_size_ret</name></param>
+
+    <if>
+        <enum_violation name="param_name"/>
+    </if>
+    <then>
+        <name>clGetGLTextureInfo</name>                         <value>CL_INVALID_VALUE</value>
+    </then>
+    <if>
+        <or>
+            <and>
+                <neq>
+                    <name>param_value</name>                    <literal>NULL</literal>
+                </neq>
+                <ls>
+                    <name>param_value_size</name>               <literal_list>param_name</literal_list>
+                </ls>
+            </and>
+            <and>
+                <eq>
+                    <name>param_value</name>                    <literal>NULL</literal>
+                </eq>
+                <eq>
+                    <name>param_value_size_ret</name>           <literal>NULL</literal>
+                </eq>
+            </and>
+        </or>
+    </if>
+    <then>
+        <name>clGetGLTextureInfo</name>                         <value>CL_INVALID_VALUE</value>
+    </then>
+    <if> // not covered by standard
+        <and>
+            <neq>
+                <name>param_value</name>                        <literal>NULL</literal>
+            </neq>
+            <array_len_ls>
+                <name>param_value</name>                        <literal_list>param_name</literal_list> // ???
+            </array_len_ls>
+        </and>
+    </if>
+    <then>
+        <name>clGetGLTextureInfo</name>                         <value>CL_INVALID_VALUE</value>
+    </then>
+</command>
+
+// 11.7
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_int</type>                                  <name>clEnqueueAcquireGLObjects</name></proto>
+    <param><type>cl_command_queue</type>                        <name>command_queue</name></param>
+    <param><type>cl_uint</type>                                 <name>num_objects</name></param>
+    <param>const <type>cl_mem</type>*                           <name>mem_objects</name></param>
+    <param><type>cl_uint</type>                                 <name>num_events_in_wait_list</name></param>
+    <param>const <type>cl_event</type>*                         <name>event_wait_list</name></param>
+    <param><type>cl_event</type>*                               <name>event</name></param>
+
+    <if>
+        <or>
+            <and>
+                <eq>
+                    <name>num_objects</name>                    <literal>0</literal>
+                </eq>
+                <neq>
+                    <name>mem_objects</name>                    <literal>NULL</literal>
+                </neq>
+            </and>
+            <and>
+                <gt>
+                    <name>num_objects</name>                    <literal>0</literal>
+                </gt>
+                <eq>
+                    <name>mem_objects</name>                    <literal>NULL</literal>
+                </eq>
+            </and>
+        </or>
+    </if>
+    <then>
+        <name>clEnqueueAcquireGLObjects</name>                  <value>CL_INVALID_VALUE</value>
+    </then>
+    <if>
+        <and>
+            <neq>
+                <name>mem_objects</name>                        <literal>NULL</literal>
+            </neq>
+            <array_len_ls>
+                <name>mem_objects</name>                        <name>num_objects</name>
+            </array_len_ls>
+        </and>
+    </if>
+    <then>
+        <name>clEnqueueAcquireGLObjects</name>                  <value>CL_INVALID_MEM_OBJECT</value>
+    </then>
+    <if>
+        <or>
+            <and>
+                <eq>
+                    <name>event_wait_list</name>                <literal>NULL</literal>
+                </eq>
+                <gt>
+                    <name>num_events_in_wait_list</name>        <literal>0</literal> 
+                </gt>
+            </and>
+            <and>
+                <neq>
+                    <name>event_wait_list</name>                <literal>NULL</literal>
+                </neq>
+                <eq>
+                    <name>num_events_in_wait_list</name>        <literal>0</literal> 
+                </eq>
+            </and>
+        </or>
+    </if>
+    <then>
+        <name>clEnqueueAcquireGLObjects</name>                  <value>CL_INVALID_EVENT_WAIT_LIST</value>
+    </then>
+    <if> // event objects in event_wait_list are not valid events
+        <and>
+            <neq>
+                <name>event_wait_list</name>                    <literal>NULL</literal>
+            </neq>
+            <array_len_ls>
+                <name>event_wait_list</name>                    <name>num_events_in_wait_list</name> 
+            </array_len_ls>
+        </and>
+    </if>
+    <then>
+        <name>clEnqueueAcquireGLObjects</name>                  <value>CL_INVALID_EVENT_WAIT_LIST</value>
+    </then>
+</command>
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_int</type>                                  <name>clEnqueueReleaseGLObjects</name></proto>
+    <param><type>cl_command_queue</type>                        <name>command_queue</name></param>
+    <param><type>cl_uint</type>                                 <name>num_objects</name></param>
+    <param>const <type>cl_mem</type>*                           <name>mem_objects</name></param>
+    <param><type>cl_uint</type>                                 <name>num_events_in_wait_list</name></param>
+    <param>const <type>cl_event</type>*                         <name>event_wait_list</name></param>
+    <param><type>cl_event</type>*                               <name>event</name></param>
+
+    <if>
+        <or>
+            <and>
+                <eq>
+                    <name>num_objects</name>                    <literal>0</literal>
+                </eq>
+                <neq>
+                    <name>mem_objects</name>                    <literal>NULL</literal>
+                </neq>
+            </and>
+            <and>
+                <gt>
+                    <name>num_objects</name>                    <literal>0</literal>
+                </gt>
+                <eq>
+                    <name>mem_objects</name>                    <literal>NULL</literal>
+                </eq>
+            </and>
+        </or>
+    </if>
+    <then>
+        <name>clEnqueueReleaseGLObjects</name>                  <value>CL_INVALID_VALUE</value>
+    </then>
+    <if>
+        <and>
+            <neq>
+                <name>mem_objects</name>                        <literal>NULL</literal>
+            </neq>
+            <array_len_ls>
+                <name>mem_objects</name>                        <name>num_objects</name>
+            </array_len_ls>
+        </and>
+    </if>
+    <then>
+        <name>clEnqueueReleaseGLObjects</name>                  <value>CL_INVALID_MEM_OBJECT</value>
+    </then>
+    <if>
+        <or>
+            <and>
+                <eq>
+                    <name>event_wait_list</name>                <literal>NULL</literal>
+                </eq>
+                <gt>
+                    <name>num_events_in_wait_list</name>        <literal>0</literal> 
+                </gt>
+            </and>
+            <and>
+                <neq>
+                    <name>event_wait_list</name>                <literal>NULL</literal>
+                </neq>
+                <eq>
+                    <name>num_events_in_wait_list</name>        <literal>0</literal> 
+                </eq>
+            </and>
+        </or>
+    </if>
+    <then>
+        <name>clEnqueueReleaseGLObjects</name>                  <value>CL_INVALID_EVENT_WAIT_LIST</value>
+    </then>
+    <if> // event objects in event_wait_list are not valid events
+        <and>
+            <neq>
+                <name>event_wait_list</name>                    <literal>NULL</literal>
+            </neq>
+            <array_len_ls>
+                <name>event_wait_list</name>                    <name>num_events_in_wait_list</name> 
+            </array_len_ls>
+        </and>
+    </if>
+    <then>
+        <name>clEnqueueReleaseGLObjects</name>                  <value>CL_INVALID_EVENT_WAIT_LIST</value>
+    </then>
+</command>
+
+// 12.5
+
+<command suffix="CL_API_SUFFIX__VERSION_1_1">
+    <proto><type>cl_event</type>                                <name>clCreateEventFromGLsyncKHR</name></proto>
+    <param><type>cl_context</type>                              <name>context</name></param>
+    <param><type>cl_GLsync</type>                               <name>sync</name></param>
+    <param><type>cl_int</type>*                                 <name>errcode_ret</name></param>
+</command>
+
+// 13.7.1
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_int</type>                                  <name>clGetDeviceIDsFromD3D10KHR</name></proto>
+    <param><type>cl_platform_id</type>                          <name>platform</name></param>
+    <param><type>cl_d3d10_device_source_khr</type>              <name>d3d_device_source</name></param>
+    <param><type>void</type>*                                   <name>d3d_object</name></param>
+    <param><type>cl_d3d10_device_set_khr</type>                 <name>d3d_device_set</name></param>
+    <param><type>cl_uint</type>                                 <name>num_entries</name></param>
+    <param><type>cl_device_id</type>*                           <name>devices</name></param>
+    <param><type>cl_uint</type>*                                <name>num_devices</name></param>
+
+    <if>
+        <or>
+            <enum_violation name="d3d_device_source"/>
+            <enum_violation name="d3d_device_set"/>
+            <and>
+                <eq>
+                    <name>num_entries</name>                    <literal>0</literal>
+                </eq>
+                <neq>
+                    <name>devices</name>                        <literal>NULL</literal>
+                </neq>
+            </and>
+            <and>
+                <eq>
+                    <name>num_devices</name>                    <literal>NULL</literal>
+                </eq>
+                <eq>
+                    <name>devices</name>                        <literal>NULL</literal>
+                </eq>
+            </and>
+        </or>
+    </if>
+    <then>
+        <name>clGetDeviceIDsFromD3D10KHR</name>                 <value>CL_INVALID_VALUE</value>
+    </then>
+    <if>
+        <or>
+            <array_len_ls>
+                <name>d3d_object</name>                         <literal_list>d3d_device_source</literal_list>
+            </array_len_ls>
+            <array_len_ls>
+                <name>devices</name>                            <name>num_entries</name>
+            </array_len_ls>
+        </or>
+    </if>
+    <then>
+        <name>clGetDeviceIDsFromD3D10KHR</name>                 <value>CL_INVALID_VALUE</value>
+    </then>
+</command>
+
+// 13.7.3
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_mem</type>                                  <name>clCreateFromD3D10BufferKHR</name></proto>
+    <param><type>cl_context</type>                              <name>context</name></param>
+    <param><type>cl_mem_flags</type>                            <name>flags</name></param>
+    <param><type>ID3D10Buffer</type>*                           <name>resource</name></param>
+    <param><type>cl_int</type>*                                 <name>errcode_ret</name></param>
+
+    <if>
+        <not>
+            <or>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_WRITE</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_ONLY</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_WRITE_ONLY</literal>
+                </bit_and>
+            </or>
+        </not>
+    </if>
+    <then>
+        <name>clCreateFromD3D10BufferKHR</name>                 <value>NULL</value>
+        <name>errcode_ret</name>                                <value>CL_INVALID_VALUE</value>
+    </then>
+</command>
+
+// 13.7.4
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_mem</type>                                  <name>clCreateFromD3D10Texture2DKHR</name></proto>
+    <param><type>cl_context</type>                              <name>context</name></param>
+    <param><type>cl_mem_flags</type>                            <name>flags</name></param>
+    <param><type>ID3D10Texture2D</type>*                        <name>resource</name></param>
+    <param><type>UINT</type>                                    <name>subresource</name></param>
+    <param><type>cl_int</type>*                                 <name>errcode_ret</name></param>
+
+    <if>
+        <not>
+            <or>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_WRITE</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_ONLY</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_WRITE_ONLY</literal>
+                </bit_and>
+            </or>
+        </not>
+    </if>
+    <then>
+        <name>clCreateFromD3D10Texture2DKHR</name>              <value>NULL</value>
+        <name>errcode_ret</name>                                <value>CL_INVALID_VALUE</value>
+    </then>
+</command>
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_mem</type>                                  <name>clCreateFromD3D10Texture3DKHR</name></proto>
+    <param><type>cl_context</type>                              <name>context</name></param>
+    <param><type>cl_mem_flags</type>                            <name>flags</name></param>
+    <param><type>ID3D10Texture3D</type>*                        <name>resource</name></param>
+    <param><type>UINT</type>                                    <name>subresource</name></param>
+    <param><type>cl_int</type>*                                 <name>errcode_ret</name></param>
+
+    <if>
+        <not>
+            <or>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_WRITE</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_READ_ONLY</literal>
+                </bit_and>
+                <bit_and>
+                    <name>flags</name>                          <literal>CL_MEM_WRITE_ONLY</literal>
+                </bit_and>
+            </or>
+        </not>
+    </if>
+    <then>
+        <name>clCreateFromD3D10Texture3DKHR</name>              <value>NULL</value>
+        <name>errcode_ret</name>                                <value>CL_INVALID_VALUE</value>
+    </then>
+</command>
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_int</type>                                  <name>clEnqueueAcquireD3D10ObjectsKHR</name></proto>
+    <param><type>cl_command_queue</type>                        <name>command_queue</name></param>
+    <param><type>cl_uint</type>                                 <name>num_objects</name></param>
+    <param>const <type>cl_mem</type>*                           <name>mem_objects</name></param>
+    <param><type>cl_uint</type>                                 <name>num_events_in_wait_list</name></param>
+    <param>const <type>cl_event</type>*                         <name>event_wait_list</name></param>
+    <param><type>cl_event</type>*                               <name>event</name></param>
+
+
+</command>
+
+
+<command suffix="CL_API_SUFFIX__VERSION_1_0">
+    <proto><type>cl_int</type>                                  <name>clEnqueueReleaseD3D10ObjectsKHR</name></proto>
+    <param><type>cl_command_queue</type>                        <name>command_queue</name></param>
+    <param><type>cl_uint</type>                                 <name>num_objects</name></param>
+    <param>const <type>cl_mem</type>*                           <name>mem_objects</name></param>
+    <param><type>cl_uint</type>                                 <name>num_events_in_wait_list</name></param>
+    <param>const <type>cl_event</type>*                         <name>event_wait_list</name></param>
+    <param><type>cl_event</type>*                               <name>event</name></param>
+</command>
+
+
+<command prefix="CL_API_PREFIX__VERSION_1_1_DEPRECATED" suffix="CL_API_SUFFIX__VERSION_1_1_DEPRECATED">
+    <proto><type>cl_mem</type>                                  <name>clCreateFromGLTexture2D</name></proto>
+    <param><type>cl_context</type>                              <name>context</name></param>
+    <param><type>cl_mem_flags</type>                            <name>flags</name></param>
+    <param><type>cl_GLenum</type>                               <name>target</name></param>
+    <param><type>cl_GLint</type>                                <name>miplevel</name></param>
+    <param><type>cl_GLuint</type>                               <name>texture</name></param>
+    <param><type>cl_int</type>*                                 <name>errcode_ret</name></param>
+</command>
+<command prefix="CL_API_PREFIX__VERSION_1_1_DEPRECATED" suffix="CL_API_SUFFIX__VERSION_1_1_DEPRECATED">
+    <proto><type>cl_mem</type>                                  <name>clCreateFromGLTexture3D</name></proto>
+    <param><type>cl_context</type>                              <name>context</name></param>
+    <param><type>cl_mem_flags</type>                            <name>flags</name></param>
+    <param><type>cl_GLenum</type>                               <name>target</name></param>
+    <param><type>cl_GLint</type>                                <name>miplevel</name></param>
+    <param><type>cl_GLuint</type>                               <name>texture</name></param>
+    <param><type>cl_int</type>*                                 <name>errcode_ret</name></param>
+</command>
