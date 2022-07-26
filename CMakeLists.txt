@@ -41,7 +41,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Common layer flags
 add_library (LayersCommon INTERFACE)
 
-# C and C++ standard, 
+# C and C++ standard,
 if (CMAKE_VERSION VERSION_LESS 3.8)
     set(CMAKE_C_STANDARD 11)
     set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -99,7 +99,11 @@ endif ()
 
 include (GNUInstallDirs)
 
+list (APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+include(Dependencies)
+
 add_subdirectory (simple-print)
 add_subdirectory (ocl-icd-compat)
 add_subdirectory (object-lifetime)
+add_subdirectory (param-verification)
 add_subdirectory (utils)

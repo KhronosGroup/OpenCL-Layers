@@ -1,11 +1,11 @@
 find_package(Threads REQUIRED)
 
 function (add_layer_test_exe NAME SOURCE)
-    add_executable (${NAME} ${SOURCE} object_lifetime_test.cpp)
+    add_executable (${NAME} ${SOURCE} object_lifetime_test.cpp object_lifetime_test.hpp)
     target_link_libraries (
         ${NAME}
         PRIVATE
-            LayersCommon
+            LayersTest
             OpenCL::OpenCL
             Threads::Threads
     )
@@ -60,7 +60,7 @@ function (add_layer_test TEST_EXE OPENCL_VERSION)
             "-DCOMMAND=${TEST_INVOCATION}"
             "-DEXTRA_OUTPUT=${TEST_LOG}"
             -DEXPECTED_EXTRA_OUTPUT=${ARG_REGEX}
-            -P ${CMAKE_CURRENT_LIST_DIR}/object_lifetime_test.cmake
+            -P ${PROJECT_SOURCE_DIR}/cmake/run_and_compare.cmake
     )
     set_tests_properties (${TEST_NAME} PROPERTIES ENVIRONMENT "${TEST_ENVIRONMENT}")
 endfunction()

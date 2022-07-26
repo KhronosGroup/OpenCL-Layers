@@ -1,0 +1,4 @@
+In clCreateContext: platform value specified in properties is not a valid platform. Returning NULL, \*errcode_ret = CL_INVALID_PLATFORM.
+In clCreateBuffer: context is not a valid context. Returning NULL, \*errcode_ret = CL_INVALID_CONTEXT.
+In clReleaseContext: context is not a vaild context. Returning CL_INVALID_CONTEXT.
+In clCreateSampler: context is not a valid context. Returning NULL, \*errcode_ret = CL_INVALID_CONTEXT.

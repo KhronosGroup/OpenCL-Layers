@@ -4,7 +4,13 @@ execute_process(
     RESULT_VARIABLE COMMAND_EXIT
 )
 
-message("${COMMAND_STDOUT}")
+message("command output:\n${COMMAND_STDOUT}")
+
+if(EXTRA_OUTPUT)
+  file(READ "${EXTRA_OUTPUT}"          OUTPUT_FILE)
+  message("command extra output:\n${OUTPUT_FILE}")
+endif()
+
 
 if(NOT COMMAND_EXIT STREQUAL 0)
     message(FATAL_ERROR "${COMMAND} exited with: ${COMMAND_EXIT}")
@@ -18,7 +24,6 @@ if(EXPECTED_OUTPUT)
 endif()
 
 if(EXTRA_OUTPUT)
-    file(READ "${EXTRA_OUTPUT}"          OUTPUT_FILE)
     file(READ "${EXPECTED_EXTRA_OUTPUT}" EXPECTED_FILE)
 
     if(EXPECTED_FILE) # More friendly towards empty regexes

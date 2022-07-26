@@ -1,0 +1,7 @@
+In clCreateContext: devices is NULL. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clCreateContext: num_devices is equal to zero. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clEnqueueFillBuffer: pattern is NULL. Returning CL_INVALID_VALUE.
+In clEnqueueFillBuffer: pattern_size is not one of { 1, 2, 4, 8, 16, 32, 64, 128 }. Returning CL_INVALID_VALUE.
+In clEnqueueFillBuffer: pattern_size is not one of { 1, 2, 4, 8, 16, 32, 64, 128 }. Returning CL_INVALID_VALUE.
+In clEnqueueFillBuffer: event_wait_list is NULL and num_events_in_wait_list > 0. Returning CL_INVALID_EVENT_WAIT_LIST.
+In clEnqueueFillBuffer: event_wait_list is not NULL and num_events_in_wait_list is 0. Returning CL_INVALID_EVENT_WAIT_LIST.

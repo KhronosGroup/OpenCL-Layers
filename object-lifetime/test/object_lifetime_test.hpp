@@ -1,11 +1,8 @@
 #ifndef _OBJECT_LIFETIME_TEST_HPP
 #define _OBJECT_LIFETIME_TEST_HPP
 
-#ifdef __APPLE__ //Mac OSX has a different name for the header file
-#include <OpenCL/opencl.h>
-#else
-#include <CL/opencl.h>
-#endif
+#include <CL/cl.h>
+#include "layers_test.hpp"
 
 #include <iostream>
 #include <cstring>
@@ -14,8 +11,20 @@
 #include <iterator>   // std::distance
 #include <vector>     // std::vector
 
-namespace layer_test {
-  bool parseArgs(int argc, char* argv[]);
+namespace object_lifetime_test {
+  struct TestOptions {
+    // Whether CL_*_REFERENCE_COUNT reports implicit or explicit reference count.
+    bool ref_count_includes_implicit = false;
+    // Whether querying released objects (with an expected total refcount of 0) is expected
+    // to return CL_INVALID or the actual ref count.
+    bool use_released_objects = false;
+    // Whether inaccessible objects that are still implicitly referenced can be used.
+    bool use_inaccessible_objects = false;
+
+    bool parseArg(int argc, char* argv[], int& i);
+  };
+
+  extern layers_test::TestContext<TestOptions> TEST_CONTEXT;
 
   void setup(int argc,
              char* argv[],
@@ -24,28 +33,6 @@ namespace layer_test {
              cl_device_id& device);
 
   int finalize();
-
-  struct TestContext {
-    // The version to base testing off.
-    cl_version version = CL_MAKE_VERSION(1, 1, 0);
-    // Whether CL_*_REFERENCE_COUNT reports implicit or explicit reference count.
-    bool ref_count_includes_implicit = false;
-    // Whether querying released objects (with an expected total refcount of 0) is expected
-    // to return CL_INVALID or the actual ref count.
-    bool use_released_objects = false;
-    // Whether inaccessible objects that are still implicitly referenced can be used.
-    bool use_inaccessible_objects = false;
-    // The OpenCL platform to use.
-    const char* platform = "Object Lifetime Layer Test ICD";
-    // Keeps track number of failed assertions during this test.
-    size_t failed_checks = 0;
-
-    void fail() {
-      ++this->failed_checks;
-    }
-  };
-
-  extern TestContext TEST_CONTEXT;
 
   namespace ocl_utils {
     inline cl_int getRefCount(cl_context handle, cl_uint& ref_count) {
@@ -111,32 +98,8 @@ namespace layer_test {
     inline cl_int CL_INVALID<cl_event>() { return CL_INVALID_EVENT; }
   }
 
-  inline std::ostream& log(const char* file, int line) {
-    return std::cout << file << ":" << line << ": ";
-  }
-
-  #define LAYER_TEST_LOG() ::layer_test::log(__FILE__, __LINE__)
-
-  inline void expectSuccess(const char* file, int line, cl_int status) {
-    if (status != CL_SUCCESS) {
-      log(file, line) << "expected success, got " << status << std::endl;
-      TEST_CONTEXT.fail();
-    }
-  }
-
-  #define EXPECT_SUCCESS(status) ::layer_test::expectSuccess(__FILE__, __LINE__, status)
-
-  inline void expectError(const char* file, int line, cl_int status, cl_int expected) {
-    if (status == CL_SUCCESS) {
-      log(file, line) << "expected error " << expected << ", got success" << std::endl;
-      TEST_CONTEXT.fail();
-    } else if (status != expected) {
-      log(file, line) << "expected error " << expected << ", got " << status << std::endl;
-      TEST_CONTEXT.fail();
-    }
-  }
-
-  #define EXPECT_ERROR(status, expected) ::layer_test::expectError(__FILE__, __LINE__, status, expected)
+  #define EXPECT_SUCCESS(status) LAYERS_TEST_EXPECT_SUCCESS(::object_lifetime_test::TEST_CONTEXT, status)
+  #define EXPECT_ERROR(status, expected) LAYERS_TEST_EXPECT_ERROR(::object_lifetime_test::TEST_CONTEXT, status, expected)
 
   template <typename Handle>
   void expectRefCount(const char* file,
@@ -150,25 +113,25 @@ namespace layer_test {
 
     auto expect_not_destroyed = [&](cl_uint expected_ref_count) {
       if (status == ocl_utils::CL_INVALID<Handle>()) {
-        log(file, line) << "expected that object was not destroyed, but it was" << std::endl;
+        layers_test::log(file, line) << "expected that object was not destroyed, but it was" << std::endl;
         TEST_CONTEXT.fail();
       } else if (status != CL_SUCCESS) {
-        log(file, line) << "expected that object was not destroyed, got error " << status << std::endl;
+        layers_test::log(file, line) << "expected that object was not destroyed, got error " << status << std::endl;
         TEST_CONTEXT.fail();
       } else if (actual_ref_count != expected_ref_count) {
-        log(file, line) << "expected ref count " << expected_ref_count << ", got " << actual_ref_count << std::endl;
+        layers_test::log(file, line) << "expected ref count " << expected_ref_count << ", got " << actual_ref_count << std::endl;
         TEST_CONTEXT.fail();
       }
     };
 
     auto expect_destroyed = [&] {
-      if (TEST_CONTEXT.use_released_objects) {
+      if (TEST_CONTEXT.options.use_released_objects) {
         expect_not_destroyed(0);
       } else if (status == CL_SUCCESS) {
-        log(file, line) << "expected that object was destroyed, but it has " << actual_ref_count << " references remaining" << std::endl;
+        layers_test::log(file, line) << "expected that object was destroyed, but it has " << actual_ref_count << " references remaining" << std::endl;
         TEST_CONTEXT.fail();
       } else if (status != ocl_utils::CL_INVALID<Handle>()) {
-        log(file, line) << "expected that object was destroyed, got error " << status << std::endl;
+        layers_test::log(file, line) << "expected that object was destroyed, got error " << status << std::endl;
         TEST_CONTEXT.fail();
       }
     };
@@ -185,13 +148,13 @@ namespace layer_test {
       // - Otherwise we expect CL_INVALID.
 
       if (TEST_CONTEXT.version >= CL_MAKE_VERSION(1, 1, 0) && TEST_CONTEXT.version <= CL_MAKE_VERSION(1, 2, 0)) {
-        if (expected_implicit_count > 0 && TEST_CONTEXT.ref_count_includes_implicit) {
+        if (expected_implicit_count > 0 && TEST_CONTEXT.options.ref_count_includes_implicit) {
           expect_not_destroyed(expected_implicit_count);
         } else {
           expect_destroyed();
         }
       } else if (TEST_CONTEXT.version == CL_MAKE_VERSION(2, 0, 0)) {
-        if (expected_implicit_count > 0 && TEST_CONTEXT.ref_count_includes_implicit) {
+        if (expected_implicit_count > 0 && TEST_CONTEXT.options.ref_count_includes_implicit) {
           expect_not_destroyed(expected_implicit_count);
         } else if (expected_implicit_count > 0) {
           expect_not_destroyed(0);
@@ -199,8 +162,8 @@ namespace layer_test {
           expect_destroyed();
         }
       } else if (TEST_CONTEXT.version >= CL_MAKE_VERSION(2, 1, 0)) {
-        if (expected_implicit_count > 0 && TEST_CONTEXT.use_inaccessible_objects) {
-          if (TEST_CONTEXT.ref_count_includes_implicit) {
+        if (expected_implicit_count > 0 && TEST_CONTEXT.options.use_inaccessible_objects) {
+          if (TEST_CONTEXT.options.ref_count_includes_implicit) {
             expect_not_destroyed(expected_implicit_count);
           } else {
             expect_not_destroyed(0);
@@ -213,7 +176,7 @@ namespace layer_test {
       // If the expected explicit ref count is nonzero:
       // In OpenCL 1.1 and 1.2, we expect that the explicit ref count is the actual ref count.
       // In OpenCL 2.0 and above, the actual ref count includes the implicit count as well (if that is enbled).
-      if (TEST_CONTEXT.ref_count_includes_implicit) {
+      if (TEST_CONTEXT.options.ref_count_includes_implicit) {
         expect_not_destroyed(expected_explicit_count + expected_implicit_count);
       } else {
         expect_not_destroyed(expected_explicit_count);
@@ -222,7 +185,7 @@ namespace layer_test {
   }
 
   #define EXPECT_REF_COUNT(handle, explicit_count, implicit_count) \
-    ::layer_test::expectRefCount(__FILE__, __LINE__, handle, explicit_count, implicit_count)
+    ::object_lifetime_test::expectRefCount(__FILE__, __LINE__, handle, explicit_count, implicit_count)
 
   #define EXPECT_DESTROYED(handle) EXPECT_REF_COUNT(handle, 0, 0)
 

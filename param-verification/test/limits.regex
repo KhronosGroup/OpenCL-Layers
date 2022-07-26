@@ -1,0 +1,4 @@
+In clCreateBuffer: size is 0. Returning NULL, \*errcode_ret = CL_INVALID_BUFFER_SIZE.
+In clCreateBuffer: size is greater than CL_DEVICE_MAX_MEM_ALLOC_SIZE for all devices in context. Returning NULL, \*errcode_ret = CL_INVALID_BUFFER_SIZE.
+In clCreateSubBuffer: buffer is a sub-buffer object. Returning NULL, \*errcode_ret = CL_INVALID_MEM_OBJECT.
+In clCreateSubBuffer: there are no devices in context associated with buffer for which the origin field of the cl_buffer_region structure passed in buffer_create_info is aligned to the CL_DEVICE_MEM_BASE_ADDR_ALIGN value. Returning NULL, \*errcode_ret = CL_MISALIGNED_SUB_BUFFER_OFFSET.

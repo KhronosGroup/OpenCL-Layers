@@ -9,9 +9,9 @@
 int main(int argc, char *argv[]) {
   cl_platform_id platform;
   cl_device_id device;
-  layer_test::setup(argc, argv, CL_MAKE_VERSION(1, 1, 0), platform, device);
+  object_lifetime_test::setup(argc, argv, CL_MAKE_VERSION(1, 1, 0), platform, device);
 
-  cl_context context = layer_test::createContext(platform, device);
+  cl_context context = object_lifetime_test::createContext(platform, device);
 
   constexpr size_t increment_count = 100;
   constexpr size_t contention_factor = 1;
@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
     std::fill_n(std::back_inserter(increments), increment_count, event);
   std::shuffle(increments.begin(), increments.end(), std::default_random_engine{});
 
-  layer_test::parallel_for(increments.begin(), increments.end(), [](const cl_event& event)
+  object_lifetime_test::parallel_for(increments.begin(), increments.end(), [](const cl_event& event)
   {
     cl_int err = clRetainEvent(event);
     EXPECT_SUCCESS(err);
@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
   EXPECT_REF_COUNT(context, 1, static_cast<cl_uint>(events.size()));
 
   clReleaseContext(context);
-  layer_test::parallel_for(events.begin(), events.end(), [=](const cl_event& event)
+  object_lifetime_test::parallel_for(events.begin(), events.end(), [=](const cl_event& event)
   {
     for (size_t i = 0 ; i < increment_count + 1; ++i)
     {
@@ -56,5 +56,5 @@ int main(int argc, char *argv[]) {
   });
   EXPECT_DESTROYED(context);
 
-  return layer_test::finalize();
+  return object_lifetime_test::finalize();
 }

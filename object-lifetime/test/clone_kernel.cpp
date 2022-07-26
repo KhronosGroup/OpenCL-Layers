@@ -4,9 +4,9 @@ int main(int argc, char *argv[]) {
   cl_platform_id platform;
   cl_device_id device;
   cl_int status;
-  layer_test::setup(argc, argv, CL_MAKE_VERSION(2, 1, 0), platform, device);
+  object_lifetime_test::setup(argc, argv, CL_MAKE_VERSION(2, 1, 0), platform, device);
 
-  cl_context context = layer_test::createContext(platform, device);
+  cl_context context = object_lifetime_test::createContext(platform, device);
 
   const char* source = "kernel void test_kernel(sampler_t sampler) {}";
   size_t length = strlen(source);
@@ -51,5 +51,5 @@ int main(int argc, char *argv[]) {
   EXPECT_DESTROYED(program); // recently deleted with type: PROGRAM
   EXPECT_DESTROYED(context); // recently deleted with type: CONTEXT
 
-  return layer_test::finalize();
+  return object_lifetime_test::finalize();
 }

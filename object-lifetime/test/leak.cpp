@@ -4,9 +4,9 @@ int main(int argc, char *argv[]) {
   cl_platform_id platform;
   cl_device_id device;
   cl_int status;
-  layer_test::setup(argc, argv, CL_MAKE_VERSION(1, 1, 0), platform, device);
+  object_lifetime_test::setup(argc, argv, CL_MAKE_VERSION(1, 1, 0), platform, device);
 
-  cl_context context = layer_test::createContext(platform, device);
+  cl_context context = object_lifetime_test::createContext(platform, device);
 
   cl_mem buffer = clCreateBuffer(context, CL_MEM_READ_WRITE, 32, nullptr, &status);
   EXPECT_SUCCESS(status);
@@ -29,5 +29,5 @@ int main(int argc, char *argv[]) {
 
   // Leak sampler and event
 
-  return layer_test::finalize();
+  return object_lifetime_test::finalize();
 }

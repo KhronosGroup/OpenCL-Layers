@@ -17,7 +17,6 @@
 #include <algorithm>
 #include <memory>
 #include <vector>
-#include <sstream>
 
 #include <sys/stat.h>
 
@@ -139,7 +138,7 @@ struct stream_deleter {
   }
 };
 
-std::unique_ptr<std::ostream, stream_deleter> log_stream;
+ocl_layer_utils::stream_ptr log_stream;
 
 struct layer_settings {
   enum class DebugLogType { StdOut, StdErr, File };
@@ -250,20 +249,11 @@ static cl_version get_platform_version(cl_platform_id platform) {
   if (res != CL_SUCCESS)
     return FALLBACK_VERSION;
 
-  std::stringstream version;
-  version.write(version_str.get(), version_len);
-
-  std::string opencl;
-  cl_uint major, minor;
-  version >> opencl;
-  version >> major;
-  version.get();
-  version >> minor;
-
-  if (version.fail())
+  cl_version version;
+  if (!ocl_layer_utils::parse_cl_version_string(version_str.get(), &version)) {
     return FALLBACK_VERSION;
-
-  return CL_MAKE_VERSION(major, minor, 0);
+  }
+  return version;
 }
 
 static cl_platform_id get_device_platform(cl_device_id device) {

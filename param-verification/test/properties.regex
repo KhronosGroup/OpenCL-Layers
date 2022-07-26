@@ -1,0 +1,6 @@
+In clCreateContext: context property name in properties is not a supported property name or the same property name is specified more than once. Returning NULL, \*errcode_ret = CL_INVALID_PROPERTY.
+In clCreateContext: context property name in properties is not a supported property name or the same property name is specified more than once. Returning NULL, \*errcode_ret = CL_INVALID_PROPERTY.
+In clCreateSamplerWithProperties: the property name in sampler_properties is not a supported property name, if the value specified for a supported property name is not valid, or if the same property name is specified more than once. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clCreateSamplerWithProperties: the property name in sampler_properties is not a supported property name, if the value specified for a supported property name is not valid, or if the same property name is specified more than once. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clCreateCommandQueueWithProperties: values specified in properties are not valid. Returning NULL, \*errcode_ret = CL_INVALID_VALUE.
+In clCreateCommandQueueWithProperties: values specified in properties are valid but are not supported by the device. Returning NULL, \*errcode_ret = CL_INVALID_QUEUE_PROPERTIES.

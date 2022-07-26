@@ -4,9 +4,9 @@ int main(int argc, char *argv[]) {
   cl_platform_id platform;
   cl_device_id device;
   cl_int status;
-  layer_test::setup(argc, argv, CL_MAKE_VERSION(1, 1, 0), platform, device);
+  object_lifetime_test::setup(argc, argv, CL_MAKE_VERSION(1, 1, 0), platform, device);
 
-  cl_context context = layer_test::createContext(platform, device);
+  cl_context context = object_lifetime_test::createContext(platform, device);
 
   cl_image_format format = { CL_RGBA, CL_UNORM_INT8 };
   cl_mem image_2d = clCreateImage2D(context, CL_MEM_READ_ONLY, &format, 1, 1, 0, nullptr, &status);
@@ -39,5 +39,5 @@ int main(int argc, char *argv[]) {
   EXPECT_ERROR(clReleaseMemObject(image_2d), CL_INVALID_MEM_OBJECT); // recently deleted with type: IMAGE
   EXPECT_ERROR(clReleaseContext(context), CL_INVALID_CONTEXT); // recently deleted with type: CONTEXT
 
-  return layer_test::finalize();
+  return object_lifetime_test::finalize();
 }
