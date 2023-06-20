@@ -25,6 +25,12 @@ jobs:
         repository: KhronosGroup/OpenCL-Headers
         path: external/OpenCL-Headers
 
+    - name: Checkout OpenCL-CLHPP
+      uses: actions/checkout@v2
+      with:
+        repository: KhronosGroup/OpenCL-CLHPP
+        path: external/OpenCL-CLHPP
+
     - name: Checkout OpenCL-ICD-Loader
       uses: actions/checkout@v2
       with:
@@ -54,6 +60,29 @@ jobs:
           -B $GITHUB_WORKSPACE/external/OpenCL-Headers/build
         cmake \
           --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build \
+          --target install \
+          --config Release \
+          --parallel `sysctl -n hw.logicalcpu` \
+          `if [[ "${{matrix.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
+
+    - name: Build & install OpenCL-CLHPP
+      shell: bash
+      run: |
+        cmake \
+          -G "${{matrix.GEN}}" \
+          -D BUILD_TESTING=OFF \
+          -D BUILD_DOCS=OFF \
+          -D BUILD_EXAMPLES=OFF \
+          -D OPENCL_CLHPP_BUILD_TESTING=OFF \
+          -D CMAKE_C_FLAGS="-w" \
+          -D CMAKE_C_COMPILER=/usr/local/bin/gcc-${{matrix.VER}} \
+          -D CMAKE_C_EXTENSIONS=${{matrix.EXT}} \
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install \
+          -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install" \
+          -S $GITHUB_WORKSPACE/external/OpenCL-CLHPP \
+          -B $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build
+        cmake \
+          --build $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build \
           --target install \
           --config Release \
           --parallel `sysctl -n hw.logicalcpu` \
@@ -89,7 +118,7 @@ jobs:
         -D CMAKE_CXX_STANDARD=${{matrix.STD}}
         -D CMAKE_CXX_EXTENSIONS=${{matrix.EXT}}
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
-        -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install"
+        -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install;$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install"
         -D CMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
         -S $GITHUB_WORKSPACE
         -B $GITHUB_WORKSPACE/build
