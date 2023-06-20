@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   compatibility:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     container: streamhpc/opencl-sdk-intelcpu:ubuntu-18.04-20220127
     strategy:
       matrix:
@@ -173,6 +173,12 @@ jobs:
         repository: KhronosGroup/OpenCL-Headers
         path: external/OpenCL-Headers
 
+    - name: Checkout OpenCL-CLHPP
+      uses: actions/checkout@v2
+      with:
+        repository: KhronosGroup/OpenCL-CLHPP
+        path: external/OpenCL-CLHPP
+
     - name: Checkout OpenCL-ICD-Loader
       uses: actions/checkout@v2
       with:
@@ -194,6 +200,30 @@ jobs:
           -H$GITHUB_WORKSPACE/external/OpenCL-Headers ;
         $CMAKE_EXE \
           --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build \
+          `if [[ "${{matrix.GEN}}" == "Ninja Multi-Config" ]]; then echo --config Release; fi;` \
+          --target install \
+          -- \
+          -j`nproc`
+
+    - name: Build & install OpenCL-CLHPP
+      shell: bash
+      run: |
+        $CMAKE_EXE \
+          -G "${{matrix.GEN}}" \
+          `if [[ "${{matrix.GEN}}" == "Unix Makefiles" ]]; then echo -D CMAKE_BUILD_TYPE=${{matrix.CONFIG}}; fi;` \
+          -D BUILD_TESTING=OFF \
+          -D BUILD_DOCS=OFF \
+          -D BUILD_EXAMPLES=OFF \
+          -D OPENCL_CLHPP_BUILD_TESTING=OFF \
+          -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}" \
+          -D CMAKE_C_COMPILER=${{matrix.C_COMPILER}} \
+          -D CMAKE_C_EXTENSIONS=OFF \
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install \
+          -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install" \
+          -B$GITHUB_WORKSPACE/external/OpenCL-CLHPP/build \
+          -H$GITHUB_WORKSPACE/external/OpenCL-CLHPP ;
+        $CMAKE_EXE \
+          --build $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build \
           `if [[ "${{matrix.GEN}}" == "Ninja Multi-Config" ]]; then echo --config Release; fi;` \
           --target install \
           -- \
@@ -234,7 +264,7 @@ jobs:
         -D CMAKE_CXX_COMPILER=${{matrix.CXX_COMPILER}}
         -D CMAKE_CXX_EXTENSIONS=OFF
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
-        -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install"
+        -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install;$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install"
         -B$GITHUB_WORKSPACE/build
         -H$GITHUB_WORKSPACE
 
