@@ -16,18 +16,18 @@ jobs:
             # For all compilers
               # For all configurations
                 # For all target architectures
-          - C_COMPILER: gcc-7
-            CXX_COMPILER: g++-7
-            CMAKE: 3.22.1
-            GEN: Unix Makefiles
-            CONFIG: Debug
-            BIN: 64
-          - C_COMPILER: gcc-7
-            CXX_COMPILER: g++-7
-            CMAKE: 3.22.1
-            GEN: Unix Makefiles
-            CONFIG: Release
-            BIN: 64
+          # - C_COMPILER: gcc-7
+          #   CXX_COMPILER: g++-7
+          #   CMAKE: 3.22.1
+          #   GEN: Unix Makefiles
+          #   CONFIG: Debug
+          #   BIN: 64
+          # - C_COMPILER: gcc-7
+          #   CXX_COMPILER: g++-7
+          #   CMAKE: 3.22.1
+          #   GEN: Unix Makefiles
+          #   CONFIG: Release
+          #   BIN: 64
           # - C_COMPILER: gcc-7
           #   CXX_COMPILER: g++-7
           #   CMAKE: 3.22.1
@@ -116,11 +116,11 @@ jobs:
             # One CMake version
             # For all compilers
               # For all architectures
-          - C_COMPILER: gcc-7
-            CXX_COMPILER: g++-7
-            CMAKE: 3.22.1
-            GEN: Ninja Multi-Config
-            BIN: 64
+          # - C_COMPILER: gcc-7
+          #   CXX_COMPILER: g++-7
+          #   CMAKE: 3.22.1
+          #   GEN: Ninja Multi-Config
+          #   BIN: 64
           # - C_COMPILER: gcc-7
           #   CXX_COMPILER: g++-7
           #   CMAKE: 3.22.1
@@ -162,6 +162,16 @@ jobs:
 
 
     steps:
+    - name: Install prerequisites
+      shell: bash
+      run: |
+        apt-get update -qq && apt-get install -y \
+          libboost-atomic-dev \
+          libboost-date-time-dev \
+          libboost-chrono-dev \
+          libboost-thread-dev \
+          libboost-wave-dev
+
     - name: Checkout OpenCL-Layers
       uses: actions/checkout@v2
       with:

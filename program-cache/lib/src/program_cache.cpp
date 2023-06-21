@@ -1,4 +1,24 @@
+/*
+ * Copyright (c) 2023 The Khronos Group Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * OpenCL is a trademark of Apple Inc. used under license by Khronos.
+ */
+
 #include <ocl_program_cache/program_cache.hpp>
+
+#include "preprocessor.hpp"
 
 #include <CL/opencl.hpp>
 
@@ -13,6 +33,7 @@
 #include <sstream>
 #include <string_view>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #define CHECK_CL_BUILD_ERROR(expression)                                       \
@@ -246,7 +267,6 @@ program_cache::fetch_or_build_source(std::string_view source,
                                      const std::vector<cl::Device>& devices,
                                      std::string_view options) const
 {
-    // ToDo preprocess source
     return fetch_or_build_impl(source, context, devices, options);
 }
 
@@ -282,11 +302,24 @@ program_cache::fetch_or_build_impl(const T& input,
                                    const std::vector<cl::Device>& devices,
                                    std::string_view options) const
 {
-    const auto key_hash = hash_str(input, options);
     std::vector<std::vector<unsigned char>> program_binaries;
     std::transform(
         devices.begin(), devices.end(), std::back_inserter(program_binaries),
         [&](const auto& device) {
+            // If input is string_view, preprocessed_input is a new value
+            // Else (input is std::vector<char>), preprocessed_input is a
+            // const& to input
+            decltype(auto) preprocessed_input = [&] {
+                if constexpr (std::is_same_v<T, std::string_view>)
+                {
+                    return preprocess(input, device, options);
+                }
+                else
+                {
+                    return input;
+                }
+            }();
+            const auto key_hash = hash_str(preprocessed_input, options);
             auto cache_path = get_path_for_device_binary(device, key_hash);
 
             if (std::ifstream ifs(cache_path, std::ios::binary); ifs.good())
@@ -294,8 +327,8 @@ program_cache::fetch_or_build_impl(const T& input,
                 return std::vector<unsigned char>(
                     std::istreambuf_iterator<char>(ifs), {});
             }
-            const auto program_binary =
-                build_program_to_binary(context, device, input, options);
+            const auto program_binary = build_program_to_binary(
+                context, device, preprocessed_input, options);
             save_binary_to_cache(cache_path, program_binary);
             return program_binary;
         });
