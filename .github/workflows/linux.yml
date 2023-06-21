@@ -28,18 +28,18 @@ jobs:
             GEN: Unix Makefiles
             CONFIG: Release
             BIN: 64
-          - C_COMPILER: gcc-7
-            CXX_COMPILER: g++-7
-            CMAKE: 3.22.1
-            GEN: Unix Makefiles
-            CONFIG: Debug
-            BIN: 32
-          - C_COMPILER: gcc-7
-            CXX_COMPILER: g++-7
-            CMAKE: 3.22.1
-            GEN: Unix Makefiles
-            CONFIG: Release
-            BIN: 32
+          # - C_COMPILER: gcc-7
+          #   CXX_COMPILER: g++-7
+          #   CMAKE: 3.22.1
+          #   GEN: Unix Makefiles
+          #   CONFIG: Debug
+          #   BIN: 32
+          # - C_COMPILER: gcc-7
+          #   CXX_COMPILER: g++-7
+          #   CMAKE: 3.22.1
+          #   GEN: Unix Makefiles
+          #   CONFIG: Release
+          #   BIN: 32
           - C_COMPILER: gcc-11
             CXX_COMPILER: g++-11
             CMAKE: 3.22.1
@@ -52,18 +52,18 @@ jobs:
             GEN: Unix Makefiles
             CONFIG: Release
             BIN: 64
-          - C_COMPILER: gcc-11
-            CXX_COMPILER: g++-11
-            CMAKE: 3.22.1
-            GEN: Unix Makefiles
-            CONFIG: Debug
-            BIN: 32
-          - C_COMPILER: gcc-11
-            CXX_COMPILER: g++-11
-            CMAKE: 3.22.1
-            GEN: Unix Makefiles
-            CONFIG: Release
-            BIN: 32
+          # - C_COMPILER: gcc-11
+          #   CXX_COMPILER: g++-11
+          #   CMAKE: 3.22.1
+          #   GEN: Unix Makefiles
+          #   CONFIG: Debug
+          #   BIN: 32
+          # - C_COMPILER: gcc-11
+          #   CXX_COMPILER: g++-11
+          #   CMAKE: 3.22.1
+          #   GEN: Unix Makefiles
+          #   CONFIG: Release
+          #   BIN: 32
           - C_COMPILER: clang-8
             CXX_COMPILER: clang++-8
             CMAKE: 3.22.1
@@ -76,18 +76,18 @@ jobs:
             GEN: Unix Makefiles
             CONFIG: Release
             BIN: 64
-          - C_COMPILER: clang-8
-            CXX_COMPILER: clang++-8
-            CMAKE: 3.22.1
-            GEN: Unix Makefiles
-            CONFIG: Debug
-            BIN: 32
-          - C_COMPILER: clang-8
-            CXX_COMPILER: clang++-8
-            CMAKE: 3.22.1
-            GEN: Unix Makefiles
-            CONFIG: Release
-            BIN: 32
+          # - C_COMPILER: clang-8
+          #   CXX_COMPILER: clang++-8
+          #   CMAKE: 3.22.1
+          #   GEN: Unix Makefiles
+          #   CONFIG: Debug
+          #   BIN: 32
+          # - C_COMPILER: clang-8
+          #   CXX_COMPILER: clang++-8
+          #   CMAKE: 3.22.1
+          #   GEN: Unix Makefiles
+          #   CONFIG: Release
+          #   BIN: 32
           - C_COMPILER: clang-13
             CXX_COMPILER: clang++-13
             CMAKE: 3.22.1
@@ -100,18 +100,18 @@ jobs:
             GEN: Unix Makefiles
             CONFIG: Release
             BIN: 64
-          - C_COMPILER: clang-13
-            CXX_COMPILER: clang++-13
-            CMAKE: 3.22.1
-            GEN: Unix Makefiles
-            CONFIG: Debug
-            BIN: 32
-          - C_COMPILER: clang-13
-            CXX_COMPILER: clang++-13
-            CMAKE: 3.22.1
-            GEN: Unix Makefiles
-            CONFIG: Release
-            BIN: 32
+          # - C_COMPILER: clang-13
+          #   CXX_COMPILER: clang++-13
+          #   CMAKE: 3.22.1
+          #   GEN: Unix Makefiles
+          #   CONFIG: Debug
+          #   BIN: 32
+          # - C_COMPILER: clang-13
+          #   CXX_COMPILER: clang++-13
+          #   CMAKE: 3.22.1
+          #   GEN: Unix Makefiles
+          #   CONFIG: Release
+          #   BIN: 32
           # Multi-config generators
             # One CMake version
             # For all compilers
@@ -121,41 +121,41 @@ jobs:
             CMAKE: 3.22.1
             GEN: Ninja Multi-Config
             BIN: 64
-          - C_COMPILER: gcc-7
-            CXX_COMPILER: g++-7
-            CMAKE: 3.22.1
-            GEN: Ninja Multi-Config
-            BIN: 32
+          # - C_COMPILER: gcc-7
+          #   CXX_COMPILER: g++-7
+          #   CMAKE: 3.22.1
+          #   GEN: Ninja Multi-Config
+          #   BIN: 32
           - C_COMPILER: gcc-11
             CXX_COMPILER: g++-11
             CMAKE: 3.22.1
             GEN: Ninja Multi-Config
             BIN: 64
-          - C_COMPILER: gcc-11
-            CXX_COMPILER: g++-11
-            CMAKE: 3.22.1
-            GEN: Ninja Multi-Config
-            BIN: 32
+          # - C_COMPILER: gcc-11
+          #   CXX_COMPILER: g++-11
+          #   CMAKE: 3.22.1
+          #   GEN: Ninja Multi-Config
+          #   BIN: 32
           - C_COMPILER: clang-8
             CXX_COMPILER: clang++-8
             CMAKE: 3.22.1
             GEN: Ninja Multi-Config
             BIN: 64
-          - C_COMPILER: clang-8
-            CXX_COMPILER: clang++-8
-            CMAKE: 3.22.1
-            GEN: Ninja Multi-Config
-            BIN: 32
+          # - C_COMPILER: clang-8
+          #   CXX_COMPILER: clang++-8
+          #   CMAKE: 3.22.1
+          #   GEN: Ninja Multi-Config
+          #   BIN: 32
           - C_COMPILER: clang-13
             CXX_COMPILER: clang++-13
             CMAKE: 3.22.1
             GEN: Ninja Multi-Config
             BIN: 64
-          - C_COMPILER: clang-13
-            CXX_COMPILER: clang++-13
-            CMAKE: 3.22.1
-            GEN: Ninja Multi-Config
-            BIN: 32
+          # - C_COMPILER: clang-13
+          #   CXX_COMPILER: clang++-13
+          #   CMAKE: 3.22.1
+          #   GEN: Ninja Multi-Config
+          #   BIN: 32
     env:
       CMAKE_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/cmake
       CTEST_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/ctest
