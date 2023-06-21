@@ -29,6 +29,11 @@ jobs:
       MultiProcMaxCount: '3'                  # -=-
 
     steps:
+    - name: Install prerequisites with vcpkg
+      id: vcpkg-install
+      shell: pwsh
+      run: C:\vcpkg\vcpkg.exe install boost-wave:${{matrix.BIN}}-windows
+
     - name: Checkout OpenCL-Layers
       uses: actions/checkout@v2
       with:
@@ -289,6 +294,7 @@ jobs:
           -D CMAKE_CXX_EXTENSIONS='${{matrix.EXT}}' `
           -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\install" `
           -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install;${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install;${env:GITHUB_WORKSPACE}\external\OpenCL-CLHPP\install" `
+          -D CMAKE_TOOLCHAIN_FILE=${env:VCPKG_INSTALLATION_ROOT}\scripts\buildsystems\vcpkg.cmake `
           -S "${env:GITHUB_WORKSPACE}" `
           -B "${env:GITHUB_WORKSPACE}\build"
 
@@ -317,6 +323,7 @@ jobs:
           -D CMAKE_EXE_LINKER_FLAGS='/INCREMENTAL' `
           -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\install" `
           -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install;${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install;${env:GITHUB_WORKSPACE}\external\OpenCL-CLHPP\install" `
+          -D CMAKE_TOOLCHAIN_FILE=${env:VCPKG_INSTALLATION_ROOT}\scripts\buildsystems\vcpkg.cmake `
           -S "${env:GITHUB_WORKSPACE}" `
           -B "${env:GITHUB_WORKSPACE}\build"
 
@@ -332,7 +339,7 @@ jobs:
             /verbosity:minimal `
             /maxCpuCount `
             /noLogo
-          if ($LASTEXITCODE -ne 0) { throw "Building OpenCL-ICD-Loader in ${Config} failed." }
+          if ($LASTEXITCODE -ne 0) { throw "Building OpenCL-Layers in ${Config} failed." }
         }
 
     - name: Build (Ninja)
@@ -351,7 +358,7 @@ jobs:
             --config ${Config} `
             -- `
             -j ${env:NUMBER_OF_PROCESSORS}
-          if ($LASTEXITCODE -ne 0) { throw "Building OpenCL-ICD-Loader in ${Config} failed." }
+          if ($LASTEXITCODE -ne 0) { throw "Building OpenCL-Layers in ${Config} failed." }
         }
 
     - name: Test
