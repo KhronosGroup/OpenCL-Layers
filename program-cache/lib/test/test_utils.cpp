@@ -21,6 +21,7 @@
 #include <gtest/gtest.h>
 
 using namespace ocl::program_cache::utils;
+using ocl::program_cache::bad_opencl_version_format;
 
 TEST(UtilsTest, Split)
 {

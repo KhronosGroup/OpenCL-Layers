@@ -19,10 +19,12 @@
 #include <ocl_program_cache/program_cache.hpp>
 
 #include "preprocessor.hpp"
+#include "utils.hpp"
 
-#include <CL/opencl.hpp>
+#include <CL/opencl.h>
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdlib>
@@ -36,13 +38,6 @@
 #include <type_traits>
 #include <vector>
 
-#define CHECK_CL_BUILD_ERROR(expression)                                       \
-    {                                                                          \
-        if (const cl_int error = (expression); error != CL_SUCCESS)            \
-            throw ::ocl::program_cache::opencl_build_error(error);             \
-    }
-
-namespace ocl::program_cache {
 namespace {
 
 #ifdef _WIN32
@@ -91,7 +86,7 @@ std::filesystem::path get_default_cache_root()
         {
             if (char* home_path = std::getenv("HOME"); home_path == nullptr)
             {
-                throw cache_access_error(
+                throw ocl::program_cache::cache_access_error(
                     "Could not get default cache root directory");
             }
             else
@@ -108,34 +103,6 @@ std::filesystem::path get_default_cache_root()
 }
 
 #endif
-
-std::string get_device_identifier(const cl::Device& device)
-{
-    const auto device_name = device.getInfo<CL_DEVICE_NAME>();
-    const auto platform = cl::Platform(device.getInfo<CL_DEVICE_PLATFORM>());
-    const auto platform_version = platform.getInfo<CL_PLATFORM_VERSION>();
-    return platform_version + "/" + device_name;
-}
-
-std::vector<unsigned char> build_program_to_binary(const cl::Context& context,
-                                                   const cl::Device& device,
-                                                   std::string_view source,
-                                                   std::string_view options)
-{
-    cl::Program program(context, std::string(source));
-    CHECK_CL_BUILD_ERROR(program.build(device, options.data()));
-    return program.getInfo<CL_PROGRAM_BINARIES>().front();
-}
-
-std::vector<unsigned char> build_program_to_binary(const cl::Context& context,
-                                                   const cl::Device& device,
-                                                   const std::vector<char>& il,
-                                                   std::string_view options)
-{
-    cl::Program program(context, il);
-    CHECK_CL_BUILD_ERROR(program.build(device, options.data()));
-    return program.getInfo<CL_PROGRAM_BINARIES>().front();
-}
 
 void save_binary_to_cache(const std::filesystem::path& cache_path,
                           const std::vector<unsigned char>& binary_data)
@@ -179,27 +146,49 @@ std::string hash_str(const std::vector<char>& data,
 
 } // namespace
 
-program_cache::program_cache(
-    std::shared_ptr<const cl::Context> context,
-    const std::optional<std::filesystem::path>& cache_root)
-    : context_(context),
+ocl::program_cache::program_cache_dispatch
+ocl::program_cache::default_program_cache_dispatch()
+{
+    ocl::program_cache::program_cache_dispatch dispatch{};
+    dispatch.clBuildProgram = &clBuildProgram;
+    dispatch.clCreateContextFromType = &clCreateContextFromType;
+    dispatch.clCreateProgramWithBinary = &clCreateProgramWithBinary;
+    dispatch.clCreateProgramWithIL = &clCreateProgramWithIL;
+    dispatch.clCreateProgramWithSource = &clCreateProgramWithSource;
+    dispatch.clGetContextInfo = &clGetContextInfo;
+    dispatch.clGetDeviceInfo = &clGetDeviceInfo;
+    dispatch.clGetPlatformIDs = &clGetPlatformIDs;
+    dispatch.clGetPlatformInfo = &clGetPlatformInfo;
+    dispatch.clGetProgramBuildInfo = &clGetProgramBuildInfo;
+    dispatch.clGetProgramInfo = &clGetProgramInfo;
+    dispatch.clReleaseDevice = &clReleaseDevice;
+    dispatch.clReleaseProgram = &clReleaseProgram;
+    return dispatch;
+}
+
+ocl::program_cache::program_cache::program_cache(
+    cl_context context,
+    const std::optional<std::filesystem::path>& cache_root,
+    const program_cache_dispatch& dispatch)
+    : dispatch_(dispatch), context_(context),
       cache_root_(cache_root.value_or(get_default_cache_root()))
 {
     std::filesystem::create_directories(cache_root_);
 }
 
-std::optional<cl::Program> program_cache::fetch(std::string_view key) const
+cl_program ocl::program_cache::program_cache::fetch(std::string_view key) const
 {
-    return fetch(key,
-                 (context_ == nullptr ? cl::Context::getDefault() : *context_)
-                     .getInfo<CL_CONTEXT_DEVICES>());
+    return fetch(
+        key,
+        get_devices(context_ == nullptr ? get_default_context() : context_));
 }
 
-std::optional<cl::Program>
-program_cache::fetch(std::string_view key,
-                     const std::vector<cl::Device>& devices) const
+cl_program ocl::program_cache::program_cache::fetch(
+    std::string_view key, const std::vector<cl_device_id>& devices) const
 {
     std::vector<std::vector<unsigned char>> device_binaries;
+    std::vector<std::size_t> binary_lengths;
+    std::vector<const unsigned char*> binary_ptrs;
     for (const auto& device : devices)
     {
         const auto cache_path =
@@ -207,36 +196,78 @@ program_cache::fetch(std::string_view key,
         std::ifstream ifs(cache_path, std::ios::binary);
         if (!ifs.good())
         {
-            return std::nullopt;
+            return nullptr;
         }
-        device_binaries.emplace_back(std::istreambuf_iterator<char>(ifs),
-                                     std::istreambuf_iterator<char>());
+        auto& binary_data =
+            device_binaries.emplace_back(std::istreambuf_iterator<char>(ifs),
+                                         std::istreambuf_iterator<char>());
+        binary_lengths.push_back(binary_data.size());
+        binary_ptrs.push_back(binary_data.data());
     }
-    cl::Program program(context_ == nullptr ? cl::Context::getDefault()
-                                            : *context_,
-                        devices, device_binaries);
-    CHECK_CL_BUILD_ERROR(program.build());
+    const cl_context context =
+        context_ == nullptr ? get_default_context() : context_;
+    cl_int error = CL_SUCCESS;
+    const cl_program program = dispatch_.clCreateProgramWithBinary(
+        context, static_cast<cl_uint>(devices.size()), devices.data(),
+        binary_lengths.data(), binary_ptrs.data(), nullptr, &error);
+    CHECK_CL_ERROR(error);
+    error =
+        dispatch_.clBuildProgram(program, static_cast<cl_uint>(devices.size()),
+                                 devices.data(), nullptr, nullptr, nullptr);
+    if (error != CL_SUCCESS)
+    {
+        throw opencl_build_error(error);
+    }
     return program;
 }
 
-void program_cache::store(const cl::Program& program,
-                          std::string_view key) const
+void ocl::program_cache::program_cache::store(cl_program program,
+                                              std::string_view key) const
 {
-    const auto build_statuses = program.getBuildInfo<CL_PROGRAM_BUILD_STATUS>();
-    const bool unsuccessful_build =
-        std::any_of(build_statuses.begin(), build_statuses.end(),
-                    [](const auto& device_status) {
-                        return device_status.second != CL_BUILD_SUCCESS;
-                    });
-    if (unsuccessful_build)
+    cl_uint num_devices{};
+    CHECK_CL_ERROR(dispatch_.clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES,
+                                              sizeof(num_devices), &num_devices,
+                                              nullptr));
+    std::vector<cl_device_id> program_devices(num_devices);
+    CHECK_CL_ERROR(dispatch_.clGetProgramInfo(
+        program, CL_PROGRAM_DEVICES, num_devices * sizeof(cl_device_id),
+        program_devices.data(), nullptr));
+    utils::final_action devices_release_guard([&] {
+        for (auto device_id : program_devices)
+        {
+            this->dispatch_.clReleaseDevice(device_id);
+        }
+    });
+    for (auto device_id : program_devices)
     {
-        throw unbuilt_program_error();
+        cl_build_status build_status{};
+        CHECK_CL_ERROR(dispatch_.clGetProgramBuildInfo(
+            program, device_id, CL_PROGRAM_BUILD_STATUS, sizeof(build_status),
+            &build_status, nullptr));
+        if (build_status != CL_BUILD_SUCCESS)
+        {
+            throw unbuilt_program_error();
+        }
     }
-    const auto devices = program.getInfo<CL_PROGRAM_DEVICES>();
-    const auto binaries = program.getInfo<CL_PROGRAM_BINARIES>();
-    assert(devices.size() == binaries.size());
-    auto device_it = devices.begin();
-    for (auto binary_it = binaries.begin(), end = binaries.end();
+    std::vector<std::size_t> binary_sizes(program_devices.size());
+    CHECK_CL_ERROR(
+        dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
+                                   binary_sizes.size() * sizeof(std::size_t),
+                                   binary_sizes.data(), nullptr));
+    std::vector<std::vector<unsigned char>> program_binaries;
+    std::vector<unsigned char*> binary_ptrs;
+    for (auto binary_size : binary_sizes)
+    {
+        auto& binary = program_binaries.emplace_back(binary_size);
+        binary_ptrs.push_back(binary.data());
+    }
+    CHECK_CL_ERROR(
+        dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARIES,
+                                   binary_ptrs.size() * sizeof(unsigned char*),
+                                   binary_ptrs.data(), nullptr));
+    auto device_it = program_devices.begin();
+    for (auto binary_it = program_binaries.begin(),
+              end = program_binaries.end();
          binary_it != end; ++binary_it, ++device_it)
     {
         const auto cache_path =
@@ -245,62 +276,60 @@ void program_cache::store(const cl::Program& program,
     }
 }
 
-cl::Program program_cache::fetch_or_build_source(std::string_view source,
-                                                 std::string_view options) const
+cl_program ocl::program_cache::program_cache::fetch_or_build_source(
+    std::string_view source, std::string_view options) const
 {
     return fetch_or_build_source(
-        source, context_ == nullptr ? cl::Context::getDefault() : *context_,
+        source, context_ == nullptr ? get_default_context() : context_,
         options);
 }
 
-cl::Program program_cache::fetch_or_build_source(std::string_view source,
-                                                 const cl::Context& context,
-                                                 std::string_view options) const
+cl_program ocl::program_cache::program_cache::fetch_or_build_source(
+    std::string_view source, cl_context context, std::string_view options) const
 {
-    return fetch_or_build_source(
-        source, context, context.getInfo<CL_CONTEXT_DEVICES>(), options);
+    return fetch_or_build_source(source, context, get_devices(context),
+                                 options);
 }
 
-cl::Program
-program_cache::fetch_or_build_source(std::string_view source,
-                                     const cl::Context& context,
-                                     const std::vector<cl::Device>& devices,
-                                     std::string_view options) const
+cl_program ocl::program_cache::program_cache::fetch_or_build_source(
+    std::string_view source,
+    cl_context context,
+    const std::vector<cl_device_id>& devices,
+    std::string_view options) const
 {
     return fetch_or_build_impl(source, context, devices, options);
 }
 
-cl::Program program_cache::fetch_or_build_il(const std::vector<char>& il,
-                                             std::string_view options) const
+cl_program ocl::program_cache::program_cache::fetch_or_build_il(
+    const std::vector<char>& il, std::string_view options) const
 {
     return fetch_or_build_il(
-        il, context_ == nullptr ? cl::Context::getDefault() : *context_,
-        options);
+        il, context_ == nullptr ? get_default_context() : context_, options);
 }
 
-cl::Program program_cache::fetch_or_build_il(const std::vector<char>& il,
-                                             const cl::Context& context,
-                                             std::string_view options) const
+cl_program ocl::program_cache::program_cache::fetch_or_build_il(
+    const std::vector<char>& il,
+    cl_context context,
+    std::string_view options) const
 {
-    return fetch_or_build_il(il, context, context.getInfo<CL_CONTEXT_DEVICES>(),
-                             options);
+    return fetch_or_build_il(il, context, get_devices(context), options);
 }
 
-cl::Program
-program_cache::fetch_or_build_il(const std::vector<char>& il,
-                                 const cl::Context& context,
-                                 const std::vector<cl::Device>& devices,
-                                 std::string_view options) const
+cl_program ocl::program_cache::program_cache::fetch_or_build_il(
+    const std::vector<char>& il,
+    cl_context context,
+    const std::vector<cl_device_id>& devices,
+    std::string_view options) const
 {
     return fetch_or_build_impl(il, context, devices, options);
 }
 
 template <class T>
-cl::Program
-program_cache::fetch_or_build_impl(const T& input,
-                                   const cl::Context& context,
-                                   const std::vector<cl::Device>& devices,
-                                   std::string_view options) const
+cl_program ocl::program_cache::program_cache::fetch_or_build_impl(
+    const T& input,
+    cl_context context,
+    const std::vector<cl_device_id>& devices,
+    std::string_view options) const
 {
     std::vector<std::vector<unsigned char>> program_binaries;
     std::transform(
@@ -312,7 +341,7 @@ program_cache::fetch_or_build_impl(const T& input,
             decltype(auto) preprocessed_input = [&] {
                 if constexpr (std::is_same_v<T, std::string_view>)
                 {
-                    return preprocess(input, device, options);
+                    return preprocess(input, device, options, this->dispatch_);
                 }
                 else
                 {
@@ -332,17 +361,37 @@ program_cache::fetch_or_build_impl(const T& input,
             save_binary_to_cache(cache_path, program_binary);
             return program_binary;
         });
+    std::vector<std::size_t> binary_lengths;
+    std::vector<const unsigned char*> binary_ptrs;
+    for (const auto& binary_data : program_binaries)
+    {
+        binary_lengths.push_back(binary_data.size());
+        binary_ptrs.push_back(binary_data.data());
+    }
 
-    const auto program = cl::Program(context, devices, program_binaries);
-    CHECK_CL_BUILD_ERROR(program.build());
+    cl_int error = CL_SUCCESS;
+    const auto program = dispatch_.clCreateProgramWithBinary(
+        context, static_cast<cl_uint>(devices.size()), devices.data(),
+        binary_lengths.data(), binary_ptrs.data(), nullptr, &error);
+    CHECK_CL_ERROR(error);
+    CHECK_CL_BUILD_ERROR(
+        dispatch_.clBuildProgram(program, static_cast<cl_uint>(devices.size()),
+                                 devices.data(), nullptr, nullptr, nullptr));
     return program;
 }
 
 std::filesystem::path
-program_cache::get_path_for_device_binary(const cl::Device& device,
-                                          std::string_view key_hash) const
+ocl::program_cache::program_cache::get_path_for_device_binary(
+    cl_device_id device, std::string_view key_hash) const
 {
-    const auto device_hash = hash_str(get_device_identifier(device));
+    const auto device_name =
+        utils::get_info_str(device, dispatch_.clGetDeviceInfo, CL_DEVICE_NAME);
+    cl_platform_id platform{};
+    CHECK_CL_ERROR(dispatch_.clGetDeviceInfo(
+        device, CL_DEVICE_PLATFORM, sizeof(platform), &platform, nullptr));
+    const auto platform_version = utils::get_info_str(
+        platform, dispatch_.clGetPlatformInfo, CL_PLATFORM_VERSION);
+    const auto device_hash = hash_str(platform_version + "/" + device_name);
     assert(key_hash.size() == 16);
     auto path =
         cache_root_ / std::string(key_hash.begin(), key_hash.begin() + 2);
@@ -351,4 +400,98 @@ program_cache::get_path_for_device_binary(const cl::Device& device,
     return path;
 }
 
-} // namespace ocl::program_cache
+template <class T>
+std::vector<unsigned char>
+ocl::program_cache::program_cache::build_program_to_binary(
+    cl_context context,
+    cl_device_id device,
+    const T& source,
+    std::string_view options) const
+{
+    cl_int error = CL_SUCCESS;
+    const auto program = [&]() -> cl_program {
+        const char* source_data = source.data();
+        const std::size_t source_size = source.size();
+        if constexpr (std::is_same_v<T, std::string>)
+        {
+            return dispatch_.clCreateProgramWithSource(context, 1, &source_data,
+                                                       &source_size, &error);
+        }
+        else if constexpr (std::is_same_v<T, std::vector<char>>)
+        {
+            return dispatch_.clCreateProgramWithIL(context, source_data,
+                                                   source_size, &error);
+        }
+        else
+        {
+            static_assert(false);
+        }
+    }();
+    if (error != CL_SUCCESS)
+    {
+        dispatch_.clReleaseProgram(program);
+        throw opencl_error(error);
+    }
+    const std::string options_str(options.begin(), options.end());
+    error = dispatch_.clBuildProgram(program, 1, &device, options_str.c_str(),
+                                     nullptr, nullptr);
+    if (error != CL_SUCCESS)
+    {
+        dispatch_.clReleaseProgram(program);
+        throw opencl_error(error);
+    }
+    std::size_t binary_size{};
+    error =
+        dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
+                                   sizeof(binary_size), &binary_size, nullptr);
+    if (error != CL_SUCCESS)
+    {
+        dispatch_.clReleaseProgram(program);
+        throw opencl_error(error);
+    }
+    std::vector<unsigned char> binaries(binary_size);
+    unsigned char* binary_data = binaries.data();
+    error = dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARIES,
+                                       binary_size, &binary_data, nullptr);
+    dispatch_.clReleaseProgram(program);
+    if (error != CL_SUCCESS)
+    {
+        throw opencl_error(error);
+    }
+    return binaries;
+}
+
+cl_context ocl::program_cache::program_cache::get_default_context() const
+{
+    static cl_context default_context = [&] {
+        cl_uint num_platforms{};
+        CHECK_CL_ERROR(dispatch_.clGetPlatformIDs(0, nullptr, &num_platforms));
+        std::vector<cl_platform_id> platform_ids(num_platforms);
+        CHECK_CL_ERROR(dispatch_.clGetPlatformIDs(
+            num_platforms, platform_ids.data(), nullptr));
+        std::array<cl_context_properties, 3> props{
+            CL_CONTEXT_PLATFORM,
+            reinterpret_cast<cl_context_properties>(platform_ids.front()), 0
+        };
+        cl_int error = CL_SUCCESS;
+        auto context = dispatch_.clCreateContextFromType(
+            props.data(), CL_DEVICE_TYPE_ALL, nullptr, nullptr, &error);
+        CHECK_CL_ERROR(error);
+        return context;
+    }();
+    return default_context;
+}
+
+std::vector<cl_device_id>
+ocl::program_cache::program_cache::get_devices(cl_context context) const
+{
+    std::size_t num_devices{};
+    CHECK_CL_ERROR(dispatch_.clGetContextInfo(context, CL_CONTEXT_NUM_DEVICES,
+                                              sizeof(num_devices), &num_devices,
+                                              nullptr));
+    std::vector<cl_device_id> device_ids(num_devices);
+    CHECK_CL_ERROR(dispatch_.clGetContextInfo(
+        context, CL_CONTEXT_DEVICES, num_devices * sizeof(cl_device_id),
+        device_ids.data(), nullptr));
+    return device_ids;
+}
