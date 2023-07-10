@@ -19,11 +19,25 @@
 #ifndef OCL_PROGRAM_CACHE_LIB_SRC_UTILS_HPP_
 #define OCL_PROGRAM_CACHE_LIB_SRC_UTILS_HPP_
 
+#include <ocl_program_cache/common.hpp>
+
 #include <charconv>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#define CHECK_CL_ERROR(expression)                                             \
+    {                                                                          \
+        if (const cl_int __error = (expression); __error != CL_SUCCESS)        \
+            throw ::ocl::program_cache::opencl_error(__error);                 \
+    }
+
+#define CHECK_CL_BUILD_ERROR(expression)                                       \
+    {                                                                          \
+        if (const cl_int __error = (expression); __error != CL_SUCCESS)        \
+            throw ::ocl::program_cache::opencl_build_error(__error);           \
+    }
 
 namespace ocl::program_cache::utils {
 
@@ -48,13 +62,18 @@ inline bool starts_with(std::string_view str, std::string_view start)
     return str.find(start) == 0;
 }
 
-struct bad_opencl_version_format : public std::runtime_error
+template <class T, class Fun, class Param>
+std::string get_info_str(T obj, Fun fun, Param param_name)
 {
-    bad_opencl_version_format()
-        : std::runtime_error(
-            "Got invalid OpenCL version string from the runtime")
-    {}
-};
+    std::size_t param_value_size{};
+    CHECK_CL_ERROR(
+        fun(obj, param_name, param_value_size, nullptr, &param_value_size));
+    std::string ret;
+    ret.resize(param_value_size);
+    CHECK_CL_ERROR(
+        fun(obj, param_name, param_value_size, ret.data(), &param_value_size));
+    return ret;
+}
 
 namespace detail {
 
@@ -100,6 +119,37 @@ template <class... Args> struct overloads : Args...
 };
 
 template <class... Ts> overloads(Ts...) -> overloads<Ts...>;
+
+template <class Fun> class final_action {
+public:
+    final_action(Fun fun): fun_(fun), execute_(true) {}
+
+    ~final_action()
+    {
+        if (execute_)
+        {
+            fun_();
+        }
+    }
+
+    final_action(const final_action& other) = delete;
+    final_action(final_action&& other)
+    {
+        this->fun_ = other.fun_;
+        other.execute_ = false;
+    }
+
+    final_action& operator=(const final_action& other) = delete;
+    final_action& operator=(final_action&& other)
+    {
+        this->fun_ = other.fun_;
+        other.execute_ = false;
+    }
+
+private:
+    Fun fun_;
+    bool execute_;
+};
 
 } // namespace ocl::program_cache::utils
 

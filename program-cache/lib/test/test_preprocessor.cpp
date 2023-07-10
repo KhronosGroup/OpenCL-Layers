@@ -15,7 +15,7 @@
  *
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
-
+#include <ocl_program_cache/program_cache.hpp>
 #include "../src/preprocessor.hpp"
 
 #include <CL/opencl.hpp>
@@ -87,9 +87,10 @@ void bar() {};
         ofs << include_source;
     }
 
-    const auto preprocessed_source =
-        ocl::program_cache::preprocess(kernel_source, cl::Device::getDefault(),
-                                       "-D FOO -I " + include_dir.string());
+    const auto preprocessed_source = ocl::program_cache::preprocess(
+        kernel_source, cl::Device::getDefault()(),
+        "-D FOO -I " + include_dir.string(),
+        ocl::program_cache::default_program_cache_dispatch());
     ASSERT_NE(std::string::npos,
               preprocessed_source.find("kernel void foo(global int* i)"));
     ASSERT_NE(std::string::npos, preprocessed_source.find("*i = 100;"));

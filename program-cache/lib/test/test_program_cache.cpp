@@ -44,7 +44,7 @@ template <> void PrintTo(const std::filesystem::path&, std::ostream*) {}
 
 class ProgramCacheTest : public testing::TestWithParam<std::filesystem::path> {
 protected:
-    const cl::Context& context() const { return *context_; }
+    const cl::Context& context() const { return context_; }
     const program_cache& cache() const { return *cache_; }
 
     void SetUp() override
@@ -54,8 +54,8 @@ protected:
         {
             std::filesystem::remove_all(cache_path);
         }
-        context_ = std::make_shared<cl::Context>(cl::Context::getDefault());
-        cache_ = std::make_unique<program_cache>(context_, cache_path);
+        context_ = cl::Context::getDefault();
+        cache_ = std::make_unique<program_cache>(context_(), cache_path);
     }
 
     std::string get_program_source(int i = 100)
@@ -113,7 +113,7 @@ protected:
     }
 
 private:
-    std::shared_ptr<cl::Context> context_;
+    cl::Context context_;
     std::unique_ptr<program_cache> cache_;
 };
 
@@ -131,7 +131,7 @@ TEST_P(ProgramCacheTest, UnbuiltProgramThrows)
 {
     cl::Program program(context(), get_program_source());
     const std::string key = "abcdef";
-    ASSERT_THROW(cache().store(program, key),
+    ASSERT_THROW(cache().store(program(), key),
                  ocl::program_cache::unbuilt_program_error);
 }
 
@@ -141,9 +141,9 @@ TEST_P(ProgramCacheTest, StoreAndFetch)
     ASSERT_EQ(CL_SUCCESS, program.build());
 
     const std::string key = "abcdef";
-    cache().store(program, key);
+    cache().store(program(), key);
 
-    program = *cache().fetch(key);
+    program = cache().fetch(key);
     check_program(program);
 }
 
@@ -152,14 +152,14 @@ TEST_P(ProgramCacheTest, CacheSimpleTextProgram)
     const auto source_100 = get_program_source(100);
     const auto source_5 = get_program_source(5);
 
-    auto program_100 = cache().fetch_or_build_source(source_100);
-    auto program_5 = cache().fetch_or_build_source(source_5);
+    auto program_100 = cl::Program(cache().fetch_or_build_source(source_100));
+    auto program_5 = cl::Program(cache().fetch_or_build_source(source_5));
     check_program(program_5, 5);
     check_program(program_100, 100);
 
     // The subsequent lookups should be cache hits
-    program_5 = cache().fetch_or_build_source(source_5);
-    program_100 = cache().fetch_or_build_source(source_100);
+    program_5 = cl::Program(cache().fetch_or_build_source(source_5));
+    program_100 = cl::Program(cache().fetch_or_build_source(source_100));
     check_program(program_5, 5);
     check_program(program_100, 100);
 }
@@ -177,7 +177,8 @@ TEST_P(ProgramCacheTest, CacheSimpleILProgram)
         GTEST_SKIP();
     }
 
-    const auto program_100 = cache().fetch_or_build_il(get_program_il());
+    const auto program_100 =
+        cl::Program(cache().fetch_or_build_il(get_program_il()));
     check_program(program_100, 100);
 }
 
@@ -198,8 +199,8 @@ TEST_P(ProgramCacheTest, ParallelAccessToCache)
             std::shuffle(program_indices.begin(), program_indices.end(), prng);
             for (auto idx : program_indices)
             {
-                const auto program =
-                    cache().fetch_or_build_source(get_program_source(idx));
+                cl::Program program(
+                    cache().fetch_or_build_source(get_program_source(idx)));
                 check_program(program, idx);
             }
         }));

@@ -19,20 +19,17 @@
 #ifndef OCL_PROGRAM_CACHE_LIB_SRC_PREPROCESSOR_HPP_
 #define OCL_PROGRAM_CACHE_LIB_SRC_PREPROCESSOR_HPP_
 
+#include <ocl_program_cache/common.hpp>
+
+#include <CL/opencl.h>
+
 #include <stdexcept>
 #include <string_view>
 #include <string>
 #include <variant>
 #include <vector>
 
-#include <CL/opencl.hpp>
-
 namespace ocl::program_cache {
-
-struct preprocess_exception : public std::runtime_error
-{
-    preprocess_exception(const std::string& what): std::runtime_error(what) {}
-};
 
 struct DefinitionOpt
 {
@@ -119,8 +116,9 @@ using Option = std::
 std::vector<Option> parse_options(std::string_view options);
 
 std::string preprocess(std::string_view kernel_source,
-                       const cl::Device& device,
-                       std::string_view options);
+                       cl_device_id device,
+                       std::string_view options,
+                       const program_cache_dispatch& dispatch);
 
 } // namespace ocl::program_cache
 
