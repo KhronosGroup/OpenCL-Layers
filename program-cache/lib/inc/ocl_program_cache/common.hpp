@@ -23,8 +23,7 @@
 
 #include <stdexcept>
 
-namespace ocl::program_cache
-{
+namespace ocl::program_cache {
 
 /// @brief Error thrown when the path for the cache cannot be accessed.
 struct cache_access_error : public std::runtime_error
@@ -37,18 +36,22 @@ struct cache_access_error : public std::runtime_error
 /// @brief Error thrown when the OpenCL runtime returns an error.
 struct opencl_error : public std::runtime_error
 {
-    opencl_error(cl_int error)
-        : std::runtime_error("An OpenCL error occured: "
-                             + std::to_string(error))
+    opencl_error(cl_int error,
+                 const std::string& prefix = "An OpenCL error occured: ")
+        : std::runtime_error(prefix + std::to_string(error)), error_(error)
     {}
+
+    cl_int err() const { return error_; }
+
+private:
+    cl_int error_;
 };
 
 /// @brief Error thrown when the passed OpenCL program could not be built.
-struct opencl_build_error : public std::runtime_error
+struct opencl_build_error : public opencl_error
 {
     opencl_build_error(cl_int error)
-        : std::runtime_error("An OpenCL kernel build error occured: "
-                             + std::to_string(error))
+        : opencl_error(error, "An OpenCL kernel build error occured: ")
     {}
 };
 

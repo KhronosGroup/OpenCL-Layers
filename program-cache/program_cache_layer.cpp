@@ -21,9 +21,10 @@
 #include "lib/src/utils.hpp"
 
 #include <CL/cl_layer.h>
-#include <CL/opencl.hpp>
 
+#include <algorithm>
 #include <cassert>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -288,6 +289,10 @@ CL_API_ENTRY cl_int CL_API_CALL clBuildProgram_wrap(
     void(CL_CALLBACK* pfn_notify)(cl_program program, void* user_data),
     void* user_data)
 {
+    if (num_devices > 0 && !device_list)
+    {
+        return CL_INVALID_ARG_VALUE;
+    }
     const auto index = reinterpret_cast<intptr_t>(program);
     std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
@@ -295,15 +300,50 @@ CL_API_ENTRY cl_int CL_API_CALL clBuildProgram_wrap(
     {
         return CL_INVALID_PROGRAM;
     }
-    // ToDo programCache
-    if (const auto error = ensure_program(entry_it->second);
-        error != CL_SUCCESS)
-    {
-        return error;
-    }
-    return tdispatch->clBuildProgram(entry_it->second.program, num_devices,
-                                     device_list, options, pfn_notify,
-                                     user_data);
+    cl_int error = CL_SUCCESS;
+    std::visit(
+        utils::overloads{
+            [&](binary_program) {
+                error = tdispatch->clBuildProgram(
+                    entry_it->second.program, num_devices, device_list, options,
+                    pfn_notify, user_data);
+            },
+            [&](const auto& source) {
+                try
+                {
+                    const auto opts = options == nullptr
+                        ? std::string_view{}
+                        : std::string_view{ options };
+                    const cl_context context = entry_it->second.context;
+                    std::vector<cl_device_id> devices(num_devices);
+                    std::copy_n(device_list, num_devices, devices.begin());
+                    cl_program new_program{};
+                    if constexpr (std::is_same_v<std::decay_t<decltype(source)>,
+                                                 std::string>)
+                    {
+
+                        new_program = program_cache->fetch_or_build_source(
+                            source, context, devices, opts);
+                    }
+                    else
+                    {
+                        new_program = program_cache->fetch_or_build_il(
+                            source, context, devices, opts);
+                    }
+                    if (entry_it->second.program)
+                        tdispatch->clReleaseProgram(entry_it->second.program);
+                    entry_it->second.program = new_program;
+                } catch (const ocl::program_cache::opencl_error& err)
+                {
+                    error = err.err();
+                } catch (...)
+                {
+                    error = CL_INVALID_BUILD_OPTIONS;
+                }
+                if (pfn_notify) pfn_notify(program, user_data);
+            } },
+        entry_it->second.source);
+    return error;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clCompileProgram_wrap(
@@ -702,6 +742,25 @@ void init_dispatch()
     dispatch.clCreateKernelsInProgram = &clCreateKernelsInProgram_wrap;
 }
 
+ocl::program_cache::program_cache_dispatch init_program_cache_dispatch()
+{
+    ocl::program_cache::program_cache_dispatch dispatch{};
+    dispatch.clBuildProgram = tdispatch->clBuildProgram;
+    dispatch.clCreateContextFromType = tdispatch->clCreateContextFromType;
+    dispatch.clCreateProgramWithBinary = tdispatch->clCreateProgramWithBinary;
+    dispatch.clCreateProgramWithIL = tdispatch->clCreateProgramWithIL;
+    dispatch.clCreateProgramWithSource = tdispatch->clCreateProgramWithSource;
+    dispatch.clGetContextInfo = tdispatch->clGetContextInfo;
+    dispatch.clGetDeviceInfo = tdispatch->clGetDeviceInfo;
+    dispatch.clGetPlatformIDs = tdispatch->clGetPlatformIDs;
+    dispatch.clGetPlatformInfo = tdispatch->clGetPlatformInfo;
+    dispatch.clGetProgramBuildInfo = tdispatch->clGetProgramBuildInfo;
+    dispatch.clGetProgramInfo = tdispatch->clGetProgramInfo;
+    dispatch.clReleaseDevice = tdispatch->clReleaseDevice;
+    dispatch.clReleaseProgram = tdispatch->clReleaseProgram;
+    return dispatch;
+}
+
 } // namespace
 
 CL_API_ENTRY cl_int CL_API_CALL clGetLayerInfo(cl_layer_info param_name,
@@ -738,18 +797,19 @@ clInitLayer(cl_uint num_entries,
         || num_entries < sizeof(dispatch) / sizeof(dispatch.clGetPlatformIDs))
         return CL_INVALID_VALUE;
 
+    init_dispatch();
+    tdispatch = target_dispatch;
+    *layer_dispatch_ret = &dispatch;
+    *num_entries_out = sizeof(dispatch) / sizeof(dispatch.clGetPlatformIDs);
     try
     {
-        program_cache = std::make_unique<ocl::program_cache::program_cache>();
+        program_cache = std::make_unique<ocl::program_cache::program_cache>(
+            nullptr, std::nullopt, init_program_cache_dispatch());
     } catch (const std::exception& e)
     {
         return CL_INVALID_VALUE;
     }
     program_entries.clear();
-    init_dispatch();
 
-    tdispatch = target_dispatch;
-    *layer_dispatch_ret = &dispatch;
-    *num_entries_out = sizeof(dispatch) / sizeof(dispatch.clGetPlatformIDs);
     return CL_SUCCESS;
 }

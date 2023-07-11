@@ -297,7 +297,9 @@ cl_program ocl::program_cache::program_cache::fetch_or_build_source(
     const std::vector<cl_device_id>& devices,
     std::string_view options) const
 {
-    return fetch_or_build_impl(source, context, devices, options);
+    return fetch_or_build_impl(source, context,
+                               devices.empty() ? get_devices(context) : devices,
+                               options);
 }
 
 cl_program ocl::program_cache::program_cache::fetch_or_build_il(
