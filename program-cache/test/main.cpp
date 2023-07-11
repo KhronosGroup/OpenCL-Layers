@@ -16,6 +16,13 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+/// @file main.cpp
+/// @brief Very simple consumption test for OpenCL.
+///
+/// This program is intended to be run with OPENCL_LAYERS=<path-to-ProgramCacheLayer-library>.
+/// It is only able to check if the successfully loaded layer has apparent problems,
+/// but will not signal if the layer load was unsuccessful.
+
 #include <CL/opencl.hpp>
 
 #include <iostream>
@@ -23,19 +30,30 @@
 
 int main()
 {
-    auto context = cl::Context::getDefault();
+    try
+    {
+        auto context = cl::Context::getDefault();
 
-    const std::string program_source = "kernel void foo(global int* i){ *i = 100; }";
-    cl::Program program(context, program_source);
-    program.build();
+        const std::string program_source = "kernel void foo(global int* i){ *i = 100; }";
+        const cl::Program program(context, program_source);
+        program.build();
 
-    cl::KernelFunctor<cl::Buffer> kernel(program, "foo");
-    cl::Buffer output(context, CL_MEM_WRITE_ONLY, sizeof(cl_int));
+        cl::KernelFunctor<cl::Buffer> kernel(program, "foo");
+        const cl::Buffer output(context, CL_MEM_WRITE_ONLY, sizeof(cl_int));
 
-    kernel(cl::EnqueueArgs(cl::NDRange(1)), output);
+        kernel(cl::EnqueueArgs(cl::NDRange(1)), output);
 
-    cl_int result{};
-    cl::enqueueReadBuffer(output, true, 0, sizeof(result), &result);
+        cl_int result{};
+        cl::enqueueReadBuffer(output, true, 0, sizeof(result), &result);
 
-    std::cout << "Result: " << result << std::endl;
+        std::cout << "Result: " << result << std::endl;
+        if (result != 100)
+        {
+            return -1;
+        }
+    } catch (const std::exception& ex)
+    {
+        std::cout << "Error: " << ex.what() << std::endl;
+        return -1;
+    }
 }

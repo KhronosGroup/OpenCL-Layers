@@ -4,7 +4,6 @@ add_executable(ProgramCacheTest
     test_utils.cpp)
 target_link_libraries(ProgramCacheTest PRIVATE
     ProgramCache
-    LayersCommon
     OpenCL::OpenCL
     OpenCL::HeadersCpp
     gtest

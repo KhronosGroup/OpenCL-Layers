@@ -2,7 +2,7 @@ if (NOT TARGET OpenCL::HeadersCpp)
     find_package(OpenCLHeadersCpp REQUIRED)
 endif()
 
-find_package(Boost COMPONENTS wave)
+find_package(Boost REQUIRED COMPONENTS wave)
 
 add_library(ProgramCache
     src/program_cache.cpp
@@ -14,7 +14,8 @@ target_link_libraries(ProgramCache PUBLIC LayersCommon)
 target_link_libraries(ProgramCache PRIVATE Boost::wave)
 target_compile_features(ProgramCache PUBLIC cxx_std_17)
 target_compile_definitions(ProgramCache PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:BOOST_WAVE_SEPARATE_LEXER_INSTANTIATION=0>)
+    $<$<CXX_COMPILER_ID:MSVC>:BOOST_WAVE_SEPARATE_LEXER_INSTANTIATION=0>
+    $<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>)
 set_target_properties(ProgramCache PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if (LAYERS_BUILD_TESTS)

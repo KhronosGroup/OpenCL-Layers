@@ -15,8 +15,16 @@
  *
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
-#include <ocl_program_cache/program_cache.hpp>
+
+/// @file test_preprocessor.cpp
+/// @brief Testing utilities in preprocessor.hpp
+
+#include "utils_test.hpp"
+
 #include "../src/preprocessor.hpp"
+#include "../src/utils.hpp"
+
+#include <ocl_program_cache/program_cache.hpp>
 
 #include <CL/opencl.hpp>
 #include <gtest/gtest.h>
@@ -29,25 +37,38 @@
 
 using namespace ocl::program_cache;
 
+TEST(PreprocessorTest, RemoveEmptyPragmas)
+{
+    std::string alloc_str;
+    EXPECT_EQ("kernel void foo(){}\n", remove_empty_pragmas("kernel void foo(){}\n", alloc_str));
+    EXPECT_EQ("kernel void foo(){}\n",
+              remove_empty_pragmas("kernel void foo(){}\n#pragma\n", alloc_str));
+    EXPECT_EQ("kernel void foo(){}\n",
+              remove_empty_pragmas("kernel void foo(){}\n#pragma", alloc_str));
+    EXPECT_EQ("kernel void foo(){}\n  ",
+              remove_empty_pragmas("kernel void foo(){}\n  #pragma\n", alloc_str));
+    EXPECT_EQ("kernel void foo(){}\n  ",
+              remove_empty_pragmas("kernel void foo(){}\n  #pragma", alloc_str));
+    EXPECT_EQ("kernel void foo(){\n#pragma bar\n}",
+              remove_empty_pragmas("kernel void foo(){\n#pragma bar\n}", alloc_str));
+    EXPECT_EQ(
+        "kernel void foo(){\n#pragma bar\n}\n",
+        remove_empty_pragmas("kernel void foo(){\n#pragma\n#pragma bar\n#pragma\n}\n", alloc_str));
+}
+
 TEST(PreprocessorTest, ParseOptions)
 {
     ASSERT_EQ(std::vector<Option>{}, parse_options(""));
-    ASSERT_EQ(std::vector<Option>{},
-              parse_options(" -cl-single-precision-constant "));
-    ASSERT_EQ((std::vector<Option>{ LanguageVersionOpt("CL2.0"),
-                                    DefinitionOpt{ "TEST=100" } }),
-              parse_options(
-                  " -cl-single-precision-constant -cl-std=CL2.0  -DTEST=100 "));
-    ASSERT_EQ((std::vector<Option>{
-                  DefinitionOpt{ "TEST2" }, FastRelaxedMathOpt{},
-                  IncludeOpt{ "/usr/include" }, DefinitionOpt{ "TEST=100" } }),
-              parse_options(
-                  " -D TEST2 -whatever -cl-fast-relaxed-math  -I /usr/include "
-                  "-cl-single-precision-constant -I/usr/bin  -DTEST=100 "));
+    ASSERT_EQ(std::vector<Option>{}, parse_options(" -cl-single-precision-constant "));
+    ASSERT_EQ((std::vector<Option>{ LanguageVersionOpt("CL2.0"), DefinitionOpt{ "TEST=100" } }),
+              parse_options(" -cl-single-precision-constant -cl-std=CL2.0  -DTEST=100 "));
+    ASSERT_EQ((std::vector<Option>{ DefinitionOpt{ "TEST2" }, FastRelaxedMathOpt{},
+                                    IncludeOpt{ "/usr/include" }, DefinitionOpt{ "TEST=100" } }),
+              parse_options(" -D TEST2 -whatever -cl-fast-relaxed-math  -I /usr/include "
+                            "-cl-single-precision-constant -I/usr/bin  -DTEST=100 "));
     ASSERT_THROW([] { parse_options("-cl-single-precision-constant -D "); }(),
                  preprocess_exception);
-    ASSERT_THROW([] { parse_options("-cl-single-precision-constant -I"); }(),
-                 preprocess_exception);
+    ASSERT_THROW([] { parse_options("-cl-single-precision-constant -I"); }(), preprocess_exception);
 }
 
 TEST(PreprocessorTest, PreprocessProgram)
@@ -72,10 +93,8 @@ kernel void foo(global int* i)
     std::string random_name;
     std::uniform_int_distribution dist(int('a'), int('z') + 1);
     std::default_random_engine engine{ std::random_device{}() };
-    std::generate_n(std::back_inserter(random_name), 8,
-                    [&] { return char(dist(engine)); });
-    const auto include_dir =
-        std::filesystem::temp_directory_path() / random_name;
+    std::generate_n(std::back_inserter(random_name), 8, [&] { return char(dist(engine)); });
+    const auto include_dir = std::filesystem::temp_directory_path() / random_name;
     std::filesystem::create_directories(include_dir);
     const auto include_file = include_dir / "header.clh";
     const std::string include_source = R"(#pragma once
@@ -88,17 +107,14 @@ void bar() {};
     }
 
     const auto preprocessed_source = ocl::program_cache::preprocess(
-        kernel_source, cl::Device::getDefault()(),
-        "-D FOO -I " + include_dir.string(),
-        ocl::program_cache::default_program_cache_dispatch());
-    ASSERT_NE(std::string::npos,
-              preprocessed_source.find("kernel void foo(global int* i)"));
+        kernel_source, cl::Device::getDefault()(), "-D FOO -I " + include_dir.string(),
+        get_default_program_cache_dispatch());
+    ASSERT_NE(std::string::npos, preprocessed_source.find("kernel void foo(global int* i)"));
     ASSERT_NE(std::string::npos, preprocessed_source.find("*i = 100;"));
     ASSERT_EQ(std::string::npos, preprocessed_source.find("*i = 101;"));
     ASSERT_EQ(std::string::npos, preprocessed_source.find("Comment"));
     ASSERT_EQ(std::string::npos, preprocessed_source.find("#include"));
     ASSERT_NE(std::string::npos, preprocessed_source.find("void bar() {};"));
-    ASSERT_NE(
-        std::string::npos,
-        preprocessed_source.find("#pragma OPENCL EXTENSION all : behavior"));
+    ASSERT_NE(std::string::npos,
+              preprocessed_source.find("#pragma OPENCL EXTENSION all : behavior"));
 }
