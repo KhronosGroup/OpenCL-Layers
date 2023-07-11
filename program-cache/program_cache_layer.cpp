@@ -132,8 +132,8 @@ clCreateProgramWithBinary_wrap(cl_context context,
         errcode_ret);
     if (errcode_ret && *errcode_ret != CL_SUCCESS)
     {
-        assert(program == NULL);
-        return NULL;
+        assert(program == nullptr);
+        return nullptr;
     }
     program_entry entry{};
     entry.context = context;
@@ -157,8 +157,8 @@ clCreateProgramWithBuiltInKernels_wrap(cl_context context,
         context, num_devices, device_list, kernel_names, errcode_ret);
     if (errcode_ret && *errcode_ret != CL_SUCCESS)
     {
-        assert(program == NULL);
-        return NULL;
+        assert(program == nullptr);
+        return nullptr;
     }
 
     program_entry entry;
@@ -182,12 +182,13 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainProgram_wrap(cl_program program)
     {
         return CL_INVALID_PROGRAM;
     }
-    const auto error = tdispatch->clRetainProgram(entry_it->second.program);
-    if (error == CL_SUCCESS)
+    if (entry_it->second.program)
     {
-        entry_it->second.reference_count += 1;
+        const auto error = tdispatch->clRetainProgram(entry_it->second.program);
+        if (error != CL_SUCCESS) return error;
     }
-    return error;
+    entry_it->second.reference_count += 1;
+    return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clReleaseProgram_wrap(cl_program program)
@@ -199,10 +200,11 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseProgram_wrap(cl_program program)
     {
         return CL_INVALID_PROGRAM;
     }
-    const auto error = tdispatch->clReleaseProgram(entry_it->second.program);
-    if (error != CL_SUCCESS)
+    if (entry_it->second.program)
     {
-        return error;
+        const auto error =
+            tdispatch->clReleaseProgram(entry_it->second.program);
+        if (error != CL_SUCCESS) return error;
     }
     entry_it->second.reference_count -= 1;
     if (entry_it->second.reference_count == 0)
@@ -263,7 +265,7 @@ clSetProgramSpecializationConstant_wrap(cl_program program,
 cl_int ensure_program(program_entry& entry)
 {
     cl_int error = CL_SUCCESS;
-    if (entry.program == NULL)
+    if (entry.program == nullptr)
     {
         std::visit(utils::overloads{
                        [](binary_program) { assert(false); },
@@ -394,22 +396,24 @@ CL_API_ENTRY cl_program CL_API_CALL clLinkProgram_wrap(
         const auto index =
             reinterpret_cast<intptr_t>(input_programs[program_idx]);
         auto entry_it = program_entries.find(index);
-        if (entry_it == program_entries.end())
+        if (entry_it == program_entries.end()
+            || entry_it->second.program == nullptr)
         {
             if (errcode_ret) *errcode_ret = CL_INVALID_PROGRAM;
-            return NULL;
-        }
-        if (const auto error = ensure_program(entry_it->second);
-            error != CL_SUCCESS)
-        {
-            if (errcode_ret) *errcode_ret = error;
-            return NULL;
+            return nullptr;
         }
         unwrapped_programs.push_back(entry_it->second.program);
     }
-    return tdispatch->clLinkProgram(
+    const cl_program linked_program = tdispatch->clLinkProgram(
         context, num_devices, device_list, options, num_input_programs,
         unwrapped_programs.data(), pfn_notify, user_data, errcode_ret);
+    program_entry entry{};
+    entry.context = context;
+    entry.program = linked_program;
+    const auto index = next_program_idx++;
+    program_entries[index] = entry;
+    if (errcode_ret) *errcode_ret = CL_SUCCESS;
+    return reinterpret_cast<cl_program>(index);
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
@@ -688,12 +692,12 @@ CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel_wrap(cl_program program,
     if (entry_it == program_entries.end())
     {
         if (errcode_ret) *errcode_ret = CL_INVALID_PROGRAM;
-        return NULL;
+        return nullptr;
     }
-    if (entry_it->second.program == NULL)
+    if (entry_it->second.program == nullptr)
     {
         if (errcode_ret) *errcode_ret = CL_INVALID_PROGRAM_EXECUTABLE;
-        return NULL;
+        return nullptr;
     }
     return tdispatch->clCreateKernel(entry_it->second.program, kernel_name,
                                      errcode_ret);
@@ -712,7 +716,7 @@ clCreateKernelsInProgram_wrap(cl_program program,
     {
         return CL_INVALID_PROGRAM;
     }
-    if (entry_it->second.program == NULL)
+    if (entry_it->second.program == nullptr)
     {
         return CL_INVALID_PROGRAM_EXECUTABLE;
     }
