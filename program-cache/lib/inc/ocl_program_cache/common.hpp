@@ -64,6 +64,8 @@ struct unbuilt_program_error : public std::runtime_error
     {}
 };
 
+/// @brief Error thrown if the OpenCL version string queried from the OpenCL
+/// runtime is invalid.
 struct bad_opencl_version_format : public std::runtime_error
 {
     bad_opencl_version_format()
@@ -72,11 +74,14 @@ struct bad_opencl_version_format : public std::runtime_error
     {}
 };
 
+/// @brief Error thrown when the C preprocessor executed on the OpenCL kernel
+/// encounters an unrecoverable problem.
 struct preprocess_exception : public std::runtime_error
 {
     preprocess_exception(const std::string& what): std::runtime_error(what) {}
 };
 
+/// @brief OpenCL function dispatch table used by \ref program_cache.
 struct program_cache_dispatch
 {
     cl_api_clBuildProgram clBuildProgram{};

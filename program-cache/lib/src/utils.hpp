@@ -21,6 +21,8 @@
 
 #include <ocl_program_cache/common.hpp>
 
+#include <CL/opencl.h>
+
 #include <charconv>
 #include <stdexcept>
 #include <string_view>
@@ -31,12 +33,6 @@
     {                                                                          \
         if (const cl_int __error = (expression); __error != CL_SUCCESS)        \
             throw ::ocl::program_cache::opencl_error(__error);                 \
-    }
-
-#define CHECK_CL_BUILD_ERROR(expression)                                       \
-    {                                                                          \
-        if (const cl_int __error = (expression); __error != CL_SUCCESS)        \
-            throw ::ocl::program_cache::opencl_build_error(__error);           \
     }
 
 namespace ocl::program_cache::utils {
@@ -120,36 +116,24 @@ template <class... Args> struct overloads : Args...
 
 template <class... Ts> overloads(Ts...) -> overloads<Ts...>;
 
-template <class Fun> class final_action {
-public:
-    final_action(Fun fun): fun_(fun), execute_(true) {}
-
-    ~final_action()
-    {
-        if (execute_)
-        {
-            fun_();
-        }
-    }
-
-    final_action(const final_action& other) = delete;
-    final_action(final_action&& other)
-    {
-        this->fun_ = other.fun_;
-        other.execute_ = false;
-    }
-
-    final_action& operator=(const final_action& other) = delete;
-    final_action& operator=(final_action&& other)
-    {
-        this->fun_ = other.fun_;
-        other.execute_ = false;
-    }
-
-private:
-    Fun fun_;
-    bool execute_;
-};
+inline program_cache_dispatch get_default_program_cache_dispatch()
+{
+    program_cache_dispatch dispatch{};
+    dispatch.clBuildProgram = &clBuildProgram;
+    dispatch.clCreateContextFromType = &clCreateContextFromType;
+    dispatch.clCreateProgramWithBinary = &clCreateProgramWithBinary;
+    dispatch.clCreateProgramWithIL = &clCreateProgramWithIL;
+    dispatch.clCreateProgramWithSource = &clCreateProgramWithSource;
+    dispatch.clGetContextInfo = &clGetContextInfo;
+    dispatch.clGetDeviceInfo = &clGetDeviceInfo;
+    dispatch.clGetPlatformIDs = &clGetPlatformIDs;
+    dispatch.clGetPlatformInfo = &clGetPlatformInfo;
+    dispatch.clGetProgramBuildInfo = &clGetProgramBuildInfo;
+    dispatch.clGetProgramInfo = &clGetProgramInfo;
+    dispatch.clReleaseDevice = &clReleaseDevice;
+    dispatch.clReleaseProgram = &clReleaseProgram;
+    return dispatch;
+}
 
 } // namespace ocl::program_cache::utils
 

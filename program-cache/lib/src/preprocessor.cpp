@@ -50,8 +50,7 @@
 
 namespace {
 
-namespace utils = ocl::program_cache::utils;
-using program_cache_dispatch = ocl::program_cache::program_cache_dispatch;
+namespace pc = ocl::program_cache;
 using lex_iterator_t =
     boost::wave::cpplexer::lex_iterator<boost::wave::cpplexer::lex_token<>>;
 using context_t =
@@ -80,32 +79,36 @@ void undefine_default_macros(context_t& context)
 }
 
 int get_device_opencl_c_id(cl_device_id device,
-                           const program_cache_dispatch& dispatch)
+                           const pc::program_cache_dispatch& dispatch)
 {
-    const auto device_opencl_c_version = utils::get_info_str(
+    const auto device_opencl_c_version = pc::utils::get_info_str(
         device, dispatch.clGetDeviceInfo, CL_DEVICE_OPENCL_C_VERSION);
     const auto [device_c_major, device_c_minor] =
-        utils::parse_device_opencl_c_version(device_opencl_c_version);
+        pc::utils::parse_device_opencl_c_version(device_opencl_c_version);
     return 100 * device_c_major + 10 * device_c_minor;
 }
 
 void add_opencl_macro_defs(cl_device_id device,
                            context_t& context,
-                           ocl::program_cache::LanguageVersion language,
-                           const program_cache_dispatch& dispatch)
+                           pc::LanguageVersion language,
+                           const pc::program_cache_dispatch& dispatch)
 {
     cl_platform_id platform;
     CHECK_CL_ERROR(dispatch.clGetDeviceInfo(
         device, CL_DEVICE_PLATFORM, sizeof(platform), &platform, nullptr));
-    const auto platform_opencl_version = utils::get_info_str(
+    const auto platform_opencl_version = pc::utils::get_info_str(
         platform, dispatch.clGetPlatformInfo, CL_PLATFORM_VERSION);
     const auto [platform_major, platform_minor] =
-        utils::parse_platform_opencl_version(platform_opencl_version);
+        pc::utils::parse_platform_opencl_version(platform_opencl_version);
     const int platform_id = 100 * platform_major + 10 * platform_minor;
     const int device_c_id = get_device_opencl_c_id(device, dispatch);
 
-    context.add_macro_definition("__kernel_exec(x, typen)=__kernel __attribute__((work_group_size_hint(X, 1, 1))) __attribute__((vec_type_hint(typen)))");
-    context.add_macro_definition("kernel_exec(x, typen)=__kernel __attribute__((work_group_size_hint(X, 1, 1))) __attribute__((vec_type_hint(typen)))");
+    context.add_macro_definition("__kernel_exec(x, typen)=__kernel "
+                                 "__attribute__((work_group_size_hint(X, 1, "
+                                 "1))) __attribute__((vec_type_hint(typen)))");
+    context.add_macro_definition(
+        "kernel_exec(x, typen)=__kernel __attribute__((work_group_size_hint(X, "
+        "1, 1))) __attribute__((vec_type_hint(typen)))");
     context.add_macro_definition("__OPENCL_VERSION__="
                                  + std::to_string(platform_id));
     if (device_c_id >= 110)
@@ -155,11 +158,11 @@ void add_opencl_macro_defs(cl_device_id device,
     }
 }
 
-void process_option(const ocl::program_cache::Option& option,
+void process_option(const pc::Option& option,
                     context_t& context,
-                    ocl::program_cache::LanguageVersion& language)
+                    pc::LanguageVersion& language)
 {
-    using namespace ocl::program_cache;
+    using namespace pc;
     std::visit(utils::overloads{
                    [&](const DefinitionOpt& opt) {
                        context.add_macro_definition(
@@ -177,18 +180,17 @@ void process_option(const ocl::program_cache::Option& option,
                option);
 }
 
-ocl::program_cache::LanguageVersion
+pc::LanguageVersion
 get_default_language(cl_device_id device,
-                     const program_cache_dispatch& dispatch)
+                     const pc::program_cache_dispatch& dispatch)
 {
-    return ocl::program_cache::LanguageVersion(
+    return pc::LanguageVersion(
         std::min(120, get_device_opencl_c_id(device, dispatch)));
 }
 
 } // namespace
 
-ocl::program_cache::LanguageVersionOpt::LanguageVersionOpt(
-    std::string_view version_str)
+pc::LanguageVersionOpt::LanguageVersionOpt(std::string_view version_str)
     : language_(100)
 {
     std::string version_str_upper;
@@ -211,8 +213,7 @@ ocl::program_cache::LanguageVersionOpt::LanguageVersionOpt(
         throw preprocess_exception("Invalid -cl-std specification");
 }
 
-std::vector<ocl::program_cache::Option>
-ocl::program_cache::parse_options(std::string_view options)
+std::vector<pc::Option> pc::parse_options(std::string_view options)
 {
     std::vector<Option> ret;
     const auto words = utils::split(options);
@@ -257,11 +258,10 @@ ocl::program_cache::parse_options(std::string_view options)
     return ret;
 }
 
-std::string
-ocl::program_cache::preprocess(std::string_view kernel_source,
-                               cl_device_id device,
-                               std::string_view options,
-                               const program_cache_dispatch& dispatch)
+std::string pc::preprocess(std::string_view kernel_source,
+                           cl_device_id device,
+                           std::string_view options,
+                           const program_cache_dispatch& dispatch)
 {
     try
     {

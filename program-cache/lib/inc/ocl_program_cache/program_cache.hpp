@@ -19,9 +19,9 @@
 #ifndef OCL_PROGRAM_CACHE_LIB_INC_OCL_PROGRAM_CACHE_PROGRAM_CACHE_HPP_
 #define OCL_PROGRAM_CACHE_LIB_INC_OCL_PROGRAM_CACHE_PROGRAM_CACHE_HPP_
 
-#include <CL/opencl.h>
-
 #include "common.hpp"
+
+#include <CL/opencl.h>
 
 #include <cstddef>
 #include <filesystem>
@@ -33,8 +33,6 @@
 
 namespace ocl::program_cache {
 
-ocl::program_cache::program_cache_dispatch default_program_cache_dispatch();
-
 /// @brief Store and fetch OpenCL program binaries to/from the filesystem.
 class program_cache {
 public:
@@ -43,11 +41,14 @@ public:
     /// is passed, then the default context is used.
     /// @param cache_root Path to the program cache root on the filesystem. If
     /// \c nullopt is passed, the platform dependent default location is used.
+    /// @param dispatch The function dispatch table that contains the pointers
+    /// for the OpenCL runtime functions that are used by the \c program_cache.
+    /// If \c nullopt is passed, then the default OpenCL runtime functions are
+    /// used.
     program_cache(
         cl_context context = nullptr,
         const std::optional<std::filesystem::path>& cache_root = std::nullopt,
-        const program_cache_dispatch& dispatch =
-            default_program_cache_dispatch());
+        const std::optional<program_cache_dispatch>& dispatch = std::nullopt);
 
     /// @brief Loads cached binaries for all devices associated with the \c
     /// cl_context passed in the constructor and builds a \c cl_program.
