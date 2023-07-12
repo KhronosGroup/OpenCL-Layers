@@ -163,20 +163,22 @@ void process_option(const pc::Option& option,
                     pc::LanguageVersion& language)
 {
     using namespace pc;
-    std::visit(utils::overloads{
-                   [&](const DefinitionOpt& opt) {
-                       context.add_macro_definition(
-                           std::string(opt.definition_));
-                   },
-                   [&](const IncludeOpt& opt) {
-                       context.add_include_path(std::string(opt.path_).c_str());
-                   },
-                   [&](const LanguageVersionOpt& opt) {
-                       language = opt.get_language();
-                   },
-                   [&](const FastRelaxedMathOpt&) {
-                       context.add_macro_definition("__FAST_RELAXED_MATH__=1");
-                   } },
+    std::visit(utils::overloads{ [&](const DefinitionOpt& opt) {
+                                    context.add_macro_definition(
+                                        std::string(opt.definition_));
+                                },
+                                 [&](const IncludeOpt& opt) {
+                                     const std::string path(opt.path_);
+                                     context.add_include_path(path.c_str());
+                                     context.add_sysinclude_path(path.c_str());
+                                 },
+                                 [&](const LanguageVersionOpt& opt) {
+                                     language = opt.get_language();
+                                 },
+                                 [&](const FastRelaxedMathOpt&) {
+                                     context.add_macro_definition(
+                                         "__FAST_RELAXED_MATH__=1");
+                                 } },
                option);
 }
 
@@ -268,7 +270,6 @@ std::string pc::preprocess(std::string_view kernel_source,
         const auto parsed_options = parse_options(options);
         context_t context(kernel_source.begin(), kernel_source.end());
         undefine_default_macros(context);
-        context.set_sysinclude_delimiter();
         LanguageVersion language = get_default_language(device, dispatch);
         for (const auto& option : parsed_options)
         {

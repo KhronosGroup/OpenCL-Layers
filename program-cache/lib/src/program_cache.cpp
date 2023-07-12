@@ -156,15 +156,15 @@ pc::program_cache::program_cache(
     const std::optional<std::filesystem::path>& cache_root,
     const std::optional<program_cache_dispatch>& dispatch)
     : dispatch_(dispatch.value_or(utils::get_default_program_cache_dispatch())),
+      context_(context),
       cache_root_(cache_root.value_or(get_default_cache_root()))
 {
-    context_ = context ? context : get_default_context();
     std::filesystem::create_directories(cache_root_);
 }
 
 cl_program pc::program_cache::fetch(std::string_view key) const
 {
-    return fetch(key, get_devices(context_));
+    return fetch(key, get_devices(context_ ? context_ : get_default_context()));
 }
 
 cl_program
@@ -191,7 +191,8 @@ pc::program_cache::fetch(std::string_view key,
     }
     cl_int error = CL_SUCCESS;
     const cl_program program = dispatch_.clCreateProgramWithBinary(
-        context_, static_cast<cl_uint>(devices.size()), devices.data(),
+        context_ ? context_ : get_default_context(),
+        static_cast<cl_uint>(devices.size()), devices.data(),
         binary_lengths.data(), binary_ptrs.data(), nullptr, &error);
     CHECK_CL_ERROR(error);
     error =
@@ -257,7 +258,8 @@ cl_program
 pc::program_cache::fetch_or_build_source(std::string_view source,
                                          std::string_view options) const
 {
-    return fetch_or_build_source(source, context_, options);
+    return fetch_or_build_source(
+        source, context_ ? context_ : get_default_context(), options);
 }
 
 cl_program pc::program_cache::fetch_or_build_source(
@@ -281,7 +283,8 @@ cl_program pc::program_cache::fetch_or_build_source(
 cl_program pc::program_cache::fetch_or_build_il(const std::vector<char>& il,
                                                 std::string_view options) const
 {
-    return fetch_or_build_il(il, context_, options);
+    return fetch_or_build_il(il, context_ ? context_ : get_default_context(),
+                             options);
 }
 
 cl_program pc::program_cache::fetch_or_build_il(const std::vector<char>& il,

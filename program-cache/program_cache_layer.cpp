@@ -50,18 +50,20 @@ struct program_entry
     cl_program program{};
     std::variant<binary_program, std::string, std::vector<char>> source =
         binary_program{};
-    void(CL_CALLBACK* pfn_notify)(cl_program, void*);
+    std::string options;
+    void(CL_CALLBACK* release_notify)(cl_program, void*);
     void* notify_user_data{};
     std::map<cl_uint, std::vector<unsigned char>> specialization_constants;
+    bool build_attempted = false;
 };
 
 _cl_icd_dispatch dispatch{};
 const _cl_icd_dispatch* tdispatch{};
 std::unique_ptr<ocl::program_cache::program_cache> program_cache;
 
-std::mutex programs_mutex;
+std::recursive_mutex programs_mutex;
 std::intptr_t next_program_idx = 1;
-std::map<std::size_t, program_entry> program_entries;
+std::map<std::intptr_t, program_entry> program_entries;
 
 CL_API_ENTRY cl_program CL_API_CALL
 clCreateProgramWithSource_wrap(cl_context context,
@@ -209,9 +211,9 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseProgram_wrap(cl_program program)
     entry_it->second.reference_count -= 1;
     if (entry_it->second.reference_count == 0)
     {
-        if (entry_it->second.pfn_notify)
-            entry_it->second.pfn_notify(program,
-                                        entry_it->second.notify_user_data);
+        if (entry_it->second.release_notify)
+            entry_it->second.release_notify(program,
+                                            entry_it->second.notify_user_data);
         program_entries.erase(entry_it);
     }
     return CL_SUCCESS;
@@ -233,7 +235,7 @@ CL_API_ENTRY cl_int CL_API_CALL clSetProgramReleaseCallback_wrap(
     {
         return CL_INVALID_PROGRAM;
     }
-    entry_it->second.pfn_notify = pfn_notify;
+    entry_it->second.release_notify = pfn_notify;
     entry_it->second.notify_user_data = user_data;
     return CL_SUCCESS;
 }
@@ -302,6 +304,8 @@ CL_API_ENTRY cl_int CL_API_CALL clBuildProgram_wrap(
     {
         return CL_INVALID_PROGRAM;
     }
+    entry_it->second.options = options ? options : std::string();
+    entry_it->second.build_attempted = true;
     cl_int error = CL_SUCCESS;
     std::visit(
         utils::overloads{
@@ -313,9 +317,6 @@ CL_API_ENTRY cl_int CL_API_CALL clBuildProgram_wrap(
             [&](const auto& source) {
                 try
                 {
-                    const auto opts = options == nullptr
-                        ? std::string_view{}
-                        : std::string_view{ options };
                     const cl_context context = entry_it->second.context;
                     std::vector<cl_device_id> devices(num_devices);
                     std::copy_n(device_list, num_devices, devices.begin());
@@ -323,14 +324,13 @@ CL_API_ENTRY cl_int CL_API_CALL clBuildProgram_wrap(
                     if constexpr (std::is_same_v<std::decay_t<decltype(source)>,
                                                  std::string>)
                     {
-
                         new_program = program_cache->fetch_or_build_source(
-                            source, context, devices, opts);
+                            source, context, devices, entry_it->second.options);
                     }
                     else
                     {
                         new_program = program_cache->fetch_or_build_il(
-                            source, context, devices, opts);
+                            source, context, devices, entry_it->second.options);
                     }
                     if (entry_it->second.program)
                         tdispatch->clReleaseProgram(entry_it->second.program);
@@ -371,6 +371,7 @@ CL_API_ENTRY cl_int CL_API_CALL clCompileProgram_wrap(
     {
         return error;
     }
+    entry_it->second.options = options ? options : std::string();
     return tdispatch->clCompileProgram(entry_it->second.program, num_devices,
                                        device_list, options, num_input_headers,
                                        input_headers, header_include_names,
@@ -474,13 +475,17 @@ clGetProgramInfo_wrap(cl_program program,
         case CL_PROGRAM_SOURCE:
             if (std::holds_alternative<std::string>(entry_it->second.source))
             {
-                const char* source =
-                    std::get<std::string>(entry_it->second.source).c_str();
-                const size_t source_size = std::strlen(source);
+                const auto& source =
+                    std::get<std::string>(entry_it->second.source);
+                const size_t source_size = source.size() + 1;
                 if (param_value && param_value_size < source_size)
                     return CL_INVALID_VALUE;
                 if (param_value)
-                    std::strcpy(static_cast<char*>(param_value), source);
+                {
+                    std::copy(source.begin(), source.end(),
+                              static_cast<char*>(param_value));
+                    static_cast<char*>(param_value)[source.size()] = '\0';
+                }
                 if (param_value_size_ret) *param_value_size_ret = source_size;
             }
             else
@@ -619,22 +624,26 @@ clGetProgramBuildInfo_wrap(cl_program program,
             if (param_value && param_value_size < sizeof(cl_build_status))
                 return CL_INVALID_VALUE;
             if (param_value)
-                *static_cast<cl_build_status*>(param_value) = CL_BUILD_NONE;
+                *static_cast<cl_build_status*>(param_value) =
+                    entry_it->second.build_attempted ? CL_BUILD_ERROR
+                                                     : CL_BUILD_NONE;
             if (param_value_size_ret)
                 *param_value_size_ret = sizeof(cl_build_status);
             return CL_SUCCESS;
-        case CL_PROGRAM_BUILD_OPTIONS:
-            if (auto unwrapped_program = entry_it->second.program;
-                unwrapped_program)
+        case CL_PROGRAM_BUILD_OPTIONS: {
+            const auto& options = entry_it->second.options;
+            const std::size_t options_size = options.size() + 1;
+            if (param_value && param_value_size < options_size)
+                return CL_INVALID_VALUE;
+            if (param_value)
             {
-                return tdispatch->clGetProgramBuildInfo(
-                    unwrapped_program, device, CL_PROGRAM_BUILD_OPTIONS,
-                    param_value_size, param_value, param_value_size_ret);
+                std::copy(options.begin(), options.end(),
+                          static_cast<char*>(param_value));
+                static_cast<char*>(param_value)[options.size()] = '\0';
             }
-            if (param_value && param_value_size < 1) return CL_INVALID_VALUE;
-            if (param_value) *static_cast<char*>(param_value) = '\0';
-            if (param_value_size_ret) *param_value_size_ret = 1;
+            if (param_value_size_ret) *param_value_size_ret = options_size;
             return CL_SUCCESS;
+        }
         case CL_PROGRAM_BUILD_LOG:
             if (auto unwrapped_program = entry_it->second.program;
                 unwrapped_program)
@@ -724,6 +733,111 @@ clCreateKernelsInProgram_wrap(cl_program program,
         entry_it->second.program, num_kernels, kernels, num_kernels_ret);
 }
 
+CL_API_ENTRY cl_int CL_API_CALL
+clGetKernelInfo_wrap(cl_kernel kernel,
+                     cl_kernel_info param_name,
+                     size_t param_value_size,
+                     void* param_value,
+                     size_t* param_value_size_ret)
+{
+    switch (param_name)
+    {
+        case CL_KERNEL_PROGRAM: {
+            if (param_value && param_value_size < sizeof(cl_program))
+                return CL_INVALID_ARG_VALUE;
+            if (param_value_size_ret)
+                *param_value_size_ret = sizeof(cl_program);
+            if (param_value == nullptr) return CL_SUCCESS;
+            cl_program wrapped_program{};
+            const cl_int error = tdispatch->clGetKernelInfo(
+                kernel, CL_KERNEL_PROGRAM, sizeof(wrapped_program),
+                &wrapped_program, nullptr);
+            if (error != CL_SUCCESS) return error;
+            std::lock_guard lock(programs_mutex);
+            const auto found_it = std::find_if(
+                program_entries.begin(), program_entries.end(),
+                [wrapped_program](const auto& key_value) {
+                    return key_value.second.program == wrapped_program;
+                });
+            assert(found_it != program_entries.end());
+            *static_cast<cl_program*>(param_value) =
+                reinterpret_cast<cl_program>(found_it->first);
+            return CL_SUCCESS;
+        }
+        case CL_KERNEL_ATTRIBUTES: {
+            cl_program wrapped_program{};
+            cl_int error = tdispatch->clGetKernelInfo(
+                kernel, CL_KERNEL_PROGRAM, sizeof(wrapped_program),
+                &wrapped_program, nullptr);
+            if (error != CL_SUCCESS) return error;
+            std::lock_guard lock(programs_mutex);
+            const auto found_it = std::find_if(
+                program_entries.begin(), program_entries.end(),
+                [wrapped_program](const auto& key_value) {
+                    return key_value.second.program == wrapped_program;
+                });
+            assert(found_it != program_entries.end());
+            if (std::holds_alternative<std::string>(found_it->second.source))
+            {
+                // Since we might have a program that is read from the cache and
+                // created with clCreateProgramWithBinary, we must recompile the
+                // source to get the attributes.
+                std::size_t kernel_name_size{};
+                error =
+                    tdispatch->clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME,
+                                               0, nullptr, &kernel_name_size);
+                if (error != CL_SUCCESS) return error;
+                std::string kernel_name;
+                kernel_name.resize(kernel_name_size);
+                error = tdispatch->clGetKernelInfo(
+                    kernel, CL_KERNEL_FUNCTION_NAME, kernel_name_size,
+                    kernel_name.data(), nullptr);
+                if (error != CL_SUCCESS) return error;
+                const auto& source =
+                    std::get<std::string>(found_it->second.source);
+                const char* source_str = source.data();
+                const std::size_t source_size = source.size();
+                const auto tmp_program = tdispatch->clCreateProgramWithSource(
+                    found_it->second.context, 1, &source_str, &source_size,
+                    &error);
+                if (error != CL_SUCCESS) return error;
+                error = tdispatch->clBuildProgram(
+                    tmp_program, 0, nullptr, found_it->second.options.c_str(),
+                    nullptr, nullptr);
+                if (error != CL_SUCCESS)
+                {
+                    tdispatch->clReleaseProgram(tmp_program);
+                    return error;
+                }
+                const auto tmp_kernel = tdispatch->clCreateKernel(
+                    tmp_program, kernel_name.c_str(), &error);
+                if (error != CL_SUCCESS)
+                {
+                    tdispatch->clReleaseProgram(tmp_program);
+                    return error;
+                }
+                error = tdispatch->clGetKernelInfo(
+                    tmp_kernel, CL_KERNEL_ATTRIBUTES, param_value_size,
+                    param_value, param_value_size_ret);
+                tdispatch->clReleaseKernel(tmp_kernel);
+                tdispatch->clReleaseProgram(tmp_program);
+            }
+            else
+            {
+                if (param_value && param_value_size < 1)
+                    return CL_INVALID_ARG_VALUE;
+                if (param_value) *static_cast<char*>(param_value) = '\0';
+                if (param_value_size_ret) *param_value_size_ret = 1;
+            }
+            return error;
+        }
+        default:
+            return tdispatch->clGetKernelInfo(kernel, param_name,
+                                              param_value_size, param_value,
+                                              param_value_size_ret);
+    }
+}
+
 void init_dispatch()
 {
     dispatch = {};
@@ -744,6 +858,7 @@ void init_dispatch()
     dispatch.clGetProgramBuildInfo = &clGetProgramBuildInfo_wrap;
     dispatch.clCreateKernel = &clCreateKernel_wrap;
     dispatch.clCreateKernelsInProgram = &clCreateKernelsInProgram_wrap;
+    dispatch.clGetKernelInfo = &clGetKernelInfo_wrap;
 }
 
 ocl::program_cache::program_cache_dispatch init_program_cache_dispatch()
