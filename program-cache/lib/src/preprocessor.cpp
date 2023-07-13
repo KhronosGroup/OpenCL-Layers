@@ -156,6 +156,28 @@ void add_opencl_macro_defs(cl_device_id device,
         context.add_macro_definition("__CL_CPP_VERSION_1_0__=100");
         context.add_macro_definition("__CL_CPP_VERSION_2021__=202100");
     }
+    const auto extension_list = pc::utils::get_info_str(
+        device, dispatch.clGetDeviceInfo, CL_DEVICE_EXTENSIONS);
+    for (const auto& extension_name : pc::utils::split(extension_list))
+    {
+        context.add_macro_definition(
+            std::string(extension_name.begin(), extension_name.end()) + "=1");
+    }
+    if (platform_id >= 300)
+    {
+        std::size_t feature_bytes{};
+        CHECK_CL_ERROR(dispatch.clGetDeviceInfo(
+            device, CL_DEVICE_OPENCL_C_FEATURES, 0, nullptr, &feature_bytes));
+        std::vector<cl_name_version> features(feature_bytes
+                                              / sizeof(cl_name_version));
+        CHECK_CL_ERROR(
+            dispatch.clGetDeviceInfo(device, CL_DEVICE_OPENCL_C_FEATURES,
+                                     feature_bytes, features.data(), nullptr));
+        for (const auto& feature : features)
+        {
+            context.add_macro_definition(std::string(feature.name) + "=1");
+        }
+    }
 }
 
 void process_option(const pc::Option& option,
@@ -191,6 +213,31 @@ get_default_language(cl_device_id device,
 }
 
 } // namespace
+
+std::string_view pc::remove_empty_pragmas(std::string_view kernel_source,
+                                          std::string& allocated_str)
+{
+    auto pragma_newline_idx = kernel_source.find("#pragma\n");
+    const auto last_pragma_idx = kernel_source.rfind("#pragma");
+    const bool ends_with_pragma = last_pragma_idx
+        == (kernel_source.size() - std::string_view("#pragma").size());
+    if (pragma_newline_idx == std::string_view::npos && !ends_with_pragma)
+    {
+        return kernel_source;
+    }
+    if (pragma_newline_idx == std::string_view::npos && ends_with_pragma)
+    {
+        return kernel_source.substr(0, last_pragma_idx);
+    }
+    allocated_str = std::string(kernel_source.begin(), kernel_source.end());
+    do
+    {
+        allocated_str.erase(pragma_newline_idx,
+                            std::string_view("#pragma\n").size());
+        pragma_newline_idx = allocated_str.find("#pragma\n");
+    } while (pragma_newline_idx != std::string::npos);
+    return allocated_str;
+}
 
 pc::LanguageVersionOpt::LanguageVersionOpt(std::string_view version_str)
     : language_(100)
@@ -268,6 +315,8 @@ std::string pc::preprocess(std::string_view kernel_source,
     try
     {
         const auto parsed_options = parse_options(options);
+        std::string alloc_str;
+        kernel_source = remove_empty_pragmas(kernel_source, alloc_str);
         context_t context(kernel_source.begin(), kernel_source.end());
         undefine_default_macros(context);
         LanguageVersion language = get_default_language(device, dispatch);
@@ -285,7 +334,9 @@ std::string pc::preprocess(std::string_view kernel_source,
                 preprocessed << (it++)->get_value();
             } catch (const boost::wave::preprocess_exception& ex)
             {
-                if (!ex.is_recoverable())
+                if (!ex.is_recoverable()
+                    || ex.get_errorcode()
+                        == boost::wave::preprocess_exception::error_directive)
                 {
                     throw;
                 }

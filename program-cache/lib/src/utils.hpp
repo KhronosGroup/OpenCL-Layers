@@ -68,6 +68,8 @@ std::string get_info_str(T obj, Fun fun, Param param_name)
     ret.resize(param_value_size);
     CHECK_CL_ERROR(
         fun(obj, param_name, param_value_size, ret.data(), &param_value_size));
+    // there is a \0 in the end of the string that we don't need
+    ret.resize(param_value_size - 1);
     return ret;
 }
 

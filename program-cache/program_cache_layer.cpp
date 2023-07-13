@@ -72,9 +72,10 @@ clCreateProgramWithSource_wrap(cl_context context,
                                const size_t* lengths,
                                cl_int* errcode_ret)
 {
-    if (!strings)
+    if (strings == nullptr)
     {
         if (errcode_ret) *errcode_ret = CL_INVALID_ARG_VALUE;
+        return nullptr;
     }
     std::stringstream sstream;
     for (size_t i = 0; i < count; ++i)
@@ -99,14 +100,42 @@ clCreateProgramWithSource_wrap(cl_context context,
     return reinterpret_cast<cl_program>(index);
 }
 
+bool is_il_program_supported(cl_context context)
+{
+    std::size_t num_devices{};
+    cl_int error =
+        tdispatch->clGetContextInfo(context, CL_CONTEXT_NUM_DEVICES,
+                                    sizeof(num_devices), &num_devices, nullptr);
+    if (error != CL_SUCCESS) return false;
+    std::vector<cl_device_id> devices(num_devices);
+    error = tdispatch->clGetContextInfo(context, CL_CONTEXT_DEVICES,
+                                        num_devices * sizeof(cl_device_id),
+                                        devices.data(), nullptr);
+    if (error != CL_SUCCESS) return false;
+    for (const auto& device : devices)
+    {
+        std::size_t il_version_length{};
+        error = tdispatch->clGetDeviceInfo(device, CL_DEVICE_IL_VERSION, 0,
+                                           nullptr, &il_version_length);
+        if (error != CL_SUCCESS || il_version_length <= 1) return false;
+    }
+    return true;
+}
 
 CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithIL_wrap(
     cl_context context, const void* il, size_t length, cl_int* errcode_ret)
 {
-    if (!il)
+    if (il == nullptr)
     {
         if (errcode_ret) *errcode_ret = CL_INVALID_ARG_VALUE;
+        return nullptr;
     }
+    if (!is_il_program_supported(context))
+    {
+        if (errcode_ret) *errcode_ret = CL_INVALID_OPERATION;
+        return nullptr;
+    }
+
     std::vector<char> source(length);
     std::copy_n(static_cast<const char*>(il), length, source.begin());
     program_entry entry{};
@@ -211,12 +240,33 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseProgram_wrap(cl_program program)
     entry_it->second.reference_count -= 1;
     if (entry_it->second.reference_count == 0)
     {
-        if (entry_it->second.release_notify)
-            entry_it->second.release_notify(program,
-                                            entry_it->second.notify_user_data);
         program_entries.erase(entry_it);
     }
     return CL_SUCCESS;
+}
+
+bool are_global_variables_supported(cl_context context)
+{
+    std::size_t num_devices{};
+    cl_int error =
+        tdispatch->clGetContextInfo(context, CL_CONTEXT_NUM_DEVICES,
+                                    sizeof(num_devices), &num_devices, nullptr);
+    if (error != CL_SUCCESS) return false;
+    std::vector<cl_device_id> devices(num_devices);
+    error = tdispatch->clGetContextInfo(context, CL_CONTEXT_DEVICES,
+                                        num_devices * sizeof(cl_device_id),
+                                        devices.data(), nullptr);
+    if (error != CL_SUCCESS) return false;
+
+    for (const auto& device : devices)
+    {
+        std::size_t max_global_var_size{};
+        error = tdispatch->clGetDeviceInfo(
+            device, CL_DEVICE_MAX_GLOBAL_VARIABLE_SIZE,
+            sizeof(max_global_var_size), &max_global_var_size, nullptr);
+        if (error != CL_SUCCESS || max_global_var_size == 0) return false;
+    }
+    return true;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clSetProgramReleaseCallback_wrap(
@@ -235,6 +285,16 @@ CL_API_ENTRY cl_int CL_API_CALL clSetProgramReleaseCallback_wrap(
     {
         return CL_INVALID_PROGRAM;
     }
+    if (entry_it->second.program != nullptr)
+    {
+        const cl_int error = tdispatch->clSetProgramReleaseCallback(
+            entry_it->second.program, pfn_notify, user_data);
+        if (error != CL_SUCCESS) return error;
+    }
+    else if (!are_global_variables_supported(entry_it->second.context))
+    {
+        return CL_INVALID_OPERATION;
+    }
     entry_it->second.release_notify = pfn_notify;
     entry_it->second.notify_user_data = user_data;
     return CL_SUCCESS;
@@ -246,7 +306,7 @@ clSetProgramSpecializationConstant_wrap(cl_program program,
                                         size_t spec_size,
                                         const void* spec_value)
 {
-    if (!spec_size || !spec_value)
+    if (spec_size == 0 || spec_value == nullptr)
     {
         return CL_INVALID_ARG_VALUE;
     }
@@ -257,6 +317,8 @@ clSetProgramSpecializationConstant_wrap(cl_program program,
     {
         return CL_INVALID_PROGRAM;
     }
+    if (!is_il_program_supported(entry_it->second.context))
+        return CL_INVALID_OPERATION;
     auto& spec_data = entry_it->second.specialization_constants[spec_id];
     spec_data.resize(spec_size);
     std::copy_n(static_cast<const unsigned char*>(spec_value), spec_size,
@@ -332,6 +394,13 @@ CL_API_ENTRY cl_int CL_API_CALL clBuildProgram_wrap(
                         new_program = program_cache->fetch_or_build_il(
                             source, context, devices, entry_it->second.options);
                     }
+                    if (entry_it->second.release_notify)
+                    {
+                        error = tdispatch->clSetProgramReleaseCallback(
+                            new_program, entry_it->second.release_notify,
+                            entry_it->second.notify_user_data);
+                        if (error != CL_SUCCESS) return;
+                    }
                     if (entry_it->second.program)
                         tdispatch->clReleaseProgram(entry_it->second.program);
                     entry_it->second.program = new_program;
@@ -372,10 +441,25 @@ CL_API_ENTRY cl_int CL_API_CALL clCompileProgram_wrap(
         return error;
     }
     entry_it->second.options = options ? options : std::string();
-    return tdispatch->clCompileProgram(entry_it->second.program, num_devices,
-                                       device_list, options, num_input_headers,
-                                       input_headers, header_include_names,
-                                       pfn_notify, user_data);
+    std::vector<cl_program> wrapped_input_headers;
+    for (std::size_t header_idx = 0; header_idx < num_input_headers;
+         ++header_idx)
+    {
+        const auto header_program_index =
+            reinterpret_cast<intptr_t>(input_headers[header_idx]);
+        const auto header_it = program_entries.find(header_program_index);
+        if (header_it == program_entries.end()) return CL_INVALID_PROGRAM;
+        if (const auto error = ensure_program(header_it->second);
+            error != CL_SUCCESS)
+        {
+            return error;
+        }
+        wrapped_input_headers.push_back(header_it->second.program);
+    }
+    return tdispatch->clCompileProgram(
+        entry_it->second.program, num_devices, device_list, options,
+        num_input_headers, wrapped_input_headers.data(), header_include_names,
+        pfn_notify, user_data);
 }
 
 CL_API_ENTRY cl_program CL_API_CALL clLinkProgram_wrap(

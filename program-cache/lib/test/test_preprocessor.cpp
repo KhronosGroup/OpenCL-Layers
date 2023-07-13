@@ -30,6 +30,31 @@
 
 using namespace ocl::program_cache;
 
+TEST(PreprocessorTest, RemoveEmptyPragmas)
+{
+    std::string alloc_str;
+    EXPECT_EQ("kernel void foo(){}\n",
+              remove_empty_pragmas("kernel void foo(){}\n", alloc_str));
+    EXPECT_EQ(
+        "kernel void foo(){}\n",
+        remove_empty_pragmas("kernel void foo(){}\n#pragma\n", alloc_str));
+    EXPECT_EQ("kernel void foo(){}\n",
+              remove_empty_pragmas("kernel void foo(){}\n#pragma", alloc_str));
+    EXPECT_EQ(
+        "kernel void foo(){}\n  ",
+        remove_empty_pragmas("kernel void foo(){}\n  #pragma\n", alloc_str));
+    EXPECT_EQ(
+        "kernel void foo(){}\n  ",
+        remove_empty_pragmas("kernel void foo(){}\n  #pragma", alloc_str));
+    EXPECT_EQ(
+        "kernel void foo(){\n#pragma bar\n}",
+        remove_empty_pragmas("kernel void foo(){\n#pragma bar\n}", alloc_str));
+    EXPECT_EQ("kernel void foo(){\n#pragma bar\n}\n",
+              remove_empty_pragmas(
+                  "kernel void foo(){\n#pragma\n#pragma bar\n#pragma\n}\n",
+                  alloc_str));
+}
+
 TEST(PreprocessorTest, ParseOptions)
 {
     ASSERT_EQ(std::vector<Option>{}, parse_options(""));
