@@ -38,4 +38,8 @@ int main()
     cl::enqueueReadBuffer(output, true, 0, sizeof(result), &result);
 
     std::cout << "Result: " << result << std::endl;
+    if (result != 100)
+    {
+        return -1;
+    }
 }
