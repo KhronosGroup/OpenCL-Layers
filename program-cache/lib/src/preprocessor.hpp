@@ -23,7 +23,6 @@
 
 #include <CL/opencl.h>
 
-#include <stdexcept>
 #include <string_view>
 #include <string>
 #include <variant>
@@ -33,32 +32,22 @@ namespace ocl::program_cache {
 
 // Boost::Wave crashes on "#pragma\n":
 // https://github.com/boostorg/wave/issues/188 Added to header for testing
-std::string_view remove_empty_pragmas(std::string_view kernel_source,
-                                      std::string& allocated_str);
+std::string_view remove_empty_pragmas(std::string_view kernel_source, std::string& allocated_str);
 
 struct DefinitionOpt
 {
     std::string_view definition_;
 
-    bool operator==(const DefinitionOpt& other) const
-    {
-        return definition_ == other.definition_;
-    }
+    bool operator==(const DefinitionOpt& other) const { return definition_ == other.definition_; }
 
-    bool operator!=(const DefinitionOpt& other) const
-    {
-        return !(*this == other);
-    }
+    bool operator!=(const DefinitionOpt& other) const { return !(*this == other); }
 };
 
 struct IncludeOpt
 {
     std::string_view path_;
 
-    bool operator==(const IncludeOpt& other) const
-    {
-        return path_ == other.path_;
-    }
+    bool operator==(const IncludeOpt& other) const { return path_ == other.path_; }
 
     bool operator!=(const IncludeOpt& other) const { return !(*this == other); }
 };
@@ -67,10 +56,7 @@ struct FastRelaxedMathOpt
 {
     bool operator==(const FastRelaxedMathOpt& /*other*/) const { return true; }
 
-    bool operator!=(const FastRelaxedMathOpt& other) const
-    {
-        return !(*this == other);
-    }
+    bool operator!=(const FastRelaxedMathOpt& other) const { return !(*this == other); }
 };
 
 class LanguageVersion {
@@ -85,10 +71,7 @@ public:
         return id_ == other.id_ && is_cpp_ == other.is_cpp_;
     }
 
-    bool operator!=(const LanguageVersion& other) const
-    {
-        return !(*this == other);
-    }
+    bool operator!=(const LanguageVersion& other) const { return !(*this == other); }
 
 private:
     int id_;
@@ -99,15 +82,9 @@ class LanguageVersionOpt {
 public:
     explicit LanguageVersionOpt(std::string_view version_str);
 
-    bool operator==(const LanguageVersionOpt& other) const
-    {
-        return language_ == other.language_;
-    }
+    bool operator==(const LanguageVersionOpt& other) const { return language_ == other.language_; }
 
-    bool operator!=(const LanguageVersionOpt& other) const
-    {
-        return !(*this == other);
-    }
+    bool operator!=(const LanguageVersionOpt& other) const { return !(*this == other); }
 
     LanguageVersion get_language() const { return language_; }
 
@@ -115,8 +92,7 @@ private:
     LanguageVersion language_;
 };
 
-using Option = std::
-    variant<DefinitionOpt, IncludeOpt, FastRelaxedMathOpt, LanguageVersionOpt>;
+using Option = std::variant<DefinitionOpt, IncludeOpt, FastRelaxedMathOpt, LanguageVersionOpt>;
 
 std::vector<Option> parse_options(std::string_view options);
 

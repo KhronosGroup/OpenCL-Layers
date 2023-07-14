@@ -28,16 +28,13 @@ namespace ocl::program_cache {
 /// @brief Error thrown when the path for the cache cannot be accessed.
 struct cache_access_error : public std::runtime_error
 {
-    cache_access_error(const std::string& what_arg)
-        : std::runtime_error(what_arg)
-    {}
+    cache_access_error(const std::string& what_arg): std::runtime_error(what_arg) {}
 };
 
 /// @brief Error thrown when the OpenCL runtime returns an error.
 struct opencl_error : public std::runtime_error
 {
-    opencl_error(cl_int error,
-                 const std::string& prefix = "An OpenCL error occured: ")
+    opencl_error(cl_int error, const std::string& prefix = "An OpenCL error occured: ")
         : std::runtime_error(prefix + std::to_string(error)), error_(error)
     {}
 
@@ -50,32 +47,26 @@ private:
 /// @brief Error thrown when the passed OpenCL program could not be built.
 struct opencl_build_error : public opencl_error
 {
-    opencl_build_error(cl_int error)
-        : opencl_error(error, "An OpenCL kernel build error occured: ")
+    opencl_build_error(cl_int error): opencl_error(error, "An OpenCL kernel build error occured: ")
     {}
 };
 
-/// @brief Error thrown when a cl_program is passed which should have been
-/// built previously.
+/// @brief Error thrown when a cl_program is passed which should have been built previously.
 struct unbuilt_program_error : public std::runtime_error
 {
-    unbuilt_program_error()
-        : std::runtime_error("The passed program has not been built")
-    {}
+    unbuilt_program_error(): std::runtime_error("The passed program has not been built") {}
 };
 
-/// @brief Error thrown if the OpenCL version string queried from the OpenCL
-/// runtime is invalid.
+/// @brief Error thrown if the OpenCL version string queried from the OpenCL runtime is invalid.
 struct bad_opencl_version_format : public std::runtime_error
 {
     bad_opencl_version_format()
-        : std::runtime_error(
-            "Got invalid OpenCL version string from the runtime")
+        : std::runtime_error("Got invalid OpenCL version string from the runtime")
     {}
 };
 
-/// @brief Error thrown when the C preprocessor executed on the OpenCL kernel
-/// encounters an unrecoverable problem.
+/// @brief Error thrown when the C preprocessor executed on the OpenCL kernel encounters an
+/// unrecoverable problem.
 struct preprocess_exception : public std::runtime_error
 {
     preprocess_exception(const std::string& what): std::runtime_error(what) {}

@@ -25,7 +25,6 @@
 
 #include <cstddef>
 #include <filesystem>
-#include <memory>
 #include <optional>
 #include <string_view>
 #include <string>
@@ -37,129 +36,109 @@ namespace ocl::program_cache {
 class program_cache {
 public:
     /// @brief Creates a new instance of the \c program_cache.
-    /// @param context OpenCL context to build the programs for. If \c nullptr
-    /// is passed, then the default context is used.
-    /// @param cache_root Path to the program cache root on the filesystem. If
-    /// \c nullopt is passed, the platform dependent default location is used.
-    /// @param dispatch The function dispatch table that contains the pointers
-    /// for the OpenCL runtime functions that are used by the \c program_cache.
-    /// If \c nullopt is passed, then the default OpenCL runtime functions are
-    /// used.
-    program_cache(
-        cl_context context = nullptr,
-        const std::optional<std::filesystem::path>& cache_root = std::nullopt,
-        const std::optional<program_cache_dispatch>& dispatch = std::nullopt);
+    /// @param context OpenCL context to build the programs for. If \c nullptr is passed, then the
+    /// default context is used.
+    /// @param cache_root Path to the program cache root on the filesystem. If \c nullopt is passed,
+    /// the platform dependent default location is used.
+    /// @param dispatch The function dispatch table that contains the pointers for the OpenCL
+    /// runtime functions that are used by the \c program_cache. If \c nullopt is passed, then the
+    /// default OpenCL runtime functions are used.
+    program_cache(cl_context context = nullptr,
+                  const std::optional<std::filesystem::path>& cache_root = std::nullopt,
+                  const std::optional<program_cache_dispatch>& dispatch = std::nullopt);
 
-    /// @brief Loads cached binaries for all devices associated with the \c
-    /// cl_context passed in the constructor and builds a \c cl_program.
-    /// @param key Key to the cache entries. The key must be equal to the key
-    /// passed to a previous \c store call to retrieve the same binaries.
-    /// @return The built \c cl_program if a cache entry was found for all
-    /// devices, \c NULL otherwise.
+    /// @brief Loads cached binaries for all devices associated with the \c cl_context passed in the
+    /// constructor and builds a \c cl_program.
+    /// @param key Key to the cache entries. The key must be equal to the key passed to a previous
+    /// \c store call to retrieve the same binaries.
+    /// @return The built \c cl_program if a cache entry was found for all devices, \c NULL
+    /// otherwise.
     cl_program fetch(std::string_view key) const;
 
-    /// @brief Loads cached binaries for all devices passed and returns a built
-    /// \c cl_program.
-    /// @param key Key to the cache entries. The key must be equal to the key
-    /// passed to a previous \c store call to retrieve the same binaries.
+    /// @brief Loads cached binaries for all devices passed and returns a built \c cl_program.
+    /// @param key Key to the cache entries. The key must be equal to the key passed to a previous
+    /// \c store call to retrieve the same binaries.
     /// @param devices The devices to load the programs for.
-    /// @return The built \c cl_program if a cache entry was found for all
-    /// devices, \c NULL otherwise.
-    cl_program fetch(std::string_view key,
-                     const std::vector<cl_device_id>& devices) const;
+    /// @return The built \c cl_program if a cache entry was found for all devices, \c NULL
+    /// otherwise.
+    cl_program fetch(std::string_view key, const std::vector<cl_device_id>& devices) const;
 
-    /// @brief Stores the binary representation of a \c cl_program in the
-    /// cache.
-    /// @param program The program to store. It must be built previously,
-    /// otherwise \c unbuilt_program_error is thrown.
-    /// @param key The key to the cache entry, which can be used to retrieve the
-    /// cache entry later via \c fetch.
+    /// @brief Stores the binary representation of a \c cl_program in the cache.
+    /// @param program The program to store. It must be built previously, otherwise \c
+    /// unbuilt_program_error is thrown.
+    /// @param key The key to the cache entry, which can be used to retrieve the cache entry later
+    /// via \c fetch.
     void store(cl_program program, std::string_view key) const;
 
-    /// @brief Builds OpenCL source code to a \c cl_program and stores it in
-    /// the cache. If the program existed in the cache previously, loads it back
-    /// from the cache without building.
+    /// @brief Builds OpenCL source code to a \c cl_program and stores it in the cache. If the
+    /// program existed in the cache previously, loads it back from the cache without building.
     /// @param source Source code of the program.
     /// @param options Build options that are passed to the OpenCL compiler.
     /// @return The built OpenCL program.
-    /// @note The cache lookup considers the passed source code, the passed
-    /// options, the platform's version and the devices to which the code is
-    /// compiled. In this overload, the code is compiled to all devices
-    /// associated with the \c cl_context passed in the constructor.
-    cl_program fetch_or_build_source(std::string_view source,
-                                     std::string_view options = {}) const;
+    /// @note The cache lookup considers the passed source code, the passed options, the platform's
+    /// version and the devices to which the code is compiled. In this overload, the code is
+    /// compiled to all devices associated with the \c cl_context passed in the constructor.
+    cl_program fetch_or_build_source(std::string_view source, std::string_view options = {}) const;
 
-    /// @brief Builds OpenCL source code to a \c cl_program and stores it in
-    /// the cache. If the program existed in the cache previously, loads it back
-    /// from the cache without building.
+    /// @brief Builds OpenCL source code to a \c cl_program and stores it in the cache. If the
+    /// program existed in the cache previously, loads it back from the cache without building.
     /// @param source Source code of the program.
     /// @param context The OpenCL context to compile for.
     /// @param options Build options that are passed to the OpenCL compiler.
     /// @return The built OpenCL program.
-    /// @note The cache lookup considers the passed source code, the passed
-    /// options, the platform's version and the devices to which the code is
-    /// compiled. In this overload, the code is compiled to all devices
-    /// associated with the \c cl_context passed.
+    /// @note The cache lookup considers the passed source code, the passed options, the platform's
+    /// version and the devices to which the code is compiled. In this overload, the code is
+    /// compiled to all devices associated with the \c cl_context passed.
     cl_program fetch_or_build_source(std::string_view source,
                                      cl_context context,
                                      std::string_view options = {}) const;
 
-    /// @brief Builds OpenCL source code to a \c cl_program and stores it in
-    /// the cache. If the program existed in the cache previously, loads it back
-    /// from the cache without building.
+    /// @brief Builds OpenCL source code to a \c cl_program and stores it in the cache. If the
+    /// program existed in the cache previously, loads it back from the cache without building.
     /// @param source Source code of the program.
     /// @param context The OpenCL context to compile for.
-    /// @param devices The OpenCL devices associated with the \c context to
-    /// compile for.
+    /// @param devices The OpenCL devices associated with the \c context to compile for.
     /// @param options Build options that are passed to the OpenCL compiler.
     /// @return The built OpenCL program.
-    /// @note The cache lookup considers the passed source code, the passed
-    /// options, the platform's version and the devices to which the code is
-    /// compiled.
+    /// @note The cache lookup considers the passed source code, the passed options, the platform's
+    /// version and the devices to which the code is compiled.
     cl_program fetch_or_build_source(std::string_view source,
                                      cl_context context,
                                      const std::vector<cl_device_id>& devices,
                                      std::string_view options = {}) const;
 
-    /// @brief Builds OpenCL IL code to a \c cl_program and stores it in the
-    /// cache. If the program existed in the cache previously, loads it back
-    /// from the cache without building.
+    /// @brief Builds OpenCL IL code to a \c cl_program and stores it in the cache. If the program
+    /// existed in the cache previously, loads it back from the cache without building.
     /// @param il IL code of the program.
     /// @param options Build options that are passed to the OpenCL compiler.
     /// @return The built OpenCL program.
-    /// @note The cache lookup considers the passed IL code, the passed options,
-    /// the platform's version and the devices to which the code is compiled.
-    /// In this overload, the code is compiled to all devices associated with
-    /// the \c cl_context passed in the constructor.
-    cl_program fetch_or_build_il(const std::vector<char>& il,
-                                 std::string_view options = {}) const;
+    /// @note The cache lookup considers the passed IL code, the passed options, the platform's
+    /// version and the devices to which the code is compiled. In this overload, the code is
+    /// compiled to all devices associated with the \c cl_context passed in the constructor.
+    cl_program fetch_or_build_il(const std::vector<char>& il, std::string_view options = {}) const;
 
-    /// @brief Builds OpenCL IL code to a \c cl_program and stores it in the
-    /// cache. If the program existed in the cache previously, loads it back
-    /// from the cache without building.
+    /// @brief Builds OpenCL IL code to a \c cl_program and stores it in the cache. If the program
+    /// existed in the cache previously, loads it back from the cache without building.
     /// @param il IL code of the program.
     /// @param context The OpenCL context to compile for.
     /// @param options Build options that are passed to the OpenCL compiler.
     /// @return The built OpenCL program.
-    /// @note The cache lookup considers the passed IL code, the passed options,
-    /// the platform's version and the devices to which the code is compiled.
-    /// In this overload, the code is compiled to all devices associated with
-    /// the \c cl_context passed.
+    /// @note The cache lookup considers the passed IL code, the passed options, the platform's
+    /// version and the devices to which the code is compiled. In this overload, the code is
+    /// compiled to all devices associated with the \c cl_context passed.
     cl_program fetch_or_build_il(const std::vector<char>& il,
                                  cl_context context,
                                  std::string_view options = {}) const;
 
-    /// @brief Builds OpenCL IL code to a \c cl_program and stores it in the
-    /// cache. If the program existed in the cache previously, loads it back
-    /// from the cache without building.
+    /// @brief Builds OpenCL IL code to a \c cl_program and stores it in the cache. If the program
+    /// existed in the cache previously, loads it back from the cache without building.
     /// @param il IL code of the program.
     /// @param context The OpenCL context to compile for.
-    /// @param devices The OpenCL devices associated with the \c context to
-    /// compile for.
+    /// @param devices The OpenCL devices associated with the \c context to compile for.
     /// @param options Build options that are passed to the OpenCL compiler.
     /// @return The built OpenCL program.
-    /// @note The cache lookup considers the passed IL code, the passed options,
-    /// the platform's version and the devices to which the code is compiled.
+    /// @note The cache lookup considers the passed IL code, the passed options, the platform's
+    /// version and the devices to which the code is compiled.
     cl_program fetch_or_build_il(const std::vector<char>& il,
                                  cl_context context,
                                  const std::vector<cl_device_id>& devices,
@@ -172,18 +151,17 @@ private:
                                    const std::vector<cl_device_id>& devices,
                                    std::string_view options) const;
 
-    std::filesystem::path
-    get_path_for_device_binary(cl_device_id device,
-                               std::string_view key_hash) const;
+    std::filesystem::path get_path_for_device_binary(cl_device_id device,
+                                                     std::string_view key_hash) const;
 
     template <class T>
-    std::vector<unsigned char>
-    build_program_to_binary(cl_context context,
-                            cl_device_id device,
-                            const T& source,
-                            std::string_view options) const;
+    std::vector<unsigned char> build_program_to_binary(cl_context context,
+                                                       cl_device_id device,
+                                                       const T& source,
+                                                       std::string_view options) const;
 
     cl_context get_default_context() const;
+
     std::vector<cl_device_id> get_devices(cl_context context) const;
 
     program_cache_dispatch dispatch_;

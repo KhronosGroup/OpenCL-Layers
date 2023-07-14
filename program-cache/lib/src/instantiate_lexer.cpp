@@ -18,8 +18,8 @@
 
 #if defined(_MSC_VER)
 #pragma warning(push)
-#pragma warning(disable : 4702)
-#pragma warning(disable : 4706)
+#pragma warning(disable : 4702) // \W4 - unreachable code
+#pragma warning(disable : 4706) // \W4 - assignment within conditional expression
 #endif
 
 #include <boost/wave/cpplexer/re2clex/cpp_re2c_lexer.hpp>
@@ -30,7 +30,5 @@
 
 #include <string_view>
 
-template struct boost::wave::cpplexer::new_lexer_gen<
-    std::string_view::iterator>;
-template struct boost::wave::cpplexer::new_lexer_gen<
-    std::string_view::const_iterator>;
+template struct boost::wave::cpplexer::new_lexer_gen<std::string_view::iterator>;
+template struct boost::wave::cpplexer::new_lexer_gen<std::string_view::const_iterator>;
