@@ -52,11 +52,12 @@ std::filesystem::path get_default_cache_root()
     appdata_local.resize(max_size);
     if (_wgetenv_s(&buffer_length, appdata_local.data(), max_size, L"LOCALAPPDATA"))
     {
-        throw cache_access_error("Could not get default cache root directory");
+        throw pc::cache_access_error("Could not get default cache root directory");
     }
     else
     {
-        appdata_local.resize(buffer_length);
+        // Exclude the terminating \0
+        appdata_local.resize(buffer_length - 1);
         return std::filesystem::path(appdata_local) / "Khronos" / "OpenCL" / "cache";
     }
 }
@@ -67,7 +68,7 @@ std::filesystem::path get_default_cache_root()
 {
     if (char* home_path = std::getenv("HOME"); home_path == nullptr)
     {
-        throw cache_access_error("Could not get default cache root directory");
+        throw pc::cache_access_error("Could not get default cache root directory");
     }
     else
     {
@@ -140,10 +141,10 @@ std::string hash_str(const std::vector<char>& data, std::string_view options = "
 
 } // namespace
 
-pc::program_cache::program_cache(cl_context context,
-                                 const std::optional<std::filesystem::path>& cache_root,
-                                 const std::optional<program_cache_dispatch>& dispatch)
-    : dispatch_(dispatch.value_or(utils::get_default_program_cache_dispatch())), context_(context),
+pc::program_cache::program_cache(const program_cache_dispatch& dispatch,
+                                 cl_context context,
+                                 const std::optional<std::filesystem::path>& cache_root)
+    : dispatch_(dispatch), context_(context),
       cache_root_(cache_root.value_or(get_default_cache_root()))
 {
     std::filesystem::create_directories(cache_root_);
@@ -393,8 +394,8 @@ std::vector<unsigned char> pc::program_cache::build_program_to_binary(
     }
     std::vector<unsigned char> binaries(binary_size);
     unsigned char* binary_data = binaries.data();
-    error = dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARIES, binary_size, &binary_data,
-                                       nullptr);
+    error = dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARIES, sizeof(binary_data),
+                                       &binary_data, nullptr);
     dispatch_.clReleaseProgram(program);
     if (error != CL_SUCCESS)
     {

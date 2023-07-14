@@ -106,7 +106,7 @@ void add_opencl_macro_defs(cl_device_id device,
     context.add_macro_definition(
         "kernel_exec(x, typen)=__kernel __attribute__((work_group_size_hint(X, "
         "1, 1))) __attribute__((vec_type_hint(typen)))");
-    context.add_macro_definition("__OPENCL_VERSION__=" + std::to_string(platform_id));
+    context.add_macro_definition("__OPENCL_VERSION__=" + std::to_string(device_c_id));
     if (device_c_id >= 110)
     {
         context.add_macro_definition("CL_VERSION_1_0=100");

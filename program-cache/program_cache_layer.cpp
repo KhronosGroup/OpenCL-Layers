@@ -864,21 +864,21 @@ void init_dispatch()
 
 ocl::program_cache::program_cache_dispatch init_program_cache_dispatch()
 {
-    ocl::program_cache::program_cache_dispatch dispatch{};
-    dispatch.clBuildProgram = tdispatch->clBuildProgram;
-    dispatch.clCreateContextFromType = tdispatch->clCreateContextFromType;
-    dispatch.clCreateProgramWithBinary = tdispatch->clCreateProgramWithBinary;
-    dispatch.clCreateProgramWithIL = tdispatch->clCreateProgramWithIL;
-    dispatch.clCreateProgramWithSource = tdispatch->clCreateProgramWithSource;
-    dispatch.clGetContextInfo = tdispatch->clGetContextInfo;
-    dispatch.clGetDeviceInfo = tdispatch->clGetDeviceInfo;
-    dispatch.clGetPlatformIDs = tdispatch->clGetPlatformIDs;
-    dispatch.clGetPlatformInfo = tdispatch->clGetPlatformInfo;
-    dispatch.clGetProgramBuildInfo = tdispatch->clGetProgramBuildInfo;
-    dispatch.clGetProgramInfo = tdispatch->clGetProgramInfo;
-    dispatch.clReleaseDevice = tdispatch->clReleaseDevice;
-    dispatch.clReleaseProgram = tdispatch->clReleaseProgram;
-    return dispatch;
+    ocl::program_cache::program_cache_dispatch program_cache_dispatch{};
+    program_cache_dispatch.clBuildProgram = tdispatch->clBuildProgram;
+    program_cache_dispatch.clCreateContextFromType = tdispatch->clCreateContextFromType;
+    program_cache_dispatch.clCreateProgramWithBinary = tdispatch->clCreateProgramWithBinary;
+    program_cache_dispatch.clCreateProgramWithIL = tdispatch->clCreateProgramWithIL;
+    program_cache_dispatch.clCreateProgramWithSource = tdispatch->clCreateProgramWithSource;
+    program_cache_dispatch.clGetContextInfo = tdispatch->clGetContextInfo;
+    program_cache_dispatch.clGetDeviceInfo = tdispatch->clGetDeviceInfo;
+    program_cache_dispatch.clGetPlatformIDs = tdispatch->clGetPlatformIDs;
+    program_cache_dispatch.clGetPlatformInfo = tdispatch->clGetPlatformInfo;
+    program_cache_dispatch.clGetProgramBuildInfo = tdispatch->clGetProgramBuildInfo;
+    program_cache_dispatch.clGetProgramInfo = tdispatch->clGetProgramInfo;
+    program_cache_dispatch.clReleaseDevice = tdispatch->clReleaseDevice;
+    program_cache_dispatch.clReleaseProgram = tdispatch->clReleaseProgram;
+    return program_cache_dispatch;
 }
 
 } // namespace
@@ -908,7 +908,6 @@ CL_API_ENTRY cl_int CL_API_CALL clInitLayer(cl_uint num_entries,
                                             cl_uint* num_entries_out,
                                             const struct _cl_icd_dispatch** layer_dispatch_ret)
 {
-    // WHY WHY WHY???
     if (!target_dispatch || !layer_dispatch_ret || !num_entries_out
         || num_entries < sizeof(dispatch) / sizeof(dispatch.clGetPlatformIDs))
         return CL_INVALID_VALUE;
@@ -920,8 +919,8 @@ CL_API_ENTRY cl_int CL_API_CALL clInitLayer(cl_uint num_entries,
     try
     {
         program_cache = std::make_unique<ocl::program_cache::program_cache>(
-            nullptr, std::nullopt, init_program_cache_dispatch());
-    } catch (const std::exception& e)
+            init_program_cache_dispatch(), nullptr, std::nullopt);
+    } catch (const std::exception&)
     {
         return CL_INVALID_VALUE;
     }

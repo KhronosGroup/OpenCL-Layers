@@ -16,6 +16,8 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+#include "utils_test.hpp"
+
 #include <ocl_program_cache/program_cache.hpp>
 
 #include <CL/opencl.hpp>
@@ -32,7 +34,7 @@
 #include <string>
 #include <thread>
 
-using ocl::program_cache::program_cache;
+namespace pc = ocl::program_cache;
 
 #ifdef _WIN32
 namespace testing::internal {
@@ -45,7 +47,7 @@ template <> void PrintTo(const std::filesystem::path&, std::ostream*) {}
 class ProgramCacheTest : public testing::TestWithParam<std::filesystem::path> {
 protected:
     const cl::Context& context() const { return context_; }
-    const program_cache& cache() const { return *cache_; }
+    const pc::program_cache& cache() const { return *cache_; }
 
     void SetUp() override
     {
@@ -55,7 +57,8 @@ protected:
             std::filesystem::remove_all(cache_path);
         }
         context_ = cl::Context::getDefault();
-        cache_ = std::make_unique<program_cache>(context_(), cache_path);
+        cache_ = std::make_unique<pc::program_cache>(get_default_program_cache_dispatch(),
+                                                     context_(), cache_path);
     }
 
     std::string get_program_source(int i = 100)
@@ -104,7 +107,7 @@ protected:
 
 private:
     cl::Context context_;
-    std::unique_ptr<program_cache> cache_;
+    std::unique_ptr<pc::program_cache> cache_;
 };
 
 INSTANTIATE_TEST_SUITE_P(ProgramCacheTest,
@@ -114,7 +117,10 @@ INSTANTIATE_TEST_SUITE_P(ProgramCacheTest,
                                          // perfection of one's [UTF-8] character"
                                          std::filesystem::u8path("人格 完成に努める こと")));
 
-TEST(ProgramCacheBasicTest, InstantiateDefaultCache) { program_cache cache; }
+TEST(ProgramCacheBasicTest, InstantiateDefaultCache)
+{
+    pc::program_cache cache(get_default_program_cache_dispatch());
+}
 
 TEST_P(ProgramCacheTest, UnbuiltProgramThrows)
 {

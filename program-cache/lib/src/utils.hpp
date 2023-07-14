@@ -115,25 +115,6 @@ template <class... Args> struct overloads : Args...
 
 template <class... Ts> overloads(Ts...) -> overloads<Ts...>;
 
-inline program_cache_dispatch get_default_program_cache_dispatch()
-{
-    program_cache_dispatch dispatch{};
-    dispatch.clBuildProgram = &clBuildProgram;
-    dispatch.clCreateContextFromType = &clCreateContextFromType;
-    dispatch.clCreateProgramWithBinary = &clCreateProgramWithBinary;
-    dispatch.clCreateProgramWithIL = &clCreateProgramWithIL;
-    dispatch.clCreateProgramWithSource = &clCreateProgramWithSource;
-    dispatch.clGetContextInfo = &clGetContextInfo;
-    dispatch.clGetDeviceInfo = &clGetDeviceInfo;
-    dispatch.clGetPlatformIDs = &clGetPlatformIDs;
-    dispatch.clGetPlatformInfo = &clGetPlatformInfo;
-    dispatch.clGetProgramBuildInfo = &clGetProgramBuildInfo;
-    dispatch.clGetProgramInfo = &clGetProgramInfo;
-    dispatch.clReleaseDevice = &clReleaseDevice;
-    dispatch.clReleaseProgram = &clReleaseProgram;
-    return dispatch;
-}
-
 template <class T> class hex_format;
 template <class T> std::ostream& operator<<(std::ostream& os, const hex_format<T>& h);
 

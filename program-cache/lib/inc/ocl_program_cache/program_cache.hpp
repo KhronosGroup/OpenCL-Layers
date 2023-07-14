@@ -36,16 +36,15 @@ namespace ocl::program_cache {
 class program_cache {
 public:
     /// @brief Creates a new instance of the \c program_cache.
+    /// @param dispatch The function dispatch table that contains the pointers for the OpenCL
+    /// runtime functions that are used by the \c program_cache.
     /// @param context OpenCL context to build the programs for. If \c nullptr is passed, then the
     /// default context is used.
     /// @param cache_root Path to the program cache root on the filesystem. If \c nullopt is passed,
     /// the platform dependent default location is used.
-    /// @param dispatch The function dispatch table that contains the pointers for the OpenCL
-    /// runtime functions that are used by the \c program_cache. If \c nullopt is passed, then the
-    /// default OpenCL runtime functions are used.
-    program_cache(cl_context context = nullptr,
-                  const std::optional<std::filesystem::path>& cache_root = std::nullopt,
-                  const std::optional<program_cache_dispatch>& dispatch = std::nullopt);
+    program_cache(const program_cache_dispatch& dispatch,
+                  cl_context context = nullptr,
+                  const std::optional<std::filesystem::path>& cache_root = std::nullopt);
 
     /// @brief Loads cached binaries for all devices associated with the \c cl_context passed in the
     /// constructor and builds a \c cl_program.

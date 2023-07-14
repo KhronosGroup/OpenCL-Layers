@@ -22,6 +22,7 @@
 #include <CL/cl_icd.h>
 
 #include <stdexcept>
+#include <string>
 
 namespace ocl::program_cache {
 
