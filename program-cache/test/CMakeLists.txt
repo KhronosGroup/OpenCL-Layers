@@ -1,7 +1,3 @@
-if (NOT TARGET OpenCL::HeadersCpp)
-    find_package(OpenCLHeadersCpp REQUIRED)
-endif()
-
 add_executable(ProgramCacheLayerTest main.cpp)
 target_link_libraries(ProgramCacheLayerTest PRIVATE LayersCommon OpenCL::OpenCL OpenCL::HeadersCpp)
 target_compile_definitions(ProgramCacheLayerTest PRIVATE
