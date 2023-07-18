@@ -16,6 +16,12 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+/// @file instantiate_lexer.cpp
+/// @brief Explicit template specializations for the Boost::Wave lexer.
+///
+/// This file is only needed on Windows. \c std::string_view::iterator is \c char* on other
+/// platforms which is already instantiated in Boost::Wave.
+
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4702) // \W4 - unreachable code

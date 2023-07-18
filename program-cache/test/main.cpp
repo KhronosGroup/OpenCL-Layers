@@ -16,6 +16,13 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+/// @file main.cpp
+/// @brief Very simple consumption test for OpenCL.
+///
+/// This program is intended to be run with OPENCL_LAYERS=<path-to-ProgramCacheLayer-library>.
+/// It is only able to check if the successfully loaded layer has apparent problems,
+/// but will not signal if the layer load was unsuccessful.
+
 #include <CL/opencl.hpp>
 
 #include <iostream>
@@ -25,7 +32,6 @@ int main()
 {
     try
     {
-
         auto context = cl::Context::getDefault();
 
         const std::string program_source = "kernel void foo(global int* i){ *i = 100; }";

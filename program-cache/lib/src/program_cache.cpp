@@ -16,6 +16,9 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+/// @file program_cache.cpp
+/// @brief Implementation of the class \c program_cache.
+
 #include <ocl_program_cache/program_cache.hpp>
 
 #include <ocl_program_cache/common.hpp>
@@ -44,26 +47,25 @@ namespace pc = ocl::program_cache;
 
 #ifdef _WIN32
 
+/// @brief Returns the default cache root (%LOCALAPPDATA%\Khronos\OpenCL\cache) on Windows.
 std::filesystem::path get_default_cache_root()
 {
     std::size_t buffer_length{};
-    std::wstring appdata_local;
     constexpr std::size_t max_size = 512;
-    appdata_local.resize(max_size);
+    std::vector<wchar_t> appdata_local(max_size);
     if (_wgetenv_s(&buffer_length, appdata_local.data(), max_size, L"LOCALAPPDATA"))
     {
         throw pc::cache_access_error("Could not get default cache root directory");
     }
     else
     {
-        // Exclude the terminating \0
-        appdata_local.resize(buffer_length - 1);
-        return std::filesystem::path(appdata_local) / "Khronos" / "OpenCL" / "cache";
+        return std::filesystem::path(appdata_local.data()) / "Khronos" / "OpenCL" / "cache";
     }
 }
 
 #elif defined(__APPLE__)
 
+/// @brief Returns the default cache root ($HOME/Library/Caches/Khronos/OpenCL) on Mac.
 std::filesystem::path get_default_cache_root()
 {
     if (char* home_path = std::getenv("HOME"); home_path == nullptr)
@@ -78,6 +80,7 @@ std::filesystem::path get_default_cache_root()
 
 #else
 
+/// @brief Returns the default cache root ($HOME/.cache/Khronos/OpenCL) on Linux.
 std::filesystem::path get_default_cache_root()
 {
     const auto cache_home = []() -> std::filesystem::path {
@@ -98,26 +101,27 @@ std::filesystem::path get_default_cache_root()
             return { cache_home };
         }
     }();
-    return cache_home / "Khronos" / "OpenCL" / "cache";
+    return cache_home / "Khronos" / "OpenCL";
 }
 
 #endif
 
-void save_binary_to_cache(const std::filesystem::path& cache_path,
-                          const std::vector<unsigned char>& binary_data)
+/// @brief Writes binary data to the path. In order to ensure atomicity, the binary is written to a
+/// temporary file first, and that file is moved to the prescribed location.
+void write_binary(const std::filesystem::path& path, const std::vector<unsigned char>& binary_data)
 {
-    std::filesystem::create_directory(cache_path.parent_path());
+    std::filesystem::create_directory(path.parent_path());
     std::default_random_engine prng(std::random_device{}());
     std::stringstream sstream;
     sstream << pc::utils::hex_format(std::uniform_int_distribution<unsigned int>{}(prng));
-    const auto tmp_file_path = cache_path.parent_path() / (sstream.str() + ".tmp");
+    const auto tmp_file_path = path.parent_path() / (sstream.str() + ".tmp");
     {
         std::ofstream ofs(tmp_file_path, std::ios::binary);
         std::copy(binary_data.begin(), binary_data.end(), std::ostreambuf_iterator(ofs));
     }
     try
     {
-        std::filesystem::rename(tmp_file_path, cache_path);
+        std::filesystem::rename(tmp_file_path, path);
     } catch (const std::filesystem::filesystem_error&)
     {
         // If the rename fails due to e.g. file being locked by another process
@@ -125,18 +129,19 @@ void save_binary_to_cache(const std::filesystem::path& cache_path,
     }
 }
 
-std::string hash_str(std::string_view data, std::string_view options = "")
+/// @brief Returns the hex-formatted hash of the passed strings.
+template <class... Ts> std::string hash_str(Ts... data)
 {
-    const auto hash_value =
-        std::hash<std::string_view>{}(data) + std::hash<std::string_view>{}(options);
+    const auto hash_value = ((std::hash<Ts>{}(data)) + ...);
     std::stringstream sstream;
     sstream << pc::utils::hex_format(hash_value);
     return sstream.str();
 }
 
-std::string hash_str(const std::vector<char>& data, std::string_view options = "")
+/// @brief Returns the hex-formatted hash of the passed char vector and strings.
+template <class... Ts> std::string hash_str(const std::vector<char>& data, Ts... additional)
 {
-    return hash_str(std::string(data.begin(), data.end()), options);
+    return hash_str(std::string(data.begin(), data.end()), additional...);
 }
 
 } // namespace
@@ -167,6 +172,7 @@ cl_program pc::program_cache::fetch(std::string_view key,
         std::ifstream ifs(cache_path, std::ios::binary);
         if (!ifs.good())
         {
+            // Cache entry could not be opened
             return nullptr;
         }
         auto& binary_data = device_binaries.emplace_back(std::istreambuf_iterator<char>(ifs),
@@ -174,6 +180,8 @@ cl_program pc::program_cache::fetch(std::string_view key,
         binary_lengths.push_back(binary_data.size());
         binary_ptrs.push_back(binary_data.data());
     }
+
+    // Create and build a cl_program from the binary that was loaded from the cache
     cl_int error = CL_SUCCESS;
     const cl_program program = dispatch_.clCreateProgramWithBinary(
         context_ ? context_ : get_default_context(), static_cast<cl_uint>(devices.size()),
@@ -206,9 +214,12 @@ void pc::program_cache::store(cl_program program, std::string_view key) const
                                             sizeof(build_status), &build_status, nullptr));
         if (build_status != CL_BUILD_SUCCESS)
         {
+            // Ensure that the passed program has been successfully built for each device
             throw unbuilt_program_error();
         }
     }
+
+    // Binaries are stored separately for every device that the passed program is built for
     std::vector<std::size_t> binary_sizes(program_devices.size());
     utils::check_cl_error(dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
                                                      binary_sizes.size() * sizeof(std::size_t),
@@ -228,7 +239,7 @@ void pc::program_cache::store(cl_program program, std::string_view key) const
          ++binary_it, ++device_it)
     {
         const auto cache_path = get_path_for_device_binary(*device_it, hash_str(key));
-        save_binary_to_cache(cache_path, *binary_it);
+        write_binary(cache_path, *binary_it);
     }
 }
 
@@ -282,6 +293,7 @@ cl_program pc::program_cache::fetch_or_build_impl(const T& input,
                                                   const std::vector<cl_device_id>& devices,
                                                   std::string_view options) const
 {
+    // Either fetch or build the binary for each device passed.
     std::vector<std::vector<unsigned char>> program_binaries;
     std::transform(devices.begin(), devices.end(), std::back_inserter(program_binaries),
                    [&](const auto& device) {
@@ -303,14 +315,20 @@ cl_program pc::program_cache::fetch_or_build_impl(const T& input,
 
                        if (std::ifstream ifs(cache_path, std::ios::binary); ifs.good())
                        {
+                           // Cache hit: just return the binary read from the cache
                            return std::vector<unsigned char>(std::istreambuf_iterator<char>(ifs),
                                                              {});
                        }
+                       // Cache miss: build the program binary...
                        auto program_binary =
                            build_program_to_binary(context, device, preprocessed_input, options);
-                       save_binary_to_cache(cache_path, program_binary);
+
+                       // ... and store it in the cache.
+                       write_binary(cache_path, program_binary);
                        return program_binary;
                    });
+
+    // Eventually, create and build the program from the binaries
     std::vector<std::size_t> binary_lengths;
     std::vector<const unsigned char*> binary_ptrs;
     for (const auto& binary_data : program_binaries)
@@ -345,6 +363,10 @@ std::filesystem::path pc::program_cache::get_path_for_device_binary(cl_device_id
         utils::get_info_str(platform, dispatch_.clGetPlatformInfo, CL_PLATFORM_VERSION);
     const auto device_hash = hash_str(platform_version + "/" + device_name);
     assert(key_hash.size() == 16);
+
+    // The first byte of the hash is used as a directory name. This is to ensure that not all cache
+    // entries are located in the same directory. Too many files in a single directory may cause
+    // performance problems with some browsers
     auto path = cache_root_ / std::string(key_hash.begin(), key_hash.begin() + 2);
     path /= std::string(key_hash.begin() + 2, key_hash.end()) + "_" + device_hash;
     return path;
@@ -354,6 +376,7 @@ template <class T>
 std::vector<unsigned char> pc::program_cache::build_program_to_binary(
     cl_context context, cl_device_id device, const T& source, std::string_view options) const
 {
+    // The program is created from either the source code or the IL representation
     cl_int error = CL_SUCCESS;
     const auto program = [&]() -> cl_program {
         const char* source_data = source.data();
@@ -377,13 +400,17 @@ std::vector<unsigned char> pc::program_cache::build_program_to_binary(
         dispatch_.clReleaseProgram(program);
         throw opencl_error(error);
     }
+
+    // Options must be copied to be able to provide a NULL-terminated string
     const std::string options_str(options.begin(), options.end());
+    // Build the program...
     error = dispatch_.clBuildProgram(program, 1, &device, options_str.c_str(), nullptr, nullptr);
     if (error != CL_SUCCESS)
     {
         dispatch_.clReleaseProgram(program);
         throw opencl_error(error);
     }
+    // ...and get the binaries
     std::size_t binary_size{};
     error = dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES, sizeof(binary_size),
                                        &binary_size, nullptr);
@@ -396,6 +423,8 @@ std::vector<unsigned char> pc::program_cache::build_program_to_binary(
     unsigned char* binary_data = binaries.data();
     error = dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARIES, sizeof(binary_data),
                                        &binary_data, nullptr);
+
+    // This program is no longer needed, can be released unconditionally
     dispatch_.clReleaseProgram(program);
     if (error != CL_SUCCESS)
     {
@@ -406,6 +435,7 @@ std::vector<unsigned char> pc::program_cache::build_program_to_binary(
 
 cl_context pc::program_cache::get_default_context() const
 {
+    // Initializer is evaluated only once
     static cl_context default_context = [&] {
         cl_uint num_platforms{};
         utils::check_cl_error(dispatch_.clGetPlatformIDs(0, nullptr, &num_platforms));

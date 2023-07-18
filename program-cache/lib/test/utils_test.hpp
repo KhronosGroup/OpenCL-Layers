@@ -16,11 +16,16 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+/// @file utils_test.hpp
+/// @brief Testing utilities used in this module's tests.
+
 #ifndef OCL_PROGRAM_CACHE_LIB_TEST_UTILS_TEST_HPP_
 #define OCL_PROGRAM_CACHE_LIB_TEST_UTILS_TEST_HPP_
 
 #include <ocl_program_cache/common.hpp>
 
+/// @brief Returns a dispatch table for the \c program_cache which contains the default OpenCL API
+/// functions.
 inline ocl::program_cache::program_cache_dispatch get_default_program_cache_dispatch()
 {
     ocl::program_cache::program_cache_dispatch dispatch{};

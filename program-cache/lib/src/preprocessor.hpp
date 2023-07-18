@@ -16,6 +16,12 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+/// @file preprocessor.hpp
+/// @brief C preprocessor utilities.
+///
+/// Utilities that implement a C preprocessor and parsing of OpenCL compilation options.
+/// Some internally used functions are exposed to this header for testability.
+
 #ifndef OCL_PROGRAM_CACHE_LIB_SRC_PREPROCESSOR_HPP_
 #define OCL_PROGRAM_CACHE_LIB_SRC_PREPROCESSOR_HPP_
 

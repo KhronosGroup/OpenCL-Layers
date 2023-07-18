@@ -16,6 +16,11 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+/// @file preprocessor.cpp
+/// @brief Implementation of C preprocessor utilities.
+///
+/// Boost::Wave is used to implement a C preprocessor which is conformant with the OpenCL standard.
+
 #include "preprocessor.hpp"
 
 #include "utils.hpp"

@@ -16,6 +16,11 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+/// @file utils.hpp
+/// @brief Simple utility functions used in the module.
+///
+/// These utilities are placed in this header file for testing purposes.
+
 #ifndef OCL_PROGRAM_CACHE_LIB_SRC_UTILS_HPP_
 #define OCL_PROGRAM_CACHE_LIB_SRC_UTILS_HPP_
 
@@ -36,11 +41,13 @@
 
 namespace ocl::program_cache::utils {
 
+/// @brief Throws an exception, if \c errorcode is not \c CL_SUCCESS
 inline void check_cl_error(cl_int errorcode)
 {
     if (errorcode != CL_SUCCESS) throw ::ocl::program_cache::opencl_error(errorcode);
 }
 
+/// @brief Splits a string at \c delimiter. For supported cases, see the corresponding test.
 inline std::vector<std::string_view> split(std::string_view input, char delimiter = ' ')
 {
     std::vector<std::string_view> ret;
@@ -55,26 +62,24 @@ inline std::vector<std::string_view> split(std::string_view input, char delimite
     return ret;
 }
 
+/// @brief Returns whether \c str starts with \c start
 inline bool starts_with(std::string_view str, std::string_view start)
 {
     return str.find(start) == 0;
 }
 
+/// @brief Generic function to wrap \c clGet*Info functions that return a string.
 template <class T, class Fun, class Param>
 std::string get_info_str(T obj, Fun fun, Param param_name)
 {
     std::size_t param_value_size{};
     check_cl_error(fun(obj, param_name, param_value_size, nullptr, &param_value_size));
-    std::string ret;
-    ret.resize(param_value_size);
-    check_cl_error(fun(obj, param_name, param_value_size, ret.data(), &param_value_size));
-    // there is a \0 in the end of the string that we don't need
-    ret.resize(param_value_size - 1);
-    return ret;
+    std::vector<char> char_data(param_value_size);
+    check_cl_error(fun(obj, param_name, param_value_size, char_data.data(), &param_value_size));
+    return { char_data.data() };
 }
 
-namespace detail {
-
+/// @brief Parses \c str to \c int. Throws \c bad_opencl_version_format if unsuccessful.
 inline int parse_int(std::string_view str)
 {
     int val{};
@@ -86,30 +91,27 @@ inline int parse_int(std::string_view str)
     return val;
 }
 
-} // namespace detail
-
+/// @brief Parses OpenCL version string to major and minor version. Throws \c
+/// bad_opencl_version_format if the \c version_string is non-conformant.
 inline std::pair<int, int> parse_platform_opencl_version(std::string_view version_string)
 {
     // Version format must be
-    // clang-format off
     // OpenCL<space><major_version.minor_version><space><platform-specific-information>
-    // clang-format on
     if (version_string.size() < 10) throw bad_opencl_version_format();
-    return { detail::parse_int(version_string.substr(7, 1)),
-             detail::parse_int(version_string.substr(9, 1)) };
+    return { parse_int(version_string.substr(7, 1)), parse_int(version_string.substr(9, 1)) };
 }
 
+/// @brief Parses OpenCL C version string to major and minor version. Throws \c
+/// bad_opencl_version_format if the \c version_string is non-conformant.
 inline std::pair<int, int> parse_device_opencl_c_version(std::string_view version_string)
 {
     // Version format must be
-    // clang-format off
     // OpenCL<space>C<space><major_version.minor_version><space><vendor-specific information>
-    // clang-format on
     if (version_string.size() < 12) throw bad_opencl_version_format();
-    return { detail::parse_int(version_string.substr(9, 1)),
-             detail::parse_int(version_string.substr(11, 1)) };
+    return { parse_int(version_string.substr(9, 1)), parse_int(version_string.substr(11, 1)) };
 }
 
+/// @brief Can be used to wrap a number of functors (e.g. lambdas) to an overload set.
 template <class... Args> struct overloads : Args...
 {
     using Args::operator()...;
@@ -120,6 +122,7 @@ template <class... Ts> overloads(Ts...) -> overloads<Ts...>;
 template <class T> class hex_format;
 template <class T> std::ostream& operator<<(std::ostream& os, const hex_format<T>& h);
 
+/// @brief Formats an unsigned value to a hexadecimal string.
 template <class T> class hex_format {
     static_assert(std::is_unsigned_v<T>, "T must be unsigned");
 

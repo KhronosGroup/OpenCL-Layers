@@ -16,6 +16,12 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+/// @file common.hpp
+/// @brief Common definitions for program-cache.
+///
+/// Contains common definitions which are shared between multiple compilation units of
+/// program-cache.
+
 #ifndef OCL_PROGRAM_CACHE_LIB_INC_OCL_PROGRAM_CACHE_COMMON_HPP_
 #define OCL_PROGRAM_CACHE_LIB_INC_OCL_PROGRAM_CACHE_COMMON_HPP_
 
@@ -90,7 +96,6 @@ struct program_cache_dispatch
     cl_api_clReleaseDevice clReleaseDevice{};
     cl_api_clReleaseProgram clReleaseProgram{};
 };
-
 
 } // namespace ocl::program_cache
 

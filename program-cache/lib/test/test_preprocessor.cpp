@@ -16,6 +16,9 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
+/// @file test_preprocessor.cpp
+/// @brief Testing utilities in preprocessor.hpp
+
 #include "utils_test.hpp"
 
 #include "../src/preprocessor.hpp"
