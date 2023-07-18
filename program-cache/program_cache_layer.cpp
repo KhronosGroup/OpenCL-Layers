@@ -50,7 +50,7 @@ struct program_entry
     cl_program program{};
     std::variant<binary_program, std::string, std::vector<char>> source = binary_program{};
     std::string options;
-    void(CL_CALLBACK* release_notify)(cl_program, void*);
+    void(CL_CALLBACK* release_notify)(cl_program, void*){};
     void* notify_user_data{};
     std::map<cl_uint, std::vector<unsigned char>> specialization_constants;
     bool build_attempted = false;
@@ -91,7 +91,7 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithSource_wrap(cl_context co
     entry.context = context;
     entry.source = sstream.str();
 
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     const auto index = next_program_idx++;
     program_entries[index] = std::move(entry);
     if (errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -140,7 +140,7 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithIL_wrap(cl_context contex
     entry.source = std::move(source);
     entry.context = context;
 
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     const auto index = next_program_idx++;
     program_entries[index] = std::move(entry);
     if (errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -166,7 +166,7 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBinary_wrap(cl_context co
     entry.context = context;
     entry.program = program;
 
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     const auto index = next_program_idx++;
     program_entries[index] = std::move(entry);
     if (errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -192,7 +192,7 @@ clCreateProgramWithBuiltInKernels_wrap(cl_context context,
     entry.context = context;
     entry.program = program;
 
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     const auto index = next_program_idx++;
     program_entries[index] = std::move(entry);
     if (errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -203,7 +203,7 @@ clCreateProgramWithBuiltInKernels_wrap(cl_context context,
 CL_API_ENTRY cl_int CL_API_CALL clRetainProgram_wrap(cl_program program)
 {
     const auto index = reinterpret_cast<intptr_t>(program);
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
     if (entry_it == program_entries.end())
     {
@@ -221,7 +221,7 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainProgram_wrap(cl_program program)
 CL_API_ENTRY cl_int CL_API_CALL clReleaseProgram_wrap(cl_program program)
 {
     const auto index = reinterpret_cast<intptr_t>(program);
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
     if (entry_it == program_entries.end())
     {
@@ -272,7 +272,7 @@ clSetProgramReleaseCallback_wrap(cl_program program,
         return CL_INVALID_ARG_VALUE;
     }
     const auto index = reinterpret_cast<intptr_t>(program);
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
     if (entry_it == program_entries.end())
     {
@@ -303,7 +303,7 @@ CL_API_ENTRY cl_int CL_API_CALL clSetProgramSpecializationConstant_wrap(cl_progr
         return CL_INVALID_ARG_VALUE;
     }
     const auto index = reinterpret_cast<intptr_t>(program);
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
     if (entry_it == program_entries.end())
     {
@@ -349,7 +349,7 @@ clBuildProgram_wrap(cl_program program,
         return CL_INVALID_ARG_VALUE;
     }
     const auto index = reinterpret_cast<intptr_t>(program);
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
     if (entry_it == program_entries.end())
     {
@@ -416,7 +416,7 @@ clCompileProgram_wrap(cl_program program,
                       void* user_data)
 {
     const auto index = reinterpret_cast<intptr_t>(program);
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
     if (entry_it == program_entries.end())
     {
@@ -455,7 +455,7 @@ clLinkProgram_wrap(cl_context context,
                    void* user_data,
                    cl_int* errcode_ret)
 {
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     std::vector<cl_program> unwrapped_programs;
     for (size_t program_idx = 0; program_idx < num_input_programs; ++program_idx)
     {
@@ -487,7 +487,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfo_wrap(cl_program program,
                                                       size_t* param_value_size_ret)
 {
     const auto index = reinterpret_cast<intptr_t>(program);
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
     if (entry_it == program_entries.end())
     {
@@ -637,7 +637,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramBuildInfo_wrap(cl_program program,
                                                            size_t* param_value_size_ret)
 {
     const auto index = reinterpret_cast<intptr_t>(program);
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
     if (entry_it == program_entries.end())
     {
@@ -714,7 +714,7 @@ CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel_wrap(cl_program program,
                                                        cl_int* errcode_ret)
 {
     const auto index = reinterpret_cast<intptr_t>(program);
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
     if (entry_it == program_entries.end())
     {
@@ -735,7 +735,7 @@ CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgram_wrap(cl_program program
                                                               cl_uint* num_kernels_ret)
 {
     const auto index = reinterpret_cast<intptr_t>(program);
-    std::lock_guard lock(programs_mutex);
+    const std::lock_guard lock(programs_mutex);
     auto entry_it = program_entries.find(index);
     if (entry_it == program_entries.end())
     {
@@ -765,7 +765,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelInfo_wrap(cl_kernel kernel,
             const cl_int error = tdispatch->clGetKernelInfo(
                 kernel, CL_KERNEL_PROGRAM, sizeof(wrapped_program), &wrapped_program, nullptr);
             if (error != CL_SUCCESS) return error;
-            std::lock_guard lock(programs_mutex);
+            const std::lock_guard lock(programs_mutex);
             const auto found_it =
                 std::find_if(program_entries.begin(), program_entries.end(),
                              [wrapped_program](const auto& key_value) {
@@ -780,7 +780,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelInfo_wrap(cl_kernel kernel,
             cl_int error = tdispatch->clGetKernelInfo(
                 kernel, CL_KERNEL_PROGRAM, sizeof(wrapped_program), &wrapped_program, nullptr);
             if (error != CL_SUCCESS) return error;
-            std::lock_guard lock(programs_mutex);
+            const std::lock_guard lock(programs_mutex);
             const auto found_it =
                 std::find_if(program_entries.begin(), program_entries.end(),
                              [wrapped_program](const auto& key_value) {
@@ -894,7 +894,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetLayerInfo(cl_layer_info param_name,
             if (param_value)
             {
                 if (param_value_size < sizeof(cl_layer_api_version)) return CL_INVALID_VALUE;
-                *((cl_layer_api_version*)param_value) = CL_LAYER_API_VERSION_100;
+                *static_cast<cl_layer_api_version*>(param_value) = CL_LAYER_API_VERSION_100;
             }
             if (param_value_size_ret) *param_value_size_ret = sizeof(cl_layer_api_version);
             break;

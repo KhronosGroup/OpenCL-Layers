@@ -90,8 +90,8 @@ void add_opencl_macro_defs(cl_device_id device,
                            pc::LanguageVersion language,
                            const pc::program_cache_dispatch& dispatch)
 {
-    cl_platform_id platform;
-    CHECK_CL_ERROR(
+    cl_platform_id platform{};
+    pc::utils::check_cl_error(
         dispatch.clGetDeviceInfo(device, CL_DEVICE_PLATFORM, sizeof(platform), &platform, nullptr));
     const auto platform_opencl_version =
         pc::utils::get_info_str(platform, dispatch.clGetPlatformInfo, CL_PLATFORM_VERSION);
@@ -128,16 +128,16 @@ void add_opencl_macro_defs(cl_device_id device,
     {
         context.add_macro_definition("CL_VERSION_3_0=300");
     }
-    cl_bool endian_little;
-    CHECK_CL_ERROR(dispatch.clGetDeviceInfo(device, CL_DEVICE_ENDIAN_LITTLE, sizeof(endian_little),
-                                            &endian_little, nullptr));
+    cl_bool endian_little{};
+    pc::utils::check_cl_error(dispatch.clGetDeviceInfo(
+        device, CL_DEVICE_ENDIAN_LITTLE, sizeof(endian_little), &endian_little, nullptr));
     if (endian_little)
     {
         context.add_macro_definition("__ENDIAN_LITTLE__=1");
     }
-    cl_bool image_support;
-    CHECK_CL_ERROR(dispatch.clGetDeviceInfo(device, CL_DEVICE_IMAGE_SUPPORT, sizeof(image_support),
-                                            &image_support, nullptr));
+    cl_bool image_support{};
+    pc::utils::check_cl_error(dispatch.clGetDeviceInfo(
+        device, CL_DEVICE_IMAGE_SUPPORT, sizeof(image_support), &image_support, nullptr));
     if (image_support)
     {
         context.add_macro_definition("__IMAGE_SUPPORT__=1");
@@ -158,14 +158,14 @@ void add_opencl_macro_defs(cl_device_id device,
     if (platform_id >= 300)
     {
         std::size_t feature_bytes{};
-        CHECK_CL_ERROR(dispatch.clGetDeviceInfo(device, CL_DEVICE_OPENCL_C_FEATURES, 0, nullptr,
-                                                &feature_bytes));
+        pc::utils::check_cl_error(dispatch.clGetDeviceInfo(device, CL_DEVICE_OPENCL_C_FEATURES, 0,
+                                                           nullptr, &feature_bytes));
         std::vector<cl_name_version> features(feature_bytes / sizeof(cl_name_version));
-        CHECK_CL_ERROR(dispatch.clGetDeviceInfo(device, CL_DEVICE_OPENCL_C_FEATURES, feature_bytes,
-                                                features.data(), nullptr));
+        pc::utils::check_cl_error(dispatch.clGetDeviceInfo(
+            device, CL_DEVICE_OPENCL_C_FEATURES, feature_bytes, features.data(), nullptr));
         for (const auto& feature : features)
         {
-            context.add_macro_definition(std::string(feature.name) + "=1");
+            context.add_macro_definition(std::string(&feature.name[0]) + "=1");
         }
     }
 }
@@ -192,7 +192,7 @@ void process_option(const pc::Option& option, context_t& context, pc::LanguageVe
 pc::LanguageVersion get_default_language(cl_device_id device,
                                          const pc::program_cache_dispatch& dispatch)
 {
-    return pc::LanguageVersion(std::min(120, get_device_opencl_c_id(device, dispatch)));
+    return { std::min(120, get_device_opencl_c_id(device, dispatch)) };
 }
 
 } // namespace
@@ -215,11 +215,11 @@ std::string_view pc::remove_empty_pragmas(std::string_view kernel_source,
     // At this point, #pragma\n is somewhere in the middle of the string
     // To remove them, we must make a copy of the entire source.
     allocated_str = std::string(kernel_source.begin(), kernel_source.end());
-    do
+    while (pragma_newline_idx != std::string::npos)
     {
         allocated_str.erase(pragma_newline_idx, std::string_view("#pragma\n").size());
         pragma_newline_idx = allocated_str.find("#pragma\n");
-    } while (pragma_newline_idx != std::string::npos);
+    }
     return allocated_str;
 }
 
@@ -254,29 +254,29 @@ std::vector<pc::Option> pc::parse_options(std::string_view options)
         {
             if (it == std::prev(words.end())) throw preprocess_exception("Missing option after -D");
             ++it;
-            ret.push_back(DefinitionOpt{ *it });
+            ret.emplace_back(DefinitionOpt{ *it });
             ++it;
         }
         else if (utils::starts_with(*it, "-D"))
         {
-            ret.push_back(DefinitionOpt{ it->substr(2) });
+            ret.emplace_back(DefinitionOpt{ it->substr(2) });
             ++it;
         }
         else if (*it == "-I")
         {
             if (it == std::prev(words.end())) throw preprocess_exception("Missing option after -I");
             ++it;
-            ret.push_back(IncludeOpt{ *it });
+            ret.emplace_back(IncludeOpt{ *it });
             ++it;
         }
         else if (*it == "-cl-fast-relaxed-math")
         {
-            ret.push_back(FastRelaxedMathOpt{});
+            ret.emplace_back(FastRelaxedMathOpt{});
             ++it;
         }
         else if (utils::starts_with(*it, "-cl-std="))
         {
-            ret.push_back(LanguageVersionOpt(it->substr(8)));
+            ret.emplace_back(LanguageVersionOpt(it->substr(8)));
             ++it;
         }
         else

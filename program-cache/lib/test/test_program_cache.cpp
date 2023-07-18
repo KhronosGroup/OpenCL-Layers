@@ -46,8 +46,8 @@ template <> void PrintTo(const std::filesystem::path&, std::ostream*) {}
 
 class ProgramCacheTest : public testing::TestWithParam<std::filesystem::path> {
 protected:
-    const cl::Context& context() const { return context_; }
-    const pc::program_cache& cache() const { return *cache_; }
+    [[nodiscard]] const cl::Context& context() const { return context_; }
+    [[nodiscard]] const pc::program_cache& cache() const { return *cache_; }
 
     void SetUp() override
     {
@@ -97,7 +97,7 @@ protected:
 
     void check_program(const cl::Program& program, int i = 100)
     {
-        cl::Buffer output(context(), CL_MEM_WRITE_ONLY, sizeof(int));
+        const cl::Buffer output(context(), CL_MEM_WRITE_ONLY, sizeof(int));
         cl::KernelFunctor<cl::Buffer> kernel_functor(program, "foo");
         kernel_functor(cl::EnqueueArgs(cl::NDRange(1)), output);
         int h_out{};

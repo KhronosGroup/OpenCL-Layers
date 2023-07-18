@@ -52,7 +52,7 @@ public:
     /// \c store call to retrieve the same binaries.
     /// @return The built \c cl_program if a cache entry was found for all devices, \c NULL
     /// otherwise.
-    cl_program fetch(std::string_view key) const;
+    [[nodiscard]] cl_program fetch(std::string_view key) const;
 
     /// @brief Loads cached binaries for all devices passed and returns a built \c cl_program.
     /// @param key Key to the cache entries. The key must be equal to the key passed to a previous
@@ -60,7 +60,8 @@ public:
     /// @param devices The devices to load the programs for.
     /// @return The built \c cl_program if a cache entry was found for all devices, \c NULL
     /// otherwise.
-    cl_program fetch(std::string_view key, const std::vector<cl_device_id>& devices) const;
+    [[nodiscard]] cl_program fetch(std::string_view key,
+                                   const std::vector<cl_device_id>& devices) const;
 
     /// @brief Stores the binary representation of a \c cl_program in the cache.
     /// @param program The program to store. It must be built previously, otherwise \c
@@ -77,7 +78,8 @@ public:
     /// @note The cache lookup considers the passed source code, the passed options, the platform's
     /// version and the devices to which the code is compiled. In this overload, the code is
     /// compiled to all devices associated with the \c cl_context passed in the constructor.
-    cl_program fetch_or_build_source(std::string_view source, std::string_view options = {}) const;
+    [[nodiscard]] cl_program fetch_or_build_source(std::string_view source,
+                                                   std::string_view options = {}) const;
 
     /// @brief Builds OpenCL source code to a \c cl_program and stores it in the cache. If the
     /// program existed in the cache previously, loads it back from the cache without building.
@@ -88,9 +90,9 @@ public:
     /// @note The cache lookup considers the passed source code, the passed options, the platform's
     /// version and the devices to which the code is compiled. In this overload, the code is
     /// compiled to all devices associated with the \c cl_context passed.
-    cl_program fetch_or_build_source(std::string_view source,
-                                     cl_context context,
-                                     std::string_view options = {}) const;
+    [[nodiscard]] cl_program fetch_or_build_source(std::string_view source,
+                                                   cl_context context,
+                                                   std::string_view options = {}) const;
 
     /// @brief Builds OpenCL source code to a \c cl_program and stores it in the cache. If the
     /// program existed in the cache previously, loads it back from the cache without building.
@@ -101,10 +103,10 @@ public:
     /// @return The built OpenCL program.
     /// @note The cache lookup considers the passed source code, the passed options, the platform's
     /// version and the devices to which the code is compiled.
-    cl_program fetch_or_build_source(std::string_view source,
-                                     cl_context context,
-                                     const std::vector<cl_device_id>& devices,
-                                     std::string_view options = {}) const;
+    [[nodiscard]] cl_program fetch_or_build_source(std::string_view source,
+                                                   cl_context context,
+                                                   const std::vector<cl_device_id>& devices,
+                                                   std::string_view options = {}) const;
 
     /// @brief Builds OpenCL IL code to a \c cl_program and stores it in the cache. If the program
     /// existed in the cache previously, loads it back from the cache without building.
@@ -114,7 +116,8 @@ public:
     /// @note The cache lookup considers the passed IL code, the passed options, the platform's
     /// version and the devices to which the code is compiled. In this overload, the code is
     /// compiled to all devices associated with the \c cl_context passed in the constructor.
-    cl_program fetch_or_build_il(const std::vector<char>& il, std::string_view options = {}) const;
+    [[nodiscard]] cl_program fetch_or_build_il(const std::vector<char>& il,
+                                               std::string_view options = {}) const;
 
     /// @brief Builds OpenCL IL code to a \c cl_program and stores it in the cache. If the program
     /// existed in the cache previously, loads it back from the cache without building.
@@ -125,9 +128,9 @@ public:
     /// @note The cache lookup considers the passed IL code, the passed options, the platform's
     /// version and the devices to which the code is compiled. In this overload, the code is
     /// compiled to all devices associated with the \c cl_context passed.
-    cl_program fetch_or_build_il(const std::vector<char>& il,
-                                 cl_context context,
-                                 std::string_view options = {}) const;
+    [[nodiscard]] cl_program fetch_or_build_il(const std::vector<char>& il,
+                                               cl_context context,
+                                               std::string_view options = {}) const;
 
     /// @brief Builds OpenCL IL code to a \c cl_program and stores it in the cache. If the program
     /// existed in the cache previously, loads it back from the cache without building.
@@ -138,10 +141,10 @@ public:
     /// @return The built OpenCL program.
     /// @note The cache lookup considers the passed IL code, the passed options, the platform's
     /// version and the devices to which the code is compiled.
-    cl_program fetch_or_build_il(const std::vector<char>& il,
-                                 cl_context context,
-                                 const std::vector<cl_device_id>& devices,
-                                 std::string_view options = {}) const;
+    [[nodiscard]] cl_program fetch_or_build_il(const std::vector<char>& il,
+                                               cl_context context,
+                                               const std::vector<cl_device_id>& devices,
+                                               std::string_view options = {}) const;
 
 private:
     template <class T>
@@ -159,7 +162,7 @@ private:
                                                        const T& source,
                                                        std::string_view options) const;
 
-    cl_context get_default_context() const;
+    [[nodiscard]] cl_context get_default_context() const;
 
     std::vector<cl_device_id> get_devices(cl_context context) const;
 

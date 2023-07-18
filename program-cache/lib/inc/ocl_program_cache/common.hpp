@@ -39,7 +39,7 @@ struct opencl_error : public std::runtime_error
         : std::runtime_error(prefix + std::to_string(error)), error_(error)
     {}
 
-    cl_int err() const { return error_; }
+    [[nodiscard]] cl_int err() const { return error_; }
 
 private:
     cl_int error_;

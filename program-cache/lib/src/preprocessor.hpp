@@ -63,8 +63,8 @@ class LanguageVersion {
 public:
     LanguageVersion(int id, bool is_cpp = false): id_(id), is_cpp_(is_cpp) {}
 
-    int id() const { return id_; }
-    bool is_cpp() const { return is_cpp_; }
+    [[nodiscard]] int id() const { return id_; }
+    [[nodiscard]] bool is_cpp() const { return is_cpp_; }
 
     bool operator==(const LanguageVersion& other) const
     {
@@ -86,7 +86,7 @@ public:
 
     bool operator!=(const LanguageVersionOpt& other) const { return !(*this == other); }
 
-    LanguageVersion get_language() const { return language_; }
+    [[nodiscard]] LanguageVersion get_language() const { return language_; }
 
 private:
     LanguageVersion language_;

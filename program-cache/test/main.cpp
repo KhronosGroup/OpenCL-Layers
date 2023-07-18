@@ -23,23 +23,31 @@
 
 int main()
 {
-    auto context = cl::Context::getDefault();
-
-    const std::string program_source = "kernel void foo(global int* i){ *i = 100; }";
-    cl::Program program(context, program_source);
-    program.build();
-
-    cl::KernelFunctor<cl::Buffer> kernel(program, "foo");
-    cl::Buffer output(context, CL_MEM_WRITE_ONLY, sizeof(cl_int));
-
-    kernel(cl::EnqueueArgs(cl::NDRange(1)), output);
-
-    cl_int result{};
-    cl::enqueueReadBuffer(output, true, 0, sizeof(result), &result);
-
-    std::cout << "Result: " << result << std::endl;
-    if (result != 100)
+    try
     {
+
+        auto context = cl::Context::getDefault();
+
+        const std::string program_source = "kernel void foo(global int* i){ *i = 100; }";
+        const cl::Program program(context, program_source);
+        program.build();
+
+        cl::KernelFunctor<cl::Buffer> kernel(program, "foo");
+        const cl::Buffer output(context, CL_MEM_WRITE_ONLY, sizeof(cl_int));
+
+        kernel(cl::EnqueueArgs(cl::NDRange(1)), output);
+
+        cl_int result{};
+        cl::enqueueReadBuffer(output, true, 0, sizeof(result), &result);
+
+        std::cout << "Result: " << result << std::endl;
+        if (result != 100)
+        {
+            return -1;
+        }
+    } catch (const std::exception& ex)
+    {
+        std::cout << "Error: " << ex.what() << std::endl;
         return -1;
     }
 }

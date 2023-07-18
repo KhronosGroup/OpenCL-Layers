@@ -33,26 +33,25 @@
 #include <utility>
 #include <vector>
 
-#define CHECK_CL_ERROR(expression)                                                                 \
-    {                                                                                              \
-        if (const cl_int __error = (expression); __error != CL_SUCCESS)                            \
-            throw ::ocl::program_cache::opencl_error(__error);                                     \
-    }
 
 namespace ocl::program_cache::utils {
 
+inline void check_cl_error(cl_int errorcode)
+{
+    if (errorcode != CL_SUCCESS) throw ::ocl::program_cache::opencl_error(errorcode);
+}
+
 inline std::vector<std::string_view> split(std::string_view input, char delimiter = ' ')
 {
-    std::size_t pos = input.find_first_not_of(delimiter);
-    if (pos == std::string_view::npos) return {};
     std::vector<std::string_view> ret;
-    do
+    std::size_t pos = input.find_first_not_of(delimiter);
+    while (pos != std::string_view::npos)
     {
         const auto last_pos = pos;
         pos = input.find(delimiter, pos);
         ret.push_back(input.substr(last_pos, pos - last_pos));
         pos = input.find_first_not_of(delimiter, pos);
-    } while (pos != std::string_view::npos);
+    }
     return ret;
 }
 
@@ -65,10 +64,10 @@ template <class T, class Fun, class Param>
 std::string get_info_str(T obj, Fun fun, Param param_name)
 {
     std::size_t param_value_size{};
-    CHECK_CL_ERROR(fun(obj, param_name, param_value_size, nullptr, &param_value_size));
+    check_cl_error(fun(obj, param_name, param_value_size, nullptr, &param_value_size));
     std::string ret;
     ret.resize(param_value_size);
-    CHECK_CL_ERROR(fun(obj, param_name, param_value_size, ret.data(), &param_value_size));
+    check_cl_error(fun(obj, param_name, param_value_size, ret.data(), &param_value_size));
     // there is a \0 in the end of the string that we don't need
     ret.resize(param_value_size - 1);
     return ret;
@@ -76,10 +75,11 @@ std::string get_info_str(T obj, Fun fun, Param param_name)
 
 namespace detail {
 
-inline int parse_int(char c)
+inline int parse_int(std::string_view str)
 {
-    int val;
-    if (auto [ptr, ec] = std::from_chars(&c, &c + 1, val); ec != std::errc{})
+    int val{};
+    if (auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), val);
+        ec != std::errc{})
     {
         throw bad_opencl_version_format();
     }
@@ -95,7 +95,8 @@ inline std::pair<int, int> parse_platform_opencl_version(std::string_view versio
     // OpenCL<space><major_version.minor_version><space><platform-specific-information>
     // clang-format on
     if (version_string.size() < 10) throw bad_opencl_version_format();
-    return { detail::parse_int(version_string[7]), detail::parse_int(version_string[9]) };
+    return { detail::parse_int(version_string.substr(7, 1)),
+             detail::parse_int(version_string.substr(9, 1)) };
 }
 
 inline std::pair<int, int> parse_device_opencl_c_version(std::string_view version_string)
@@ -105,7 +106,8 @@ inline std::pair<int, int> parse_device_opencl_c_version(std::string_view versio
     // OpenCL<space>C<space><major_version.minor_version><space><vendor-specific information>
     // clang-format on
     if (version_string.size() < 12) throw bad_opencl_version_format();
-    return { detail::parse_int(version_string[9]), detail::parse_int(version_string[11]) };
+    return { detail::parse_int(version_string.substr(9, 1)),
+             detail::parse_int(version_string.substr(11, 1)) };
 }
 
 template <class... Args> struct overloads : Args...

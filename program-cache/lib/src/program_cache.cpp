@@ -178,7 +178,7 @@ cl_program pc::program_cache::fetch(std::string_view key,
     const cl_program program = dispatch_.clCreateProgramWithBinary(
         context_ ? context_ : get_default_context(), static_cast<cl_uint>(devices.size()),
         devices.data(), binary_lengths.data(), binary_ptrs.data(), nullptr, &error);
-    CHECK_CL_ERROR(error);
+    utils::check_cl_error(error);
     error = dispatch_.clBuildProgram(program, static_cast<cl_uint>(devices.size()), devices.data(),
                                      nullptr, nullptr, nullptr);
     if (error != CL_SUCCESS)
@@ -192,27 +192,27 @@ cl_program pc::program_cache::fetch(std::string_view key,
 void pc::program_cache::store(cl_program program, std::string_view key) const
 {
     cl_uint num_devices{};
-    CHECK_CL_ERROR(dispatch_.clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, sizeof(num_devices),
-                                              &num_devices, nullptr));
+    utils::check_cl_error(dispatch_.clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES,
+                                                     sizeof(num_devices), &num_devices, nullptr));
     std::vector<cl_device_id> program_devices(num_devices);
-    CHECK_CL_ERROR(dispatch_.clGetProgramInfo(program, CL_PROGRAM_DEVICES,
-                                              num_devices * sizeof(cl_device_id),
-                                              program_devices.data(), nullptr));
+    utils::check_cl_error(dispatch_.clGetProgramInfo(program, CL_PROGRAM_DEVICES,
+                                                     num_devices * sizeof(cl_device_id),
+                                                     program_devices.data(), nullptr));
     for (auto device_id : program_devices)
     {
         cl_build_status build_status{};
-        CHECK_CL_ERROR(dispatch_.clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_STATUS,
-                                                       sizeof(build_status), &build_status,
-                                                       nullptr));
+        utils::check_cl_error(
+            dispatch_.clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_STATUS,
+                                            sizeof(build_status), &build_status, nullptr));
         if (build_status != CL_BUILD_SUCCESS)
         {
             throw unbuilt_program_error();
         }
     }
     std::vector<std::size_t> binary_sizes(program_devices.size());
-    CHECK_CL_ERROR(dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
-                                              binary_sizes.size() * sizeof(std::size_t),
-                                              binary_sizes.data(), nullptr));
+    utils::check_cl_error(dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
+                                                     binary_sizes.size() * sizeof(std::size_t),
+                                                     binary_sizes.data(), nullptr));
     std::vector<std::vector<unsigned char>> program_binaries;
     std::vector<unsigned char*> binary_ptrs;
     for (auto binary_size : binary_sizes)
@@ -220,9 +220,9 @@ void pc::program_cache::store(cl_program program, std::string_view key) const
         auto& binary_data = program_binaries.emplace_back(binary_size);
         binary_ptrs.push_back(binary_data.data());
     }
-    CHECK_CL_ERROR(dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARIES,
-                                              binary_ptrs.size() * sizeof(unsigned char*),
-                                              binary_ptrs.data(), nullptr));
+    utils::check_cl_error(dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARIES,
+                                                     binary_ptrs.size() * sizeof(unsigned char*),
+                                                     binary_ptrs.data(), nullptr));
     auto device_it = program_devices.begin();
     for (auto binary_it = program_binaries.begin(), end = program_binaries.end(); binary_it != end;
          ++binary_it, ++device_it)
@@ -306,7 +306,7 @@ cl_program pc::program_cache::fetch_or_build_impl(const T& input,
                            return std::vector<unsigned char>(std::istreambuf_iterator<char>(ifs),
                                                              {});
                        }
-                       const auto program_binary =
+                       auto program_binary =
                            build_program_to_binary(context, device, preprocessed_input, options);
                        save_binary_to_cache(cache_path, program_binary);
                        return program_binary;
@@ -323,7 +323,7 @@ cl_program pc::program_cache::fetch_or_build_impl(const T& input,
     const auto program = dispatch_.clCreateProgramWithBinary(
         context, static_cast<cl_uint>(devices.size()), devices.data(), binary_lengths.data(),
         binary_ptrs.data(), nullptr, &error);
-    CHECK_CL_ERROR(error);
+    utils::check_cl_error(error);
     error = dispatch_.clBuildProgram(program, static_cast<cl_uint>(devices.size()), devices.data(),
                                      nullptr, nullptr, nullptr);
     if (error != CL_SUCCESS)
@@ -339,8 +339,8 @@ std::filesystem::path pc::program_cache::get_path_for_device_binary(cl_device_id
 {
     const auto device_name = utils::get_info_str(device, dispatch_.clGetDeviceInfo, CL_DEVICE_NAME);
     cl_platform_id platform{};
-    CHECK_CL_ERROR(dispatch_.clGetDeviceInfo(device, CL_DEVICE_PLATFORM, sizeof(platform),
-                                             &platform, nullptr));
+    utils::check_cl_error(dispatch_.clGetDeviceInfo(device, CL_DEVICE_PLATFORM, sizeof(platform),
+                                                    &platform, nullptr));
     const auto platform_version =
         utils::get_info_str(platform, dispatch_.clGetPlatformInfo, CL_PLATFORM_VERSION);
     const auto device_hash = hash_str(platform_version + "/" + device_name);
@@ -369,7 +369,7 @@ std::vector<unsigned char> pc::program_cache::build_program_to_binary(
         }
         else
         {
-            static_assert(false, "T is expected to be std::string or std::vector<char>");
+            static_assert(sizeof(T) == 0, "T is expected to be std::string or std::vector<char>");
         }
     }();
     if (error != CL_SUCCESS)
@@ -408,16 +408,17 @@ cl_context pc::program_cache::get_default_context() const
 {
     static cl_context default_context = [&] {
         cl_uint num_platforms{};
-        CHECK_CL_ERROR(dispatch_.clGetPlatformIDs(0, nullptr, &num_platforms));
+        utils::check_cl_error(dispatch_.clGetPlatformIDs(0, nullptr, &num_platforms));
         std::vector<cl_platform_id> platform_ids(num_platforms);
-        CHECK_CL_ERROR(dispatch_.clGetPlatformIDs(num_platforms, platform_ids.data(), nullptr));
+        utils::check_cl_error(
+            dispatch_.clGetPlatformIDs(num_platforms, platform_ids.data(), nullptr));
         std::array<cl_context_properties, 3> props{
             CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platform_ids.front()), 0
         };
         cl_int error = CL_SUCCESS;
         auto context = dispatch_.clCreateContextFromType(props.data(), CL_DEVICE_TYPE_ALL, nullptr,
                                                          nullptr, &error);
-        CHECK_CL_ERROR(error);
+        utils::check_cl_error(error);
         return context;
     }();
     // TODO release on exit
@@ -427,11 +428,11 @@ cl_context pc::program_cache::get_default_context() const
 std::vector<cl_device_id> pc::program_cache::get_devices(cl_context context) const
 {
     std::size_t num_devices{};
-    CHECK_CL_ERROR(dispatch_.clGetContextInfo(context, CL_CONTEXT_NUM_DEVICES, sizeof(num_devices),
-                                              &num_devices, nullptr));
+    utils::check_cl_error(dispatch_.clGetContextInfo(context, CL_CONTEXT_NUM_DEVICES,
+                                                     sizeof(num_devices), &num_devices, nullptr));
     std::vector<cl_device_id> device_ids(num_devices);
-    CHECK_CL_ERROR(dispatch_.clGetContextInfo(context, CL_CONTEXT_DEVICES,
-                                              num_devices * sizeof(cl_device_id), device_ids.data(),
-                                              nullptr));
+    utils::check_cl_error(dispatch_.clGetContextInfo(context, CL_CONTEXT_DEVICES,
+                                                     num_devices * sizeof(cl_device_id),
+                                                     device_ids.data(), nullptr));
     return device_ids;
 }
