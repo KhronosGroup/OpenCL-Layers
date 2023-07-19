@@ -2,7 +2,7 @@ if (NOT DEPENDENCIES_FORCE_DOWNLOAD)
     find_package(Boost COMPONENTS wave)
 endif ()
 
-if (NOT Boost_WAVE_FOUND)
+if (NOT Boost_FOUND)
   if (DEPENDENCIES_FORCE_DOWNLOAD)
     message (STATUS "DEPENDENCIES_FORCE_DOWNLOAD is ON. Fetching Boost::format and Boost::wave")
   else ()

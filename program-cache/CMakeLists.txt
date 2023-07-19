@@ -15,13 +15,7 @@ if (LAYERS_BUILD_TESTS)
     add_subdirectory(test)
 endif()
 
-set (INSTALL_TARGETS ProgramCache ProgramCacheLayer)
-set (BUILD_TARGETS ${INSTALL_TARGETS})
-if (LAYERS_BUILD_TESTS)
-    list (APPEND BUILD_TARGETS ProgramCacheTest ProgramCacheLayerTest)
-endif ()
-
-set_target_properties (${BUILD_TARGETS}
+set_target_properties (ProgramCacheLayer
     PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
         LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}"
@@ -31,7 +25,7 @@ set_target_properties (${BUILD_TARGETS}
         FOLDER "Layers"
 )
 install (
-    TARGETS ${INSTALL_TARGETS}
+    TARGETS ProgramCacheLayer
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

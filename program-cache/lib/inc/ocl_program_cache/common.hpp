@@ -82,19 +82,19 @@ struct preprocess_exception : public std::runtime_error
 /// @brief OpenCL function dispatch table used by \ref program_cache.
 struct program_cache_dispatch
 {
-    cl_api_clBuildProgram clBuildProgram{};
-    cl_api_clCreateContextFromType clCreateContextFromType{};
-    cl_api_clCreateProgramWithBinary clCreateProgramWithBinary{};
-    cl_api_clCreateProgramWithIL clCreateProgramWithIL{};
-    cl_api_clCreateProgramWithSource clCreateProgramWithSource{};
-    cl_api_clGetContextInfo clGetContextInfo{};
-    cl_api_clGetDeviceInfo clGetDeviceInfo{};
-    cl_api_clGetPlatformIDs clGetPlatformIDs{};
-    cl_api_clGetPlatformInfo clGetPlatformInfo{};
-    cl_api_clGetProgramBuildInfo clGetProgramBuildInfo{};
-    cl_api_clGetProgramInfo clGetProgramInfo{};
-    cl_api_clReleaseDevice clReleaseDevice{};
-    cl_api_clReleaseProgram clReleaseProgram{};
+    clBuildProgram_t* clBuildProgram{};
+    clCreateContextFromType_t* clCreateContextFromType{};
+    clCreateProgramWithBinary_t* clCreateProgramWithBinary{};
+    clCreateProgramWithIL_t* clCreateProgramWithIL{};
+    clCreateProgramWithSource_t* clCreateProgramWithSource{};
+    clGetContextInfo_t* clGetContextInfo{};
+    clGetDeviceInfo_t* clGetDeviceInfo{};
+    clGetPlatformIDs_t* clGetPlatformIDs{};
+    clGetPlatformInfo_t* clGetPlatformInfo{};
+    clGetProgramBuildInfo_t* clGetProgramBuildInfo{};
+    clGetProgramInfo_t* clGetProgramInfo{};
+    clReleaseDevice_t* clReleaseDevice{};
+    clReleaseProgram_t* clReleaseProgram{};
 };
 
 } // namespace ocl::program_cache
