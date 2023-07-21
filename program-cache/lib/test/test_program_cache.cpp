@@ -21,7 +21,7 @@
 
 #include "utils_test.hpp"
 
-#include <ocl_program_cache/program_cache.hpp>
+#include <program_cache.hpp>
 
 #include <CL/opencl.hpp>
 #include <gtest/gtest-printers.h>

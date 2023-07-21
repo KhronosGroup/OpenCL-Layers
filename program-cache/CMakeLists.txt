@@ -10,6 +10,7 @@ add_library (ProgramCacheLayer SHARED
 )
 
 target_link_libraries(ProgramCacheLayer PRIVATE ProgramCache)
+target_compile_definitions(ProgramCacheLayer PRIVATE CL_TARGET_OPENCL_VERSION=300)
 
 if (LAYERS_BUILD_TESTS)
     add_subdirectory(test)
@@ -26,7 +27,7 @@ set_target_properties (ProgramCacheLayer
 )
 install (
     TARGETS ProgramCacheLayer
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )

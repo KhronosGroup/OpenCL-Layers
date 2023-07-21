@@ -22,7 +22,7 @@
 #ifndef OCL_PROGRAM_CACHE_PROGRAM_CACHE_LAYER_HPP_
 #define OCL_PROGRAM_CACHE_PROGRAM_CACHE_LAYER_HPP_
 
-#include <ocl_program_cache/program_cache.hpp>
+#include <program_cache.hpp>
 
 #include <CL/cl_layer.h>
 

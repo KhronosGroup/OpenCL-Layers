@@ -1,3 +1,4 @@
+include (OpenCLHeaders)
 if (LAYERS_BUILD_TESTS)
     include (gtest)
     include (OpenCLHeadersCpp)

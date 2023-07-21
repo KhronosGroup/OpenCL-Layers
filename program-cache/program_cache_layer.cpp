@@ -23,7 +23,7 @@
 
 #include "./lib/src/utils.hpp"
 
-#include <ocl_program_cache/program_cache.hpp>
+#include <program_cache.hpp>
 
 #include <CL/cl_layer.h>
 

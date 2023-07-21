@@ -9,6 +9,7 @@ target_link_libraries(ProgramCacheTest PRIVATE
     gtest_with_main)
 target_compile_features(ProgramCacheTest PRIVATE cxx_std_17)
 target_compile_definitions(ProgramCacheTest PRIVATE
+    CL_TARGET_OPENCL_VERSION=300
     CL_HPP_ENABLE_EXCEPTIONS
     CL_HPP_MINIMUM_OPENCL_VERSION=100
     CL_HPP_TARGET_OPENCL_VERSION=300)
