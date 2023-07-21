@@ -24,7 +24,7 @@
 #ifndef OCL_PROGRAM_CACHE_LIB_SRC_UTILS_HPP_
 #define OCL_PROGRAM_CACHE_LIB_SRC_UTILS_HPP_
 
-#include <ocl_program_cache/common.hpp>
+#include <common.hpp>
 
 #include <CL/opencl.h>
 

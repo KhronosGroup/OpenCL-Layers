@@ -16,17 +16,17 @@
  * OpenCL is a trademark of Apple Inc. used under license by Khronos.
  */
 
-/// @file utils_test.hpp
-/// @brief Testing utilities used in this module's tests.
+/// @file main.cpp
+/// @brief Standalone test to check if the ProgramCache library can be consumed.
 
-#ifndef OCL_PROGRAM_CACHE_LIB_TEST_UTILS_TEST_HPP_
-#define OCL_PROGRAM_CACHE_LIB_TEST_UTILS_TEST_HPP_
+#include <program_cache/program_cache.hpp>
 
-#include <common.hpp>
+#include <CL/opencl.hpp>
 
-/// @brief Returns a dispatch table for the \c program_cache which contains the default OpenCL API
-/// functions.
-inline ocl::program_cache::program_cache_dispatch get_default_program_cache_dispatch()
+#include <string_view>
+
+namespace {
+ocl::program_cache::program_cache_dispatch get_default_program_cache_dispatch()
 {
     ocl::program_cache::program_cache_dispatch dispatch{};
     dispatch.clBuildProgram = &clBuildProgram;
@@ -44,5 +44,23 @@ inline ocl::program_cache::program_cache_dispatch get_default_program_cache_disp
     dispatch.clReleaseProgram = &clReleaseProgram;
     return dispatch;
 }
+} // namespace
 
-#endif // OCL_PROGRAM_CACHE_LIB_TEST_UTILS_TEST_HPP_
+int main()
+{
+    const auto context = cl::Context::getDefault();
+    ocl::program_cache::program_cache program_cache(get_default_program_cache_dispatch(),
+                                                    context());
+    const std::string_view program_source = "kernel void foo(global int* i) { *i = 100; }";
+
+    const cl::Program program(program_cache.fetch_or_build_source(program_source));
+    cl::KernelFunctor<cl::Buffer> kernel_func(program, "foo");
+    const cl::Buffer output(context, CL_MEM_WRITE_ONLY, sizeof(cl_int));
+
+    kernel_func(cl::EnqueueArgs(cl::NDRange(1)), output);
+
+    cl_int result{};
+    cl::enqueueReadBuffer(output, true, 0, sizeof(result), &result);
+
+    if (result != 100) return -1;
+}

@@ -19,9 +19,8 @@
 /// @file program_cache.cpp
 /// @brief Implementation of the class \c program_cache.
 
-#include <ocl_program_cache/program_cache.hpp>
-
-#include <ocl_program_cache/common.hpp>
+#include <common.hpp>
+#include <program_cache.hpp>
 
 #include "preprocessor.hpp"
 #include "utils.hpp"

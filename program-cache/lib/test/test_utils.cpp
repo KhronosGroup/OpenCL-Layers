@@ -21,7 +21,7 @@
 
 #include "../src/utils.hpp"
 
-#include <ocl_program_cache/common.hpp>
+#include <common.hpp>
 
 #include <gtest/gtest.h>
 

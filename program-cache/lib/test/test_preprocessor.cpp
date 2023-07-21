@@ -24,7 +24,7 @@
 #include "../src/preprocessor.hpp"
 #include "../src/utils.hpp"
 
-#include <ocl_program_cache/program_cache.hpp>
+#include <program_cache.hpp>
 
 #include <CL/opencl.hpp>
 #include <gtest/gtest.h>
