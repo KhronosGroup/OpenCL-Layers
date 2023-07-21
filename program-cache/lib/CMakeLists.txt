@@ -22,12 +22,17 @@ target_link_libraries(ProgramCache
     PUBLIC
         OpenCL::Headers
     PRIVATE
-        Boost::wave
-        # Boost::format is needed with newer Boost versions, because it is missing from the
-        # dependency list of Boost::wave, even though it depends on it.
-        # -> CMake 3.12: TARGET_NAME_IF_EXISTS
-        $<$<TARGET_EXISTS:Boost::format>:Boost::format>
+        $<BUILD_INTERFACE:Boost::wave>
 )
+# Boost::format is needed with newer Boost versions, because it is missing from the
+# dependency list of Boost::wave, even though it depends on it.
+# -> CMake 3.12: TARGET_NAME_IF_EXISTS
+if (TARGET Boost::format)
+    target_link_libraries(ProgramCache
+        PRIVATE
+            $<BUILD_INTERFACE:Boost::format>
+    )
+endif()
 target_compile_features(ProgramCache PUBLIC cxx_std_17)
 target_compile_definitions(ProgramCache PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:BOOST_WAVE_SEPARATE_LEXER_INSTANTIATION=0>
@@ -55,11 +60,6 @@ install (
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
-export(
-    EXPORT ProgramCacheTargets
-    NAMESPACE OpenCL::
-    FILE ${PROJECT_BINARY_DIR}/ProgramCache/ProgramCacheTargets.cmake
-)
 install (
     FILES
         include/common.hpp
@@ -74,14 +74,10 @@ install (
 )
 file(
   WRITE ${CMAKE_CURRENT_BINARY_DIR}/ProgramCache/ProgramCacheConfig.cmake
-  "include(\"\${CMAKE_CURRENT_LIST_DIR}/OpenCLHeaders.cmake\")\n"
-  "include(\"\${CMAKE_CURRENT_LIST_DIR}/BoostWave.cmake\")\n"
   "include(\"\${CMAKE_CURRENT_LIST_DIR}/ProgramCacheTargets.cmake\")\n"
 )
 install(
   FILES
-    "${PROJECT_SOURCE_DIR}/cmake/OpenCLHeaders.cmake"
-    "${PROJECT_SOURCE_DIR}/cmake/BoostWave.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/ProgramCache/ProgramCacheConfig.cmake"
   DESTINATION "${config_package_location}"
 )

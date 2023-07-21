@@ -7,8 +7,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        IMAGE:
-          - streamhpc/opencl-sdk-intelcpu:ubuntu-22.04-20230717
         CMAKE: [3.26.4]
         COMPILER:
           - C_COMPILER: gcc-11
@@ -27,10 +25,11 @@ jobs:
           - GEN: Unix Makefiles
             CONFIG: Release
           - GEN: Ninja Multi-Config
-            CONFIG:
+            CONFIG: Release
+        IMAGE:
+          - streamhpc/opencl-sdk-intelcpu:ubuntu-22.04-20230717
         include:
-          - IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-20.04-20230717
-            CMAKE: 3.10.3
+          - CMAKE: 3.10.3
             COMPILER:
               C_COMPILER: gcc-9
               CXX_COMPILER: g++-9
@@ -39,8 +38,8 @@ jobs:
             CONF:
               GEN: Unix Makefiles
               CONFIG: Debug
-          - IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-20.04-20230717
-            CMAKE: 3.10.3
+            IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-20.04-20230717
+          - CMAKE: 3.10.3
             COMPILER:
               C_COMPILER: gcc-9
               CXX_COMPILER: g++-9
@@ -49,8 +48,8 @@ jobs:
             CONF:
               GEN: Unix Makefiles
               CONFIG: Release
-          - IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-22.04-20230717
-            CMAKE: 3.10.3
+            IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-20.04-20230717
+          - CMAKE: 3.10.3
             COMPILER:
               C_COMPILER: gcc-11
               CXX_COMPILER: g++-11
@@ -59,8 +58,8 @@ jobs:
             CONF:
               GEN: Unix Makefiles
               CONFIG: Debug
-          - IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-22.04-20230717
-            CMAKE: 3.10.3
+            IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-22.04-20230717
+          - CMAKE: 3.10.3
             COMPILER:
               C_COMPILER: gcc-11
               CXX_COMPILER: g++-11
@@ -69,6 +68,7 @@ jobs:
             CONF:
               GEN: Unix Makefiles
               CONFIG: Release
+            IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-22.04-20230717
         exclude:
           - BIN: 32
             DEPS: system
@@ -124,64 +124,61 @@ jobs:
 
     - name: Build & install OpenCL-Headers
       shell: bash
-      run: |
-        $CMAKE_EXE \
-          -G "${{matrix.CONF.GEN}}" \
-          -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}} \
-          -D BUILD_TESTING=OFF \
-          -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}" \
-          -D CMAKE_C_COMPILER=${{matrix.COMPILER.C_COMPILER}} \
-          -D CMAKE_C_EXTENSIONS=OFF \
-          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install \
-          -B$GITHUB_WORKSPACE/external/OpenCL-Headers/build \
-          -H$GITHUB_WORKSPACE/external/OpenCL-Headers &&
-        $CMAKE_EXE \
-          --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build \
-          --target install \
-          -- \
+      run: mkdir external/OpenCL-Headers/build && cd external/OpenCL-Headers/build &&
+        $CMAKE_EXE
+          -G "${{matrix.CONF.GEN}}"
+          -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}
+          -D BUILD_TESTING=OFF
+          -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
+          -D CMAKE_C_COMPILER=${{matrix.COMPILER.C_COMPILER}}
+          -D CMAKE_C_EXTENSIONS=OFF
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
+          .. &&
+        $CMAKE_EXE
+          --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build
+          --target install
+          --
           -j`nproc`
 
     - name: Build & install OpenCL-CLHPP
       shell: bash
-      run: |
-        $CMAKE_EXE \
-          -G "${{matrix.CONF.GEN}}" \
-          -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}} \
-          -D BUILD_TESTING=OFF \
-          -D BUILD_DOCS=OFF \
-          -D BUILD_EXAMPLES=OFF \
-          -D OPENCL_CLHPP_BUILD_TESTING=OFF \
-          -D CMAKE_CXX_FLAGS="-w -m${{matrix.BIN}}" \
-          -D CMAKE_CXX_COMPILER=${{matrix.COMPILER.CXX_COMPILER}} \
-          -D CMAKE_CXX_EXTENSIONS=OFF \
-          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install \
-          -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install" \
-          -B$GITHUB_WORKSPACE/external/OpenCL-CLHPP/build \
-          -H$GITHUB_WORKSPACE/external/OpenCL-CLHPP &&
-        $CMAKE_EXE \
-          --build $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build \
-          --target install \
-          -- \
+      run: mkdir external/OpenCL-CLHPP/build && cd external/OpenCL-CLHPP/build &&
+        $CMAKE_EXE
+          -G "${{matrix.CONF.GEN}}"
+          -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}
+          -D BUILD_TESTING=OFF
+          -D BUILD_DOCS=OFF
+          -D BUILD_EXAMPLES=OFF
+          -D OPENCL_CLHPP_BUILD_TESTING=OFF
+          -D CMAKE_CXX_FLAGS="-w -m${{matrix.BIN}}"
+          -D CMAKE_CXX_COMPILER=${{matrix.COMPILER.CXX_COMPILER}}
+          -D CMAKE_CXX_EXTENSIONS=OFF
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install
+          -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install"
+          .. &&
+        $CMAKE_EXE
+          --build $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build
+          --target install
+          --
           -j`nproc`
 
     - name: Build & install OpenCL-ICD-Loader
       shell: bash
-      run: |
-        $CMAKE_EXE \
-          -G "${{matrix.CONF.GEN}}" \
-          -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}} \
-          -D BUILD_TESTING=OFF \
-          -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}" \
-          -D CMAKE_C_COMPILER=${{matrix.COMPILER.C_COMPILER}} \
-          -D CMAKE_C_EXTENSIONS=OFF \
-          -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install \
-          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install \
-          -B$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build \
-          -H$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader &&
-        $CMAKE_EXE \
-          --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build \
-          --target install \
-          -- \
+      run: mkdir external/OpenCL-ICD-Loader/build && cd external/OpenCL-ICD-Loader/build &&
+        $CMAKE_EXE
+          -G "${{matrix.CONF.GEN}}"
+          -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}
+          -D BUILD_TESTING=OFF
+          -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
+          -D CMAKE_C_COMPILER=${{matrix.COMPILER.C_COMPILER}}
+          -D CMAKE_C_EXTENSIONS=OFF
+          -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install
+          .. &&
+        $CMAKE_EXE
+          --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
+          --target install
+          --
           -j`nproc`
 
     - name: Configure
@@ -189,7 +186,7 @@ jobs:
       run: export CFLAGS="-Wall -Wextra -pedantic -m${{matrix.BIN}} `if [[ "${{matrix.DEPS}}" != "fetch" ]]; then echo -Werror; fi`" &&
         export CXXFLAGS="-Wall -Wextra -pedantic -m${{matrix.BIN}} `if [[ "${{matrix.DEPS}}" != "fetch" ]]; then echo -Werror; fi`" &&
         export VCPKG_TRIPLET=`if [[ "${{matrix.BIN}}" == "32" ]]; then echo x86-linux; else echo x64-linux; fi;` &&
-        $CMAKE_EXE
+        mkdir $GITHUB_WORKSPACE/build && cd $GITHUB_WORKSPACE/build && $CMAKE_EXE
         -G "${{matrix.CONF.GEN}}"
         -D OPENCL_LAYERS_BUILD_TESTING=ON
         -D BUILD_TESTING=ON
@@ -202,8 +199,7 @@ jobs:
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install;$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install"
         `if [[ "${{matrix.DEPS}}" == "vcpkg" ]]; then echo "-D CMAKE_TOOLCHAIN_FILE=/opt/Microsoft/vcpkg/scripts/buildsystems/vcpkg.cmake"; fi;`
         `if [[ "${{matrix.DEPS}}" == "vcpkg" ]]; then echo "-D VCPKG_TARGET_TRIPLET=$VCPKG_TRIPLET"; fi;`
-        -B$GITHUB_WORKSPACE/build
-        -H$GITHUB_WORKSPACE
+        ..
 
     - name: Build
       shell: bash
@@ -227,3 +223,45 @@ jobs:
           $CTEST_EXE --output-on-failure -C Debug   --parallel `nproc` --exclude-regex "$EXCLUDED_TESTS";
           $CTEST_EXE --output-on-failure -C Release --parallel `nproc` --exclude-regex "$EXCLUDED_TESTS";
         fi;
+
+    - name: Install
+      shell: bash
+      run: $CMAKE_EXE --build $GITHUB_WORKSPACE/build --target install --config ${{matrix.CONF.CONFIG}}
+
+    - name: Configure package test
+      shell: bash
+      run: mkdir $GITHUB_WORKSPACE/program-cache/lib/test/package/build && cd $GITHUB_WORKSPACE/program-cache/lib/test/package/build &&
+        $CMAKE_EXE
+        -G "${{matrix.CONF.GEN}}"
+        -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}
+        -D CMAKE_C_FLAGS="-m${{matrix.BIN}}"
+        -D CMAKE_C_COMPILER=${{matrix.COMPILER.C_COMPILER}}
+        -D CMAKE_C_EXTENSIONS=OFF
+        -D CMAKE_CXX_FLAGS="-m${{matrix.BIN}}"
+        -D CMAKE_CXX_COMPILER=${{matrix.COMPILER.CXX_COMPILER}}
+        -D CMAKE_CXX_EXTENSIONS=OFF        
+        -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install;$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install;$GITHUB_WORKSPACE/install"
+        ..
+
+    - name: Build package test
+      shell: bash
+      run: if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]];
+        then
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build -- -j`nproc`;
+        else
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --config Debug   -- -j`nproc`;
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --config Release -- -j`nproc`;
+        fi;
+
+    - name: Run package test
+      if: matrix.BIN != 32
+      shell: bash
+      working-directory: ${{runner.workspace}}/OpenCL-Layers/program-cache/lib/test/package/build
+      run: |
+        if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]];
+        then
+          $CTEST_EXE --output-on-failure --parallel `nproc`
+        else
+          $CTEST_EXE --output-on-failure -C Debug   --parallel `nproc`
+          $CTEST_EXE --output-on-failure -C Release --parallel `nproc`
+        fi; 
