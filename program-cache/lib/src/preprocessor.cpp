@@ -32,6 +32,7 @@
 #endif
 #if defined(_MSC_VER)
 #pragma warning(push)
+#pragma warning(disable : 4100) // \W4 - unreferenced formal parameter
 #pragma warning(disable : 4706) // \W4 - assignment within conditional expression
 #endif
 

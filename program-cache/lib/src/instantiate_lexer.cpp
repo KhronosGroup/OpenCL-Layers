@@ -24,6 +24,7 @@
 
 #if defined(_MSC_VER)
 #pragma warning(push)
+#pragma warning(disable : 4100) // \W4 - unreferenced formal parameter
 #pragma warning(disable : 4702) // \W4 - unreachable code
 #pragma warning(disable : 4706) // \W4 - assignment within conditional expression
 #endif
@@ -37,4 +38,3 @@
 #include <string_view>
 
 template struct boost::wave::cpplexer::new_lexer_gen<std::string_view::iterator>;
-template struct boost::wave::cpplexer::new_lexer_gen<std::string_view::const_iterator>;
