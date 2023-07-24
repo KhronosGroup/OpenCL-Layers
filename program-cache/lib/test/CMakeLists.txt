@@ -12,7 +12,8 @@ target_compile_definitions(ProgramCacheTest PRIVATE
     CL_TARGET_OPENCL_VERSION=300
     CL_HPP_ENABLE_EXCEPTIONS
     CL_HPP_MINIMUM_OPENCL_VERSION=100
-    CL_HPP_TARGET_OPENCL_VERSION=300)
+    CL_HPP_TARGET_OPENCL_VERSION=300
+    $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:NOMINMAX>)
 add_test(NAME ProgramCacheTest COMMAND ProgramCacheTest)
 
 set_target_properties (ProgramCacheTest
