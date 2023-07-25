@@ -2,7 +2,7 @@ add_library(ProgramCache "")
 
 target_sources(ProgramCache
     PRIVATE
-        $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:src/instantiate_lexer.cpp>
+        $<$<OR:$<PLATFORM_ID:Darwin>,$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>>:src/instantiate_lexer.cpp>
         src/preprocessor.cpp
         src/preprocessor.hpp
         src/program_cache.cpp
@@ -35,7 +35,7 @@ if (TARGET Boost::format)
 endif()
 target_compile_features(ProgramCache PUBLIC cxx_std_17)
 target_compile_definitions(ProgramCache PRIVATE
-    $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:BOOST_WAVE_SEPARATE_LEXER_INSTANTIATION=0>
+    $<$<OR:$<PLATFORM_ID:Darwin>,$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>>:BOOST_WAVE_SEPARATE_LEXER_INSTANTIATION=0>
     $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:NOMINMAX>
     CL_TARGET_OPENCL_VERSION=300
 )
