@@ -149,7 +149,7 @@ std::string find_settings() {
     }
     else return false;
   };
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
   {
     std::string search_path;
     if (detail::get_environment("XDG_DATA_HOME", search_path) && !search_path.empty())

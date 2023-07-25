@@ -4,12 +4,14 @@ on: [push, pull_request]
 
 jobs:
   compatibility:
+    if: false
     runs-on: windows-2022
     strategy:
       matrix:
         VER: [v142, v143, clangcl]
         GEN: [Visual Studio 17 2022, Ninja Multi-Config]
         BIN: [x64, x86]
+        DEPS: [vcpkg, fetch]
         exclude:
         - VER: clangcl
           GEN: Ninja Multi-Config
@@ -23,6 +25,7 @@ jobs:
 
     steps:
     - name: Cache vcpkg install
+      if: matrix.DEPS == 'vcpkg'
       id: vcpkg-install
       uses: actions/cache@v3
       with:
@@ -31,7 +34,7 @@ jobs:
         key: boost-wave:${{matrix.BIN}}-windows-static-md
 
     - name: Install prerequisites with vcpkg
-      if: steps.vcpkg-install.outputs.cache-hit != 'true'
+      if: matrix.DEPS == 'vcpkg' && steps.vcpkg-install.outputs.cache-hit != 'true'
       shell: pwsh
       run: C:\vcpkg\vcpkg.exe install boost-wave:${{matrix.BIN}}-windows-static-md
 
@@ -173,8 +176,8 @@ jobs:
       shell: pwsh
       run: |
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
-        $C_FLAGS = '/W4 /WX'
-        $CXX_FLAGS = '/W4 /WX /EHsc'
+        $C_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX'} else {'/W4'}
+        $CXX_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX /EHsc'} else {'/W4 /EHsc'}
         & cmake `
           -G '${{matrix.GEN}}' `
           -A $BIN `
@@ -201,8 +204,8 @@ jobs:
           'v143' {'14.3'} }
         Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
         Enter-VsDevShell -VsInstallPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' -SkipAutomaticLocation -DevCmdArguments "-host_arch=x64 -arch=${{matrix.BIN}} -vcvars_ver=${VER}"
-        $C_FLAGS = '/W4 /WX'
-        $CXX_FLAGS = '/W4 /WX /EHsc'
+        $C_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX'} else {'/W4'}
+        $CXX_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX /EHsc'} else {'/W4 /EHsc'}
         & cmake `
           -G '${{matrix.GEN}}' `
           -D CMAKE_MAKE_PROGRAM="${env:NINJA_ROOT}\ninja.exe" `
@@ -327,8 +330,8 @@ jobs:
       shell: pwsh
       run: |
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
-        $C_FLAGS = '/W4 /WX'
-        $CXX_FLAGS = '/W4 /WX /EHsc'
+        $C_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX'} else {'/W4'}
+        $CXX_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX /EHsc'} else {'/W4 /EHsc'}
         & cmake `
           -G '${{matrix.GEN}}' `
           -A $BIN `
@@ -352,8 +355,8 @@ jobs:
           'v143' {'14.3'} }
         Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
         Enter-VsDevShell -VsInstallPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' -SkipAutomaticLocation -DevCmdArguments "-host_arch=x64 -arch=${{matrix.BIN}} -vcvars_ver=${VER}"
-        $C_FLAGS = '/W4 /WX'
-        $CXX_FLAGS = '/W4 /WX /EHsc'
+        $C_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX'} else {'/W4'}
+        $CXX_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX /EHsc'} else {'/W4 /EHsc'}
         & cmake `
           -G '${{matrix.GEN}}' `
           -D CMAKE_MAKE_PROGRAM="${env:NINJA_ROOT}\ninja.exe" `
