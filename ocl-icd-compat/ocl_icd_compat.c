@@ -92,7 +92,8 @@ static void _sort_platforms(struct platform_icd *picds, cl_uint npicds) {
   }
 }
 
-static void _set_default_id(void) {
+static void _set_default_id(void)
+{
   long num_default_platform = 0;
 #ifndef _MSC_VER
     const char *default_platform = getenv("OCL_ICD_DEFAULT_PLATFORM");
@@ -114,12 +115,12 @@ static void _set_default_id(void) {
     if (*default_platform == '\0' || *end_scan != '\0')
       return;
   }
-  if (num_default_platform < 0 || num_default_platform >= (long)_num_platforms)
-    return;
+  if (num_default_platform < 0 || num_default_platform >= (long)_num_platforms) return;
   _default_id = _platforms[num_default_platform].pid;
 }
 
-void _init_platforms(void) {
+void _init_platforms(void)
+{
   cl_int err;
   cl_platform_id *ids = NULL;
 
