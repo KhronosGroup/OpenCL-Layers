@@ -44,6 +44,38 @@ jobs:
             CXX_COMPILER: /usr/local/bin/g++-13
           DEPS: vcpkg
     steps:
+    - name: Create Build Environment
+      shell: bash
+      run: |
+        cmake -E make_directory $GITHUB_WORKSPACE/build;
+        cmake -E make_directory $GITHUB_WORKSPACE/install;
+        if [[ "${{matrix.CONF.GEN}}" == "Ninja Multi-Config" && ! `which ninja` ]]; then brew install ninja; fi;
+        # Install Ninja only if it's the selected generator and it's not available.
+        if [[ "${{matrix.DEPS}}" == "vcpkg" && ! `which pkg-config` ]]; then brew install pkg-config; fi;
+        cmake --version
+
+    - name: Install dependencies (Homebrew)
+      if: matrix.DEPS == 'system'
+      shell: bash
+      run: brew install boost googletest
+
+    - name: Cache dependencies (vcpkg)
+      if: matrix.DEPS == 'vcpkg'
+      id: vcpkg-install
+      uses: actions/cache@v3
+      with:
+        path: /usr/local/share/vcpkg
+        key: vcpkg-macos-${{matrix.CONF.CXX_COMPILER}}
+
+    - name: Install dependencies (vcpkg)
+      if: matrix.DEPS == 'vcpkg' && steps.vcpkg-install.outputs.cache-hit != 'true'
+      shell: bash
+      # Important: the same compiler must be used with vcpkg as with the project build
+      # because apple-clang uses a different standard library implementation from GCC
+      run: CC=${{matrix.CONF.C_COMPILER}}
+        CXX=${{matrix.CONF.CXX_COMPILER}}
+        $VCPKG_INSTALLATION_ROOT/vcpkg install boost-wave gtest rapidxml
+
     - name: Checkout OpenCL-Layers
       uses: actions/checkout@v3
       with:
@@ -66,38 +98,6 @@ jobs:
       with:
         repository: KhronosGroup/OpenCL-ICD-Loader
         path: external/OpenCL-ICD-Loader
-
-    - name: Create Build Environment
-      shell: bash
-      run: |
-        cmake -E make_directory $GITHUB_WORKSPACE/build;
-        cmake -E make_directory $GITHUB_WORKSPACE/install;
-        if [[ "${{matrix.CONF.GEN}}" == "Ninja Multi-Config" && ! `which ninja` ]]; then brew install ninja; fi;
-        # Install Ninja only if it's the selected generator and it's not available.
-        if [[ "${{matrix.DEPS}}" == "vcpkg" && ! `which pkg-config` ]]; then brew install pkg-config; fi;
-        cmake --version
-
-    - name: Install dependencies with Homebrew
-      if: matrix.DEPS == 'system'
-      shell: bash
-      run: brew install boost googletest
-
-    - name: Cache vcpkg install
-      if: matrix.DEPS == 'vcpkg'
-      id: vcpkg-install
-      uses: actions/cache@v3
-      with:
-        path: /usr/local/share/vcpkg
-        key: vcpkg-macos-${{matrix.CONF.CXX_COMPILER}}
-
-    - name: Install dependencies with vcpkg
-      if: matrix.DEPS == 'vcpkg' && steps.vcpkg-install.outputs.cache-hit != 'true'
-      shell: bash
-      # Important: the same compiler must be used with vcpkg as with the project build
-      # because apple-clang uses a different standard library implementation from GCC
-      run: CC=${{matrix.CONF.C_COMPILER}}
-        CXX=${{matrix.CONF.CXX_COMPILER}}
-        $VCPKG_INSTALLATION_ROOT/vcpkg install boost-wave gtest rapidxml
 
     - name: Build & install OpenCL-Headers
       shell: bash
@@ -157,7 +157,7 @@ jobs:
           --config Release \
           --parallel `sysctl -n hw.logicalcpu`
 
-    - name: Configure CMake
+    - name: Configure
       shell: bash
       run: export FLAGS=`if [[ "${{matrix.DEPS}}" == "fetch" ]]; then echo "-Wall -Wextra -pedantic -Wno-format -m64"; else echo "-Wall -Wextra -pedantic -Wno-format -m64 -Werror"; fi` ;
         cmake
@@ -183,14 +183,6 @@ jobs:
       run: |
         cmake --build $GITHUB_WORKSPACE/build --config Release --parallel `sysctl -n hw.logicalcpu` `if [[ "${{matrix.CONF.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
         cmake --build $GITHUB_WORKSPACE/build --config Debug   --parallel `sysctl -n hw.logicalcpu` `if [[ "${{matrix.CONF.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
-
-    - name: Test
-      if: false
-      working-directory: ${{runner.workspace}}/OpenCL-Layers/build
-      shell: bash
-      run: |
-        ctest -C Release --output-on-failure --parallel `sysctl -n hw.logicalcpu`
-        ctest -C Debug --output-on-failure --parallel `sysctl -n hw.logicalcpu`
 
     - name: Install
       shell: bash

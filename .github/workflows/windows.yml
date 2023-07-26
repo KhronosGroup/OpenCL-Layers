@@ -4,7 +4,6 @@ on: [push, pull_request]
 
 jobs:
   compatibility:
-    if: false
     runs-on: windows-2022
     strategy:
       matrix:
@@ -24,7 +23,7 @@ jobs:
       MultiProcMaxCount: '3'                  # -=-
 
     steps:
-    - name: Cache vcpkg install
+    - name: Cache dependencies (vcpkg)
       if: matrix.DEPS == 'vcpkg'
       id: vcpkg-install
       uses: actions/cache@v3
@@ -33,10 +32,26 @@ jobs:
           C:\vcpkg
         key: boost-wave:${{matrix.BIN}}-windows-static-md
 
-    - name: Install prerequisites with vcpkg
+    - name: Install dependencies (vcpkg)
       if: matrix.DEPS == 'vcpkg' && steps.vcpkg-install.outputs.cache-hit != 'true'
       shell: pwsh
       run: C:\vcpkg\vcpkg.exe install boost-wave:${{matrix.BIN}}-windows-static-md
+
+    - name: Cache Ninja install
+      id: ninja-install
+      uses: actions/cache@v3
+      with:
+        path: |
+          C:\Tools\Ninja
+        key: ${{runner.os}}-ninja-${{env.NINJA_URL}}
+
+    - name: Install Ninja
+      if: steps.ninja-install.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        Invoke-WebRequest ${env:NINJA_URL} -OutFile ~\Downloads\ninja-win.zip
+        Expand-Archive ~\Downloads\ninja-win.zip -DestinationPath C:\Tools\Ninja\
+        Remove-Item ~\Downloads\*
 
     - name: Checkout OpenCL-Layers
       uses: actions/checkout@v3
@@ -58,26 +73,8 @@ jobs:
     - name: Checkout OpenCL-ICD-Loader
       uses: actions/checkout@v3
       with:
-        repository: Kerilk/OpenCL-ICD-Loader
-        ref: system-layers
+        repository: KhronosGroup/OpenCL-ICD-Loader
         path: external/OpenCL-ICD-Loader
-      # Temporary redirection to external repo. Changes needed from there.
-
-    - name: Cache Ninja install
-      id: ninja-install
-      uses: actions/cache@v3
-      with:
-        path: |
-          C:\Tools\Ninja
-        key: ${{runner.os}}-ninja-${{env.NINJA_URL}}
-
-    - name: Install Ninja
-      if: steps.ninja-install.outputs.cache-hit != 'true'
-      shell: pwsh
-      run: |
-        Invoke-WebRequest ${env:NINJA_URL} -OutFile ~\Downloads\ninja-win.zip
-        Expand-Archive ~\Downloads\ninja-win.zip -DestinationPath C:\Tools\Ninja\
-        Remove-Item ~\Downloads\*
 
     - name: Build & install OpenCL-Headers
       shell: pwsh

@@ -4,7 +4,6 @@ on: [push, pull_request]
 
 jobs:
   compatibility:
-    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -79,26 +78,33 @@ jobs:
       CTEST_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/ctest
 
     steps:
-    - name: Install prerequisites
+    - name: Install dependencies (apt)
+      if: matrix.DEPS == 'system'
+      shell: bash
+      run: apt-get update -qq && apt-get install -y
+          libboost-atomic-dev
+          libboost-chrono-dev
+          libboost-date-time-dev
+          libboost-thread-dev
+          libboost-wave-dev
+          libgtest-dev
+          librapidxml-dev
+
+    - name: Cache dependencies (vcpkg)
+      if: matrix.DEPS == 'vcpkg'
+      id: vcpkg-install
+      uses: actions/cache@v3
+      with:
+        path: /opt/Microsoft/vcpkg
+        key: vcpkg-linux-${{matrix.BIN}}
+
+    - name: Install dependencies (vcpkg)
+      if: matrix.DEPS == 'vcpkg'
       shell: bash
       run: |
-        if [[ "${{matrix.DEPS}}" == "system" ]]; then
-          apt-get update -qq && apt-get install -y \
-          libboost-atomic-dev \
-          libboost-chrono-dev \
-          libboost-date-time-dev \
-          libboost-thread-dev \
-          libboost-wave-dev \
-          libgtest-dev \
-          librapidxml-dev
-        elif [[ "${{matrix.DEPS}}" == "vcpkg" ]]; then
-          export VCPKG_TRIPLET=`if [[ "${{matrix.BIN}}" == "32" ]]; then echo x86-linux; else echo x64-linux; fi;`
-          /opt/Microsoft/vcpkg/bootstrap-vcpkg.sh && \
-          /opt/Microsoft/vcpkg/vcpkg install \
-            boost-wave:$VCPKG_TRIPLET \
-            gtest:$VCPKG_TRIPLET \
-            rapidxml:$VCPKG_TRIPLET
-        fi
+        export VCPKG_TRIPLET=`if [[ "${{matrix.BIN}}" == "32" ]]; then echo x86-linux; else echo x64-linux; fi;`
+        /opt/Microsoft/vcpkg/bootstrap-vcpkg.sh
+        /opt/Microsoft/vcpkg/vcpkg install boost-wave:$VCPKG_TRIPLET gtest:$VCPKG_TRIPLET rapidxml:$VCPKG_TRIPLET
 
     - name: Checkout OpenCL-Layers
       uses: actions/checkout@v3
