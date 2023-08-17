@@ -9,7 +9,6 @@ if (NOT OpenCLHeadersCpp_FOUND)
   else ()
     message (STATUS "Fetching OpenCLHeadersCpp")
   endif ()
-  cmake_minimum_required(VERSION 3.11)
   include (FetchContent)
   FetchContent_Declare(
     OpenCLHeadersCpp

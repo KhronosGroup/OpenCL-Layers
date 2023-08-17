@@ -1,5 +1,5 @@
-cmake_minimum_required (VERSION 3.3)
-cmake_policy(VERSION 3.3...3.22)
+cmake_minimum_required (VERSION 3.16)
+cmake_policy(VERSION 3.16...3.26)
 
 project(ProgramCachePackageTest CXX)
 enable_testing()
