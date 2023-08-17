@@ -1,5 +1,5 @@
-cmake_minimum_required (VERSION 3.3)
-cmake_policy(VERSION 3.3...3.22)
+cmake_minimum_required (VERSION 3.16)
+cmake_policy(VERSION 3.16...3.26)
 
 # Include guard for including this project multiple times
 if (TARGET PrintLayer)
@@ -32,14 +32,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library (LayersCommon INTERFACE)
 
 # C and C++ standard,
-if (CMAKE_VERSION VERSION_LESS 3.8)
-    set(CMAKE_C_STANDARD 11)
-    set(CMAKE_C_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_STANDARD 14)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-else()
-    target_compile_features(LayersCommon INTERFACE c_std_11 cxx_std_14)
-endif()
+target_compile_features(LayersCommon INTERFACE c_std_11 cxx_std_14)
 
 target_link_libraries (LayersCommon INTERFACE OpenCL::Headers)
 
@@ -56,11 +49,11 @@ target_compile_definitions (LayersCommon
 
 if (LAYERS_BUILD_TESTS)
     if (NOT TARGET OpenCL)
-        if(APPLE) # Apple's own loader can't load layers. We have to avoid it.
+        # if(APPLE) # Apple's own loader can't load layers. We have to avoid it.
           find_package (OpenCLICDLoader REQUIRED)
-        else()
-          find_package (OpenCL REQUIRED)
-        endif()
+        # else()
+        #   find_package (OpenCL REQUIRED)
+        # endif()
     endif ()
 endif ()
 

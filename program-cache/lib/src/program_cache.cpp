@@ -143,6 +143,39 @@ template <class... Ts> std::string hash_str(const std::vector<char>& data, Ts...
     return hash_str(std::string(data.begin(), data.end()), additional...);
 }
 
+class default_context_wrapper {
+public:
+    default_context_wrapper(const pc::program_cache_dispatch& dispatch): dispatch_(dispatch)
+    {
+        cl_uint num_platforms{};
+        pc::utils::check_cl_error(dispatch.clGetPlatformIDs(0, nullptr, &num_platforms));
+        std::vector<cl_platform_id> platform_ids(num_platforms);
+        pc::utils::check_cl_error(
+            dispatch.clGetPlatformIDs(num_platforms, platform_ids.data(), nullptr));
+        std::array<cl_context_properties, 3> props{
+            CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platform_ids.front()), 0
+        };
+        cl_int error = CL_SUCCESS;
+        context_ = dispatch.clCreateContextFromType(props.data(), CL_DEVICE_TYPE_ALL, nullptr,
+                                                    nullptr, &error);
+        pc::utils::check_cl_error(error);
+    }
+
+    default_context_wrapper(const default_context_wrapper&) = delete;
+    default_context_wrapper(default_context_wrapper&&) = delete;
+
+    default_context_wrapper& operator=(const default_context_wrapper&) = delete;
+    default_context_wrapper& operator=(default_context_wrapper&&) = delete;
+
+    ~default_context_wrapper() { dispatch_.clReleaseContext(context_); }
+
+    cl_context operator()() const { return context_; }
+
+private:
+    pc::program_cache_dispatch dispatch_;
+    cl_context context_;
+};
+
 } // namespace
 
 pc::program_cache::program_cache(const program_cache_dispatch& dispatch,
@@ -435,23 +468,8 @@ std::vector<unsigned char> pc::program_cache::build_program_to_binary(
 cl_context pc::program_cache::get_default_context() const
 {
     // Initializer is evaluated only once
-    static cl_context default_context = [&] {
-        cl_uint num_platforms{};
-        utils::check_cl_error(dispatch_.clGetPlatformIDs(0, nullptr, &num_platforms));
-        std::vector<cl_platform_id> platform_ids(num_platforms);
-        utils::check_cl_error(
-            dispatch_.clGetPlatformIDs(num_platforms, platform_ids.data(), nullptr));
-        std::array<cl_context_properties, 3> props{
-            CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platform_ids.front()), 0
-        };
-        cl_int error = CL_SUCCESS;
-        auto context = dispatch_.clCreateContextFromType(props.data(), CL_DEVICE_TYPE_ALL, nullptr,
-                                                         nullptr, &error);
-        utils::check_cl_error(error);
-        return context;
-    }();
-    // TODO release on exit
-    return default_context;
+    static default_context_wrapper wrapper(dispatch_);
+    return wrapper();
 }
 
 std::vector<cl_device_id> pc::program_cache::get_devices(cl_context context) const

@@ -3,9 +3,25 @@ name: Presubmit
 on: [push, pull_request]
 
 jobs:
+  get-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get working branch
+        id: get-branch
+        run: |
+          if [[ ${{ github.event_name }} == "push" ]]; then
+            echo "branch=main" >> $GITHUB_OUTPUT
+          else
+            echo "branch=${{ github.base_ref }}" >> $GITHUB_OUTPUT
+          fi ;
+          echo $GITHUB_OUTPUT
+    outputs:
+      branch: ${{ steps.get-branch.outputs.branch }}
+
   format:
     name: Code formatting
     runs-on: ubuntu-latest
+    needs: get-branch
     steps:
       - uses: actions/checkout@v3
         with:
@@ -13,7 +29,7 @@ jobs:
       - name: Install clang-format
         run: sudo apt-get install clang-format
       - name: Check format
-        run: ./scripts/check-format.sh origin/main --binary clang-format
+        run: $GITHUB_WORKSPACE/scripts/check-format.sh origin/${{ needs.get-branch.outputs.branch }} --binary clang-format
 
   linux:
     runs-on: ubuntu-latest
@@ -22,15 +38,19 @@ jobs:
       matrix:
         CMAKE: [3.26.4]
         COMPILER:
-          - C_COMPILER: gcc-11
-            CXX_COMPILER: g++-11
-          - C_COMPILER: gcc-13
-            CXX_COMPILER: g++-13
-          - C_COMPILER: clang-14
-            CXX_COMPILER: clang++-14
-          - C_COMPILER: clang-16
-            CXX_COMPILER: clang++-16
-        BIN: [64, 32]
+          - C_NAME: gcc
+            CXX_NAME: g++
+            VER: 11
+          - C_NAME: gcc
+            CXX_NAME: g++
+            VER: 13
+          - C_NAME: clang
+            CXX_NAME: clang++
+            VER: 14
+          - C_NAME: clang
+            CXX_NAME: clang++
+            VER: 16
+        BIN: [64]
         DEPS: [system, fetch, vcpkg]
         CONF:
           - GEN: Unix Makefiles
@@ -42,55 +62,87 @@ jobs:
         IMAGE:
           - streamhpc/opencl-sdk-intelcpu:ubuntu-22.04-20230717
         include:
-          - CMAKE: 3.10.3
+          - CMAKE: system
             COMPILER:
-              C_COMPILER: gcc-9
-              CXX_COMPILER: g++-9
+              C_NAME: gcc
+              CXX_NAME: g++
+              VER: 9
             BIN: 64
             DEPS: system
             CONF:
               GEN: Unix Makefiles
               CONFIG: Debug
             IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-20.04-20230717
-          - CMAKE: 3.10.3
+          - CMAKE: system
             COMPILER:
-              C_COMPILER: gcc-9
-              CXX_COMPILER: g++-9
+              C_NAME: gcc
+              CXX_NAME: g++
+              VER: 9
             BIN: 64
             DEPS: system
             CONF:
               GEN: Unix Makefiles
               CONFIG: Release
             IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-20.04-20230717
-          - CMAKE: 3.10.3
+          - CMAKE: system
             COMPILER:
-              C_COMPILER: gcc-11
-              CXX_COMPILER: g++-11
-            BIN: 64
-            DEPS: system
+              C_NAME: gcc
+              CXX_NAME: g++
+              VER: 9
+            BIN: 32
+            DEPS: vcpkg
             CONF:
               GEN: Unix Makefiles
               CONFIG: Debug
-            IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-22.04-20230717
-          - CMAKE: 3.10.3
+            IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-20.04-20230717
+          - CMAKE: system
             COMPILER:
-              C_COMPILER: gcc-11
-              CXX_COMPILER: g++-11
-            BIN: 64
-            DEPS: system
+              C_NAME: gcc
+              CXX_NAME: g++
+              VER: 9
+            BIN: 32
+            DEPS: vcpkg
             CONF:
               GEN: Unix Makefiles
               CONFIG: Release
-            IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-22.04-20230717
-        exclude:
-          - BIN: 32
-            DEPS: system
+            IMAGE: streamhpc/opencl-sdk-intelcpu:ubuntu-20.04-20230717
     container: ${{matrix.IMAGE}}
     env:
       CMAKE_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/cmake
       CTEST_EXE: /opt/Kitware/CMake/${{ matrix.CMAKE }}/bin/ctest
+      CC: ${{matrix.COMPILER.C_NAME}}-${{matrix.COMPILER.VER}}
+      CXX: ${{matrix.COMPILER.CXX_NAME}}-${{matrix.COMPILER.VER}}
 
     steps:
+    - name: Set up compiler flags
+      shell: bash
+      # -Werror omitted when fetching the dependencies. The dependencies emit warnings
+      # that are beyond our control.
+      run: |
+        if [[ "${{ matrix.DEPS }}" == "fetch" ]]; then
+          echo "CFLAGS=-Wall -Wextra -pedantic -m${{matrix.BIN}}" >> $GITHUB_ENV;
+          echo "CXXFLAGS=-Wall -Wextra -pedantic -m${{matrix.BIN}}" >> $GITHUB_ENV;
+        else
+          echo "CFLAGS=-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}" >> $GITHUB_ENV;
+          echo "CXXFLAGS=-Wall -Wextra -pedantic -Werror -m${{matrix.BIN}}" >> $GITHUB_ENV;
+        fi
+
+    - name: Set up vcpkg triplet
+      if: matrix.DEPS == 'vcpkg'
+      shell: bash
+      run: if [[ "${{ matrix.BIN }}" == "64" ]]; then
+          echo "VCPKG_TRIPLET=x64-linux" >> $GITHUB_ENV;
+        else
+          echo "VCPKG_TRIPLET=x86-linux" >> $GITHUB_ENV;
+        fi
+
+    - name: Install system CMake
+      shell: bash
+      if: matrix.CMAKE == 'system'
+      run: apt-get update -qq && apt-get install -y cmake &&
+        echo "CMAKE_EXE=cmake" >> "$GITHUB_ENV" &&
+        echo "CTEST_EXE=ctest" >> "$GITHUB_ENV"
+
     - name: Install dependencies (apt)
       if: matrix.DEPS == 'system'
       shell: bash
@@ -115,9 +167,12 @@ jobs:
       if: matrix.DEPS == 'vcpkg'
       shell: bash
       run: |
-        export VCPKG_TRIPLET=`if [[ "${{matrix.BIN}}" == "32" ]]; then echo x86-linux; else echo x64-linux; fi;`
-        /opt/Microsoft/vcpkg/bootstrap-vcpkg.sh
-        /opt/Microsoft/vcpkg/vcpkg install boost-wave:$VCPKG_TRIPLET gtest:$VCPKG_TRIPLET rapidxml:$VCPKG_TRIPLET
+        export CFLAGS=""
+        export CXXFLAGS=""
+        cd /opt/Microsoft/vcpkg
+        git pull
+        ./bootstrap-vcpkg.sh
+        ./vcpkg install boost-wave:$VCPKG_TRIPLET gtest:$VCPKG_TRIPLET rapidxml:$VCPKG_TRIPLET
 
     - name: Checkout OpenCL-Layers
       uses: actions/checkout@v3
@@ -144,91 +199,74 @@ jobs:
 
     - name: Build & install OpenCL-Headers
       shell: bash
-      run: mkdir external/OpenCL-Headers/build && cd external/OpenCL-Headers/build &&
-        $CMAKE_EXE
+      run: $CMAKE_EXE
           -G "${{matrix.CONF.GEN}}"
-          -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}
+          `if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]]; then echo "-D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}"; fi`
           -D BUILD_TESTING=OFF
-          -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
-          -D CMAKE_C_COMPILER=${{matrix.COMPILER.C_COMPILER}}
-          -D CMAKE_C_EXTENSIONS=OFF
           -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
-          .. &&
+          -S $GITHUB_WORKSPACE/external/OpenCL-Headers
+          -B $GITHUB_WORKSPACE/external/OpenCL-Headers/build &&
         $CMAKE_EXE
           --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build
           --target install
-          --
-          -j`nproc`
+          --parallel `nproc`
+          `if [[ "${{matrix.CONF.GEN}}" == "Ninja Multi-Config" ]]; then echo "--config ${{matrix.CONF.CONFIG}}"; fi`
 
     - name: Build & install OpenCL-CLHPP
       shell: bash
-      run: mkdir external/OpenCL-CLHPP/build && cd external/OpenCL-CLHPP/build &&
-        $CMAKE_EXE
+      run: $CMAKE_EXE
           -G "${{matrix.CONF.GEN}}"
-          -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}
-          -D BUILD_TESTING=OFF
+          `if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]]; then echo "-D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}"; fi`
           -D BUILD_DOCS=OFF
           -D BUILD_EXAMPLES=OFF
-          -D OPENCL_CLHPP_BUILD_TESTING=OFF
-          -D CMAKE_CXX_FLAGS="-w -m${{matrix.BIN}}"
-          -D CMAKE_CXX_COMPILER=${{matrix.COMPILER.CXX_COMPILER}}
-          -D CMAKE_CXX_EXTENSIONS=OFF
+          -D BUILD_TESTING=OFF
           -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install
           -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install"
-          .. &&
+          -S $GITHUB_WORKSPACE/external/OpenCL-CLHPP
+          -B $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build &&
         $CMAKE_EXE
           --build $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build
           --target install
-          --
-          -j`nproc`
+          --parallel `nproc`
+          `if [[ "${{matrix.CONF.GEN}}" == "Ninja Multi-Config" ]]; then echo "--config ${{matrix.CONF.CONFIG}}"; fi`
 
     - name: Build & install OpenCL-ICD-Loader
       shell: bash
-      run: mkdir external/OpenCL-ICD-Loader/build && cd external/OpenCL-ICD-Loader/build &&
-        $CMAKE_EXE
+      run: $CMAKE_EXE
           -G "${{matrix.CONF.GEN}}"
-          -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}
+          `if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]]; then echo "-D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}"; fi`
           -D BUILD_TESTING=OFF
-          -D CMAKE_C_FLAGS="-w -m${{matrix.BIN}}"
-          -D CMAKE_C_COMPILER=${{matrix.COMPILER.C_COMPILER}}
-          -D CMAKE_C_EXTENSIONS=OFF
-          -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
           -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install
-          .. &&
+          -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
+          -S $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader
+          -B $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build &&
         $CMAKE_EXE
           --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
           --target install
-          --
-          -j`nproc`
-
+          --parallel `nproc`
+          `if [[ "${{matrix.CONF.GEN}}" == "Ninja Multi-Config" ]]; then echo "--config ${{matrix.CONF.CONFIG}}"; fi`
+  
     - name: Configure
       shell: bash
-      run: export CFLAGS="-Wall -Wextra -pedantic -m${{matrix.BIN}} `if [[ "${{matrix.DEPS}}" != "fetch" ]]; then echo -Werror; fi`" &&
-        export CXXFLAGS="-Wall -Wextra -pedantic -m${{matrix.BIN}} `if [[ "${{matrix.DEPS}}" != "fetch" ]]; then echo -Werror; fi`" &&
-        export VCPKG_TRIPLET=`if [[ "${{matrix.BIN}}" == "32" ]]; then echo x86-linux; else echo x64-linux; fi;` &&
-        mkdir $GITHUB_WORKSPACE/build && cd $GITHUB_WORKSPACE/build && $CMAKE_EXE
+      run: $CMAKE_EXE
         -G "${{matrix.CONF.GEN}}"
-        -D OPENCL_LAYERS_BUILD_TESTING=ON
+        `if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]]; then echo "-D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}"; fi`
         -D BUILD_TESTING=ON
-        -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}
-        -D CMAKE_C_COMPILER=${{matrix.COMPILER.C_COMPILER}}
-        -D CMAKE_C_EXTENSIONS=OFF
-        -D CMAKE_CXX_COMPILER=${{matrix.COMPILER.CXX_COMPILER}}
-        -D CMAKE_CXX_EXTENSIONS=OFF
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install;$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install"
         `if [[ "${{matrix.DEPS}}" == "vcpkg" ]]; then echo "-D CMAKE_TOOLCHAIN_FILE=/opt/Microsoft/vcpkg/scripts/buildsystems/vcpkg.cmake"; fi;`
         `if [[ "${{matrix.DEPS}}" == "vcpkg" ]]; then echo "-D VCPKG_TARGET_TRIPLET=$VCPKG_TRIPLET"; fi;`
-        ..
+        -S $GITHUB_WORKSPACE
+        -B $GITHUB_WORKSPACE/build
 
     - name: Build
       shell: bash
       run: if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]];
         then
-          $CMAKE_EXE --build $GITHUB_WORKSPACE/build -- -j`nproc`;
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/build --parallel `nproc`;
         else
-          $CMAKE_EXE --build $GITHUB_WORKSPACE/build --config Debug   -- -j`nproc`;
-          $CMAKE_EXE --build $GITHUB_WORKSPACE/build --config Release -- -j`nproc`;
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/build --config Debug;
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/build --config Release;
         fi;
 
     - name: Test
@@ -248,49 +286,45 @@ jobs:
       shell: bash
       run: $CMAKE_EXE --build $GITHUB_WORKSPACE/build --target install --config ${{matrix.CONF.CONFIG}}
 
-    - name: Configure package test
+    - name: Configure consume test
       shell: bash
-      run: mkdir $GITHUB_WORKSPACE/program-cache/lib/test/package/build && cd $GITHUB_WORKSPACE/program-cache/lib/test/package/build &&
-        $CMAKE_EXE
+      run: $CMAKE_EXE
         -G "${{matrix.CONF.GEN}}"
-        -D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}
-        -D CMAKE_C_FLAGS="-m${{matrix.BIN}}"
-        -D CMAKE_C_COMPILER=${{matrix.COMPILER.C_COMPILER}}
-        -D CMAKE_C_EXTENSIONS=OFF
-        -D CMAKE_CXX_FLAGS="-m${{matrix.BIN}}"
-        -D CMAKE_CXX_COMPILER=${{matrix.COMPILER.CXX_COMPILER}}
-        -D CMAKE_CXX_EXTENSIONS=OFF        
+        `if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]]; then echo "-D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}"; fi`
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install;$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install;$GITHUB_WORKSPACE/install"
-        ..
+        `if [[ "${{matrix.DEPS}}" == "vcpkg" ]]; then echo "-D CMAKE_TOOLCHAIN_FILE=/opt/Microsoft/vcpkg/scripts/buildsystems/vcpkg.cmake"; fi;`
+        `if [[ "${{matrix.DEPS}}" == "vcpkg" ]]; then echo "-D VCPKG_TARGET_TRIPLET=$VCPKG_TRIPLET"; fi;`
+        -S $GITHUB_WORKSPACE/program-cache/lib/test/package
+        -B $GITHUB_WORKSPACE/program-cache/lib/test/package/build
 
-    - name: Build package test
+    - name: Build consume test
       shell: bash
       run: if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]];
         then
-          $CMAKE_EXE --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build -- -j`nproc`;
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --parallel `nproc`;
         else
-          $CMAKE_EXE --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --config Debug   -- -j`nproc`;
-          $CMAKE_EXE --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --config Release -- -j`nproc`;
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --config Debug;
+          $CMAKE_EXE --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --config Release;
         fi;
 
-    - name: Run package test
+    - name: Run consume test
       if: matrix.BIN != 32
       shell: bash
       working-directory: ${{runner.workspace}}/OpenCL-Layers/program-cache/lib/test/package/build
-      run: |
-        if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]];
+      run: if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]];
         then
-          $CTEST_EXE --output-on-failure --parallel `nproc`
+          $CTEST_EXE --output-on-failure --parallel `nproc`;
         else
-          $CTEST_EXE --output-on-failure -C Debug   --parallel `nproc`
-          $CTEST_EXE --output-on-failure -C Release --parallel `nproc`
+          $CTEST_EXE --output-on-failure -C Debug   --parallel `nproc`;
+          $CTEST_EXE --output-on-failure -C Release --parallel `nproc`;
         fi; 
 
   windows:
-    runs-on: windows-2022
+    runs-on: windows-latest
     needs: format
     strategy:
       matrix:
+        # Toolset v141 has bugs with "if constexpr" thereby it's omitted.
         VER: [v142, v143, clangcl]
         GEN: [Visual Studio 17 2022, Ninja Multi-Config]
         BIN: [x64]
@@ -302,15 +336,6 @@ jobs:
         - VER: v142
           GEN: Visual Studio 17 2022
           BIN: x86
-          DEPS: vcpkg
-        - VER: v143
-          GEN: Visual Studio 17 2022
-          BIN: x86
-          DEPS: vcpkg
-        - VER: clangcl
-          GEN: Visual Studio 17 2022
-          BIN: x86
-          DEPS: vcpkg
     env:
       NINJA_URL: https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip
       NINJA_ROOT: C:\Tools\Ninja
@@ -320,6 +345,27 @@ jobs:
       MultiProcMaxCount: '3'                  # -=-
 
     steps:
+    - name: Enable long paths
+      shell: pwsh
+      run: New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+        -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+     
+    - name: Set up compiler flags
+      shell: pwsh
+      # -Werror omitted when fetching the dependencies. The dependencies emit warnings
+      # that are beyond our control.
+      run: |
+        if ('${{ matrix.DEPS }}' -eq 'fetch')
+        {
+          echo "CFLAGS=/W4" >> $GITHUB_ENV
+          echo "CXXFLAGS=/W4" >> $GITHUB_ENV
+        }
+        else
+        {
+          echo "CFLAGS=/W4 /WX" >> $GITHUB_ENV
+          echo "CXXFLAGS=/W4 /WX" >> $GITHUB_ENV
+        }
+
     - name: Cache dependencies (vcpkg)
       if: matrix.DEPS == 'vcpkg'
       id: vcpkg-install
@@ -377,14 +423,11 @@ jobs:
       shell: pwsh
       run: |
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
-        $C_FLAGS = '/w'
         & cmake `
           -G "Visual Studio 17 2022" `
           -A $BIN `
           -T ${{matrix.VER}} `
           -D BUILD_TESTING=OFF `
-          -D CMAKE_C_FLAGS="$C_FLAGS" `
-          -D CMAKE_C_STANDARD=99 `
           -S ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers `
           -B ${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\build
         if ($LASTEXITCODE -ne 0) { throw "Configuring OpenCL-Headers failed." }
@@ -406,17 +449,13 @@ jobs:
       shell: pwsh
       run: |
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
-        $C_FLAGS = '/w'
         & cmake `
           -G "Visual Studio 17 2022" `
           -A $BIN `
           -T ${{matrix.VER}} `
-          -D BUILD_TESTING=OFF `
           -D BUILD_DOCS=OFF `
           -D BUILD_EXAMPLES=OFF `
-          -D OPENCL_CLHPP_BUILD_TESTING=OFF `
-          -D CMAKE_C_FLAGS="$C_FLAGS" `
-          -D CMAKE_C_STANDARD=99 `
+          -D BUILD_TESTING=OFF `
           -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install" `
           -S ${env:GITHUB_WORKSPACE}\external\OpenCL-CLHPP `
           -B ${env:GITHUB_WORKSPACE}\external\OpenCL-CLHPP\build
@@ -439,14 +478,11 @@ jobs:
       shell: pwsh
       run: |
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
-        $C_FLAGS = '/w'
         & cmake `
           -G "Visual Studio 17 2022" `
           -A $BIN `
           -T ${{matrix.VER}} `
           -D BUILD_TESTING=OFF `
-          -D CMAKE_C_FLAGS="$C_FLAGS" `
-          -D CMAKE_C_STANDARD=99 `
           -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install" `
           -S ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader `
           -B ${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\build
@@ -470,16 +506,11 @@ jobs:
       shell: pwsh
       run: |
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
-        $C_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX'} else {'/W4'}
-        $CXX_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX /EHsc'} else {'/W4 /EHsc'}
         & cmake `
           -G '${{matrix.GEN}}' `
           -A $BIN `
           -T ${{matrix.VER}} `
-          -D OPENCL_LAYERS_BUILD_TESTING=ON `
           -D BUILD_TESTING=ON `
-          -D CMAKE_C_FLAGS="${C_FLAGS}" `
-          -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" `
           -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\install" `
           -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install;${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install;${env:GITHUB_WORKSPACE}\external\OpenCL-CLHPP\install" `
           -D CMAKE_TOOLCHAIN_FILE=${env:VCPKG_INSTALLATION_ROOT}\scripts\buildsystems\vcpkg.cmake `
@@ -498,15 +529,11 @@ jobs:
           'v143' {'14.3'} }
         Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
         Enter-VsDevShell -VsInstallPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' -SkipAutomaticLocation -DevCmdArguments "-host_arch=x64 -arch=${{matrix.BIN}} -vcvars_ver=${VER}"
-        $C_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX'} else {'/W4'}
-        $CXX_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX /EHsc'} else {'/W4 /EHsc'}
         & cmake `
           -G '${{matrix.GEN}}' `
           -D CMAKE_MAKE_PROGRAM="${env:NINJA_ROOT}\ninja.exe" `
           -D OPENCL_LAYERS_BUILD_TESTING=ON `
           -D BUILD_TESTING=ON `
-          -D CMAKE_C_FLAGS="${C_FLAGS}" `
-          -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" `
           -D CMAKE_EXE_LINKER_FLAGS='/INCREMENTAL' `
           -D CMAKE_INSTALL_PREFIX="${env:GITHUB_WORKSPACE}\install" `
           -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install;${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install;${env:GITHUB_WORKSPACE}\external\OpenCL-CLHPP\install" `
@@ -624,14 +651,10 @@ jobs:
       shell: pwsh
       run: |
         $BIN = if('${{matrix.BIN}}' -eq 'x86') {'Win32'} else {'x64'}
-        $C_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX'} else {'/W4'}
-        $CXX_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX /EHsc'} else {'/W4 /EHsc'}
         & cmake `
           -G '${{matrix.GEN}}' `
           -A $BIN `
           -T ${{matrix.VER}} `
-          -D CMAKE_C_FLAGS="${C_FLAGS}" `
-          -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" `
           -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install;${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install;${env:GITHUB_WORKSPACE}\external\OpenCL-CLHPP\install;${env:GITHUB_WORKSPACE}\install" `
           -D CMAKE_TOOLCHAIN_FILE=${env:VCPKG_INSTALLATION_ROOT}\scripts\buildsystems\vcpkg.cmake `
           -D VCPKG_TARGET_TRIPLET=${{matrix.BIN}}-windows-static-md `
@@ -649,13 +672,9 @@ jobs:
           'v143' {'14.3'} }
         Import-Module 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
         Enter-VsDevShell -VsInstallPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' -SkipAutomaticLocation -DevCmdArguments "-host_arch=x64 -arch=${{matrix.BIN}} -vcvars_ver=${VER}"
-        $C_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX'} else {'/W4'}
-        $CXX_FLAGS = if('${{matrix.DEPS}}' -ne 'fetch') {'/W4 /WX /EHsc'} else {'/W4 /EHsc'}
         & cmake `
           -G '${{matrix.GEN}}' `
           -D CMAKE_MAKE_PROGRAM="${env:NINJA_ROOT}\ninja.exe" `
-          -D CMAKE_C_FLAGS="${C_FLAGS}" `
-          -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" `
           -D CMAKE_EXE_LINKER_FLAGS='/INCREMENTAL' `
           -D CMAKE_PREFIX_PATH="${env:GITHUB_WORKSPACE}\external\OpenCL-Headers\install;${env:GITHUB_WORKSPACE}\external\OpenCL-ICD-Loader\install;${env:GITHUB_WORKSPACE}\external\OpenCL-CLHPP\install;${env:GITHUB_WORKSPACE}\install" `
           -D CMAKE_TOOLCHAIN_FILE=${env:VCPKG_INSTALLATION_ROOT}\scripts\buildsystems\vcpkg.cmake `
@@ -694,53 +713,60 @@ jobs:
         if ($LASTEXITCODE -ne 0) { throw "Building OpenCL-Layers package test in Release failed." }
 
   macos:
-    runs-on: macos-13
+    runs-on: macos-latest
     needs: format
     strategy:
       matrix:
-        include:
-        - CONF: 
-            GEN: Xcode
-            C_COMPILER: /usr/bin/gcc
-            CXX_COMPILER: /usr/bin/g++
-          DEPS: system
-        - CONF: 
-            GEN: Xcode
-            C_COMPILER: /usr/bin/gcc
-            CXX_COMPILER: /usr/bin/g++
-          DEPS: vcpkg
-        - CONF: 
-            GEN: Xcode
-            C_COMPILER: /usr/bin/gcc
-            CXX_COMPILER: /usr/bin/g++
-          DEPS: fetch
-        - CONF: 
-            GEN: Ninja Multi-Config
-            C_COMPILER: /usr/local/bin/gcc-11
-            CXX_COMPILER: /usr/local/bin/g++-11
-          DEPS: fetch
-        - CONF: 
-            GEN: Ninja Multi-Config
-            C_COMPILER: /usr/local/bin/gcc-13
-            CXX_COMPILER: /usr/local/bin/g++-13
-          DEPS: fetch
-        - CONF: 
-            GEN: Ninja Multi-Config
-            C_COMPILER: /usr/local/bin/gcc-11
-            CXX_COMPILER: /usr/local/bin/g++-11
-          DEPS: vcpkg
-        - CONF: 
-            GEN: Ninja Multi-Config
-            C_COMPILER: /usr/local/bin/gcc-13
-            CXX_COMPILER: /usr/local/bin/g++-13
-          DEPS: vcpkg
+        COMPILER:
+        # "Plain" gcc is Apple clang
+        - CC: /usr/bin/gcc
+          CXX: /usr/bin/g++
+        - CC: /usr/local/bin/gcc-11
+          CXX: /usr/local/bin/g++-11
+        - CC: /usr/local/bin/gcc-13
+          CXX: /usr/local/bin/g++-13
+        GEN:
+        - Xcode
+        - Ninja Multi-Config
+        DEPS: [system, vcpkg, fetch]
+        exclude:
+        - COMPILER:
+            CC: /usr/bin/gcc
+            CXX: /usr/bin/g++
+          GEN: Ninja Multi-Config
+        - COMPILER:
+            CC: /usr/local/bin/gcc-11
+            CXX: /usr/local/bin/g++-11
+          GEN: Xcode
+        - COMPILER:
+            CC: /usr/local/bin/gcc-13
+            CXX: /usr/local/bin/g++-13
+          GEN: Xcode
+        - DEPS: system
+          GEN: Ninja Multi-Config
+    env:
+      CC: ${{matrix.COMPILER.CC}}
+      CXX: ${{matrix.COMPILER.CXX}}
     steps:
+    - name: Set up compiler flags
+      shell: bash
+      # -Werror omitted when fetching the dependencies. The dependencies emit warnings
+      # that are beyond our control.
+      run: |
+        if [[ "${{ matrix.DEPS }}" == "fetch" ]]; then
+          echo "CFLAGS=-Wall -Wextra -pedantic" >> $GITHUB_ENV;
+          echo "CXXFLAGS=-Wall -Wextra -pedantic" >> $GITHUB_ENV;
+        else
+          echo "CFLAGS=-Wall -Wextra -pedantic -Werror" >> $GITHUB_ENV;
+          echo "CXXFLAGS=-Wall -Wextra -pedantic -Werror" >> $GITHUB_ENV;
+        fi
+
     - name: Create Build Environment
       shell: bash
       run: |
         cmake -E make_directory $GITHUB_WORKSPACE/build;
         cmake -E make_directory $GITHUB_WORKSPACE/install;
-        if [[ "${{matrix.CONF.GEN}}" == "Ninja Multi-Config" && ! `which ninja` ]]; then brew install ninja; fi;
+        if [[ "${{matrix.GEN}}" == "Ninja Multi-Config" && ! `which ninja` ]]; then brew install ninja; fi;
         # Install Ninja only if it's the selected generator and it's not available.
         if [[ "${{matrix.DEPS}}" == "vcpkg" && ! `which pkg-config` ]]; then brew install pkg-config; fi;
         cmake --version
@@ -756,15 +782,16 @@ jobs:
       uses: actions/cache@v3
       with:
         path: /usr/local/share/vcpkg
-        key: vcpkg-macos-${{matrix.CONF.CXX_COMPILER}}
+        key: vcpkg-macos-${{matrix.COMPILER.CXX}}
 
     - name: Install dependencies (vcpkg)
       if: matrix.DEPS == 'vcpkg' && steps.vcpkg-install.outputs.cache-hit != 'true'
       shell: bash
       # Important: the same compiler must be used with vcpkg as with the project build
       # because apple-clang uses a different standard library implementation from GCC
-      run: CC=${{matrix.CONF.C_COMPILER}}
-        CXX=${{matrix.CONF.CXX_COMPILER}}
+      run: |
+        export CFLAGS=""
+        export CXXFLAGS=""
         $VCPKG_INSTALLATION_ROOT/vcpkg install boost-wave gtest rapidxml
 
     - name: Checkout OpenCL-Layers
@@ -792,76 +819,55 @@ jobs:
 
     - name: Build & install OpenCL-Headers
       shell: bash
-      run: |
-        cmake \
-          -G "${{matrix.CONF.GEN}}" \
-          -D BUILD_TESTING=OFF \
-          -D CMAKE_C_FLAGS="-w" \
-          -D CMAKE_C_COMPILER=${{matrix.CONF.C_COMPILER}} \
-          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install \
-          -S $GITHUB_WORKSPACE/external/OpenCL-Headers \
-          -B $GITHUB_WORKSPACE/external/OpenCL-Headers/build
-        cmake \
-          --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build \
-          --target install \
-          --config Release \
-          --parallel `sysctl -n hw.logicalcpu` \
-          `if [[ "${{matrix.CONF.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
+      run: cmake
+          -G "${{matrix.GEN}}"
+          -D BUILD_TESTING=OFF
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
+          -S $GITHUB_WORKSPACE/external/OpenCL-Headers
+          -B $GITHUB_WORKSPACE/external/OpenCL-Headers/build &&
+        cmake
+          --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build
+          --target install
+          --config Release
+          --parallel `sysctl -n hw.logicalcpu`
 
     - name: Build & install OpenCL-CLHPP
       shell: bash
-      run: |
-        cmake \
-          -G "${{matrix.CONF.GEN}}" \
-          -D BUILD_TESTING=OFF \
-          -D BUILD_DOCS=OFF \
-          -D BUILD_EXAMPLES=OFF \
-          -D OPENCL_CLHPP_BUILD_TESTING=OFF \
-          -D CMAKE_C_FLAGS="-w" \
-          -D CMAKE_C_COMPILER=${{matrix.CONF.C_COMPILER}} \
-          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install \
-          -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install" \
-          -S $GITHUB_WORKSPACE/external/OpenCL-CLHPP \
-          -B $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build
-        cmake \
-          --build $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build \
-          --target install \
-          --config Release \
-          --parallel `sysctl -n hw.logicalcpu` \
-          `if [[ "${{matrix.CONF.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
+      run: cmake
+          -G "${{matrix.GEN}}"
+          -D BUILD_DOCS=OFF
+          -D BUILD_EXAMPLES=OFF
+          -D BUILD_TESTING=OFF
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install
+          -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
+          -S $GITHUB_WORKSPACE/external/OpenCL-CLHPP
+          -B $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build &&
+        cmake
+          --build $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build
+          --target install
+          --config Release
+          --parallel `sysctl -n hw.logicalcpu`
 
     - name: Build & install OpenCL-ICD-Loader
       shell: bash
-      run: |
-        cmake \
-          -G "${{matrix.CONF.GEN}}" \
-          -D BUILD_TESTING=OFF \
-          -D CMAKE_C_FLAGS="-w -m64" \
-          -D CMAKE_C_COMPILER=${{matrix.CONF.C_COMPILER}} \
-          -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install \
-          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install \
-          -S $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader \
-          -B $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
-        cmake \
-          --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build \
-          --target install \
-          --config Release \
+      run: cmake
+          -G "${{matrix.GEN}}"
+          -D BUILD_TESTING=OFF
+          -D CMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install
+          -S $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader
+          -B $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build &&
+        cmake
+          --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
+          --target install
+          --config Release
           --parallel `sysctl -n hw.logicalcpu`
 
     - name: Configure
       shell: bash
-      run: export FLAGS=`if [[ "${{matrix.DEPS}}" == "fetch" ]]; then echo "-Wall -Wextra -pedantic -Wno-format -m64"; else echo "-Wall -Wextra -pedantic -Wno-format -m64 -Werror"; fi` ;
-        cmake
-        -G "${{matrix.CONF.GEN}}"
-        -D OPENCL_LAYERS_BUILD_TESTING=ON
+      run: cmake
+        -G "${{matrix.GEN}}"
         -D BUILD_TESTING=ON
-        -D CMAKE_CXX_FLAGS="$FLAGS"
-        -D CMAKE_CXX_COMPILER=/${{matrix.CONF.CXX_COMPILER}}
-        -D CMAKE_CXX_EXTENSIONS=OFF
-        -D CMAKE_CXX_STANDARD=14
-        -D CMAKE_C_FLAGS="$FLAGS"
-        -D CMAKE_C_COMPILER=${{matrix.CONF.C_COMPILER}}
-        -D CMAKE_C_EXTENSIONS=OFF
         -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/install
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install;$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install"
         -D CMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
@@ -872,29 +878,207 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cmake --build $GITHUB_WORKSPACE/build --config Release --parallel `sysctl -n hw.logicalcpu` `if [[ "${{matrix.CONF.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
-        cmake --build $GITHUB_WORKSPACE/build --config Debug   --parallel `sysctl -n hw.logicalcpu` `if [[ "${{matrix.CONF.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
+        cmake --build $GITHUB_WORKSPACE/build --config Release --parallel `sysctl -n hw.logicalcpu`
+        cmake --build $GITHUB_WORKSPACE/build --config Debug   --parallel `sysctl -n hw.logicalcpu`
 
     - name: Install
       shell: bash
       run: cmake --build $GITHUB_WORKSPACE/build --target install --config Release
 
-    - name: Configure package test
+    - name: Configure consume test
       shell: bash
-      run: export FLAGS=`if [[ "${{matrix.DEPS}}" == "fetch" ]]; then echo "-Wall -Wextra -pedantic -Wno-format -m64"; else echo "-Wall -Wextra -pedantic -Wno-format -m64 -Werror"; fi` ;
-        cmake
-        -G "${{matrix.CONF.GEN}}"
-        -D CMAKE_CXX_FLAGS="$FLAGS"
-        -D CMAKE_CXX_COMPILER=${{matrix.CONF.CXX_COMPILER}}
-        -D CMAKE_CXX_EXTENSIONS=OFF
+      run: cmake
+        -G "${{matrix.GEN}}"
         -D CMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install;$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install;$GITHUB_WORKSPACE/install"
         -D CMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
         -S $GITHUB_WORKSPACE/program-cache/lib/test/package
         -B $GITHUB_WORKSPACE/program-cache/lib/test/package/build
 
-    - name: Build package test
+    - name: Build consume test
       shell: bash
       run: |
-        cmake --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --config Debug --parallel `sysctl -n hw.logicalcpu` `if [[ "${{matrix.CONF.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
-        cmake --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --config Release --parallel `sysctl -n hw.logicalcpu` `if [[ "${{matrix.CONF.GEN}}" == "Xcode" ]]; then echo "-- -quiet"; fi;`
+        cmake --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --config Debug --parallel `sysctl -n hw.logicalcpu`
+        cmake --build $GITHUB_WORKSPACE/program-cache/lib/test/package/build --config Release --parallel `sysctl -n hw.logicalcpu`
 
+  android:
+    runs-on: ubuntu-latest
+    needs: format
+    strategy:
+      matrix:
+        ABI:
+        - arm64-v8a
+        - x86_64
+        API_LEVEL:
+        - android-19
+        - android-33
+        CONF:
+          - GEN: Unix Makefiles
+            CONFIG: Debug
+          - GEN: Unix Makefiles
+            CONFIG: Release
+          - GEN: Ninja Multi-Config
+            CONFIG: Release
+        DEPS:
+        - vcpkg
+        - fetch
+    steps:
+    - name: Set up compiler flags
+      shell: bash
+      # -Werror omitted when fetching the dependencies. The dependencies emit warnings
+      # that are beyond our control.
+      run: |
+        if [[ "${{ matrix.DEPS }}" == "fetch" ]]; then
+          echo "CFLAGS=-Wall -Wextra -pedantic" >> $GITHUB_ENV;
+          echo "CXXFLAGS=-Wall -Wextra -pedantic" >> $GITHUB_ENV;
+        else
+          echo "CFLAGS=-Wall -Wextra -pedantic -Werror" >> $GITHUB_ENV;
+          echo "CXXFLAGS=-Wall -Wextra -pedantic -Werror" >> $GITHUB_ENV;
+        fi
+
+    - name: Set up vcpkg triplet
+      if: matrix.DEPS == 'vcpkg'
+      shell: bash
+      run: if [[ "${{ matrix.ABI }}" == "arm64-v8a" ]]; then
+          echo "VCPKG_TRIPLET=arm64-android" >> $GITHUB_ENV;
+        else
+          echo "VCPKG_TRIPLET=x64-android" >> $GITHUB_ENV;
+        fi
+
+    # Caching the vcpkg directory doesn't work due to permission problems on the Github Ubuntu image
+    - name: Install dependencies (vcpkg)
+      if: matrix.DEPS == 'vcpkg'
+      shell: bash
+      run: |
+        export CFLAGS=""
+        export CXXFLAGS=""
+        $VCPKG_INSTALLATION_ROOT/vcpkg install boost-wave:$VCPKG_TRIPLET gtest:$VCPKG_TRIPLET rapidxml:$VCPKG_TRIPLET
+
+    - name: Checkout OpenCL-Layers
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Checkout OpenCL-Headers
+      uses: actions/checkout@v3
+      with:
+        repository: KhronosGroup/OpenCL-Headers
+        path: external/OpenCL-Headers
+
+    - name: Checkout OpenCL-CLHPP
+      uses: actions/checkout@v3
+      with:
+        repository: KhronosGroup/OpenCL-CLHPP
+        path: external/OpenCL-CLHPP
+
+    - name: Checkout OpenCL-ICD-Loader
+      uses: actions/checkout@v3
+      with:
+        repository: KhronosGroup/OpenCL-ICD-Loader
+        path: external/OpenCL-ICD-Loader
+
+    - name: Configure & install OpenCL-Headers
+      shell: bash
+      run: cmake
+        -G "Unix Makefiles"
+        `if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]]; then echo "-D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}"; fi`
+        -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
+        -D CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
+        -D ANDROID_ABI=${{matrix.ABI}}
+        -D ANDROID_PLATFORM=${{matrix.API_LEVEL}}
+        -D BUILD_TESTING=OFF
+        -S $GITHUB_WORKSPACE/external/OpenCL-Headers
+        -B $GITHUB_WORKSPACE/external/OpenCL-Headers/build &&
+        cmake
+        --build $GITHUB_WORKSPACE/external/OpenCL-Headers/build
+        --target install
+        `if [[ "${{matrix.CONF.GEN}}" == "Ninja Multi-Config" ]]; then echo "--config ${{matrix.CONF.CONFIG}}"; fi`
+        --parallel `nproc`
+
+    - name: Build & install OpenCL-CLHPP
+      shell: bash
+      run: cmake
+          -G "Unix Makefiles"
+          `if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]]; then echo "-D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}"; fi`
+          -D CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install
+          -D CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
+          -D CMAKE_FIND_ROOT_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
+          -D BUILD_DOCS=OFF
+          -D BUILD_EXAMPLES=OFF
+          -D BUILD_TESTING=OFF
+          -D ANDROID_ABI=${{matrix.ABI}}
+          -D ANDROID_PLATFORM=${{matrix.API_LEVEL}}
+          -S $GITHUB_WORKSPACE/external/OpenCL-CLHPP
+          -B $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build &&
+        cmake
+          --build $GITHUB_WORKSPACE/external/OpenCL-CLHPP/build
+          --target install
+          `if [[ "${{matrix.CONF.GEN}}" == "Ninja Multi-Config" ]]; then echo "--config ${{matrix.CONF.CONFIG}}"; fi`
+          --parallel `nproc`
+
+    - name: Build & install OpenCL-ICD-Loader
+      shell: bash
+      run: cmake
+          -G "Unix Makefiles"
+          `if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]]; then echo "-D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}"; fi`
+          -D CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
+          -D CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
+          -D CMAKE_FIND_ROOT_PATH=$GITHUB_WORKSPACE/external/OpenCL-Headers/install
+          -D CMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install
+          -D BUILD_TESTING=OFF
+          -D ANDROID_ABI=${{matrix.ABI}}
+          -D ANDROID_PLATFORM=${{matrix.API_LEVEL}}
+          -S $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader
+          -B $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build &&
+        cmake
+          --build $GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/build
+          --target install
+          `if [[ "${{matrix.CONF.GEN}}" == "Ninja Multi-Config" ]]; then echo "--config ${{matrix.CONF.CONFIG}}"; fi`
+          --parallel `nproc`
+
+    - name: Configure (fetch dependencies)
+      if: matrix.DEPS != 'vcpkg'
+      shell: bash
+      run: cmake
+        -G "Unix Makefiles"
+        `if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]]; then echo "-D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}"; fi`
+        -D CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
+        -D CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
+        -D CMAKE_FIND_ROOT_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install;$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install"
+        -D CMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
+        -D ANDROID_ABI=${{matrix.ABI}}
+        -D ANDROID_PLATFORM=${{matrix.API_LEVEL}}
+        -D BUILD_TESTING=ON
+        -S $GITHUB_WORKSPACE
+        -B $GITHUB_WORKSPACE/build
+
+    - name: Configure (vcpkg dependencies)
+      if: matrix.DEPS == 'vcpkg'
+      shell: bash
+      run: cmake
+        -G "Unix Makefiles"
+        `if [[ "${{matrix.CONF.GEN}}" == "Unix Makefiles" ]]; then echo "-D CMAKE_BUILD_TYPE=${{matrix.CONF.CONFIG}}"; fi`
+        -D CMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
+        -D VCPKG_TARGET_TRIPLET=$VCPKG_TRIPLET
+        -D VCPKG_CHAINLOAD_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
+        -D CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
+        -D CMAKE_FIND_ROOT_PATH="$GITHUB_WORKSPACE/external/OpenCL-Headers/install;$GITHUB_WORKSPACE/external/OpenCL-ICD-Loader/install;$GITHUB_WORKSPACE/external/OpenCL-CLHPP/install"
+        -D CMAKE_FIND_PACKAGE_PREFER_CONFIG=ON
+        -D ANDROID_ABI=${{matrix.ABI}}
+        -D ANDROID_PLATFORM=${{matrix.API_LEVEL}}
+        -D BUILD_TESTING=ON
+        -S $GITHUB_WORKSPACE
+        -B $GITHUB_WORKSPACE/build
+
+    - name: Build (Unix Makefiles)
+      if: matrix.CONF.GEN == 'Unix Makefiles'
+      shell: bash
+      run: |
+        cmake --build $GITHUB_WORKSPACE/build --parallel `nproc`
+
+    - name: Build (Ninja Multi-Config)
+      if: matrix.CONF.GEN == 'Ninja Multi-Config'
+      shell: bash
+      run: |
+        cmake --build $GITHUB_WORKSPACE/build --config Debug
+        cmake --build $GITHUB_WORKSPACE/build --config Release

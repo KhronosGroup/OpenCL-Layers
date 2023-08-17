@@ -57,6 +57,7 @@ init_program_cache_dispatch(const _cl_icd_dispatch* tdispatch)
     program_cache_dispatch.clGetProgramInfo = tdispatch->clGetProgramInfo;
     program_cache_dispatch.clReleaseDevice = tdispatch->clReleaseDevice;
     program_cache_dispatch.clReleaseProgram = tdispatch->clReleaseProgram;
+    program_cache_dispatch.clReleaseContext = tdispatch->clReleaseContext;
     return program_cache_dispatch;
 }
 

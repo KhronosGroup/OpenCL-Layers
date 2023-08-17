@@ -8,7 +8,6 @@ if (NOT Boost_FOUND)
   else ()
     message (STATUS "Fetching Boost::format and Boost::wave")
   endif ()
-  cmake_minimum_required(VERSION 3.11)
   include (FetchContent)
   set(boost_dependencies
     algorithm

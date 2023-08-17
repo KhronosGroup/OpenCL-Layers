@@ -95,6 +95,7 @@ struct program_cache_dispatch
     clGetProgramInfo_t* clGetProgramInfo{};
     clReleaseDevice_t* clReleaseDevice{};
     clReleaseProgram_t* clReleaseProgram{};
+    clReleaseContext_t* clReleaseContext{};
 };
 
 } // namespace ocl::program_cache
