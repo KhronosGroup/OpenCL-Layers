@@ -4,9 +4,10 @@ target_compile_definitions(ProgramCacheLayerTest PRIVATE
     CL_HPP_ENABLE_EXCEPTIONS
     CL_HPP_MINIMUM_OPENCL_VERSION=100
     CL_HPP_TARGET_OPENCL_VERSION=300)
+target_compile_features(ProgramCacheLayerTest PRIVATE cxx_std_17)
 
 add_test(NAME ProgramCacheLayerTest COMMAND ProgramCacheLayerTest)
-set_tests_properties(ProgramCacheLayerTest PROPERTIES ENVIRONMENT "OPENCL_LAYERS=$<TARGET_FILE:ProgramCacheLayer>")
+set_tests_properties(ProgramCacheLayerTest PROPERTIES ENVIRONMENT "OPENCL_LAYERS=$<TARGET_FILE:ProgramCacheLayer>" LABELS "system-icd")
 
 set_target_properties (ProgramCacheLayerTest
     PROPERTIES

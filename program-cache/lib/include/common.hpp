@@ -22,8 +22,8 @@
 /// Contains common definitions which are shared between multiple compilation units of
 /// program-cache.
 
-#ifndef OCL_PROGRAM_CACHE_LIB_INC_OCL_PROGRAM_CACHE_COMMON_HPP_
-#define OCL_PROGRAM_CACHE_LIB_INC_OCL_PROGRAM_CACHE_COMMON_HPP_
+#ifndef OCL_PROGRAM_CACHE_LIB_INCLUDE_OCL_PROGRAM_CACHE_COMMON_HPP_
+#define OCL_PROGRAM_CACHE_LIB_INCLUDE_OCL_PROGRAM_CACHE_COMMON_HPP_
 
 #include <CL/cl_icd.h>
 
@@ -100,4 +100,4 @@ struct program_cache_dispatch
 
 } // namespace ocl::program_cache
 
-#endif // OCL_PROGRAM_CACHE_LIB_INC_OCL_PROGRAM_CACHE_COMMON_HPP_
+#endif // OCL_PROGRAM_CACHE_LIB_INCLUDE_OCL_PROGRAM_CACHE_COMMON_HPP_

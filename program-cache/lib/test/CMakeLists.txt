@@ -15,6 +15,7 @@ target_compile_definitions(ProgramCacheTest PRIVATE
     CL_HPP_TARGET_OPENCL_VERSION=300
     $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:NOMINMAX>)
 add_test(NAME ProgramCacheTest COMMAND ProgramCacheTest)
+set_tests_properties(ProgramCacheTest PROPERTIES LABELS "system-icd")
 
 set_target_properties (ProgramCacheTest
     PROPERTIES

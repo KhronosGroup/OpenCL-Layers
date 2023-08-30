@@ -202,7 +202,7 @@ cl_program pc::program_cache::fetch(std::string_view key,
     {
         const auto cache_path = get_path_for_device_binary(device, hash_str(key));
         std::ifstream ifs(cache_path, std::ios::binary);
-        if (!ifs.good())
+        if (!ifs)
         {
             // Cache entry could not be opened
             return nullptr;
@@ -238,17 +238,17 @@ void pc::program_cache::store(cl_program program, std::string_view key) const
     utils::check_cl_error(dispatch_.clGetProgramInfo(program, CL_PROGRAM_DEVICES,
                                                      num_devices * sizeof(cl_device_id),
                                                      program_devices.data(), nullptr));
-    for (auto device_id : program_devices)
+    const bool not_successful_build = std::any_of(
+        program_devices.begin(), program_devices.end(), [&](const cl_device_id device_id) {
+            cl_build_status build_status{};
+            utils::check_cl_error(
+                dispatch_.clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_STATUS,
+                                                sizeof(build_status), &build_status, nullptr));
+            return build_status != CL_BUILD_SUCCESS;
+        });
+    if (not_successful_build)
     {
-        cl_build_status build_status{};
-        utils::check_cl_error(
-            dispatch_.clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_STATUS,
-                                            sizeof(build_status), &build_status, nullptr));
-        if (build_status != CL_BUILD_SUCCESS)
-        {
-            // Ensure that the passed program has been successfully built for each device
-            throw unbuilt_program_error();
-        }
+        throw unbuilt_program_error();
     }
 
     // Binaries are stored separately for every device that the passed program is built for
@@ -433,6 +433,34 @@ std::vector<unsigned char> pc::program_cache::build_program_to_binary(
         throw opencl_error(error);
     }
 
+    // Select the index of the passed device of all associated devices
+    cl_uint num_associated_devices{};
+    error =
+        dispatch_.clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, sizeof(num_associated_devices),
+                                   &num_associated_devices, nullptr);
+    if (error != CL_SUCCESS)
+    {
+        dispatch_.clReleaseProgram(program);
+        throw opencl_error(error);
+    }
+    std::vector<cl_device_id> associated_devices(num_associated_devices);
+    error = dispatch_.clGetProgramInfo(program, CL_PROGRAM_DEVICES,
+                                       sizeof(cl_device_id) * num_associated_devices,
+                                       associated_devices.data(), nullptr);
+    if (error != CL_SUCCESS)
+    {
+        dispatch_.clReleaseProgram(program);
+        throw opencl_error(error);
+    }
+    const auto selected_device_idx =
+        std::distance(associated_devices.begin(),
+                      std::find(associated_devices.begin(), associated_devices.end(), device));
+    if (selected_device_idx >= static_cast<std::ptrdiff_t>(num_associated_devices))
+    {
+        dispatch_.clReleaseProgram(program);
+        throw opencl_error(CL_INVALID_DEVICE);
+    }
+
     // Options must be copied to be able to provide a NULL-terminated string
     const std::string options_str(options.begin(), options.end());
     // Build the program...
@@ -443,18 +471,25 @@ std::vector<unsigned char> pc::program_cache::build_program_to_binary(
         throw opencl_error(error);
     }
     // ...and get the binaries
-    std::size_t binary_size{};
-    error = dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES, sizeof(binary_size),
-                                       &binary_size, nullptr);
+    std::vector<std::size_t> binary_sizes(num_associated_devices);
+    error = dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
+                                       sizeof(std::size_t) * num_associated_devices,
+                                       binary_sizes.data(), nullptr);
     if (error != CL_SUCCESS)
     {
         dispatch_.clReleaseProgram(program);
         throw opencl_error(error);
     }
-    std::vector<unsigned char> binaries(binary_size);
-    unsigned char* binary_data = binaries.data();
-    error = dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARIES, sizeof(binary_data),
-                                       &binary_data, nullptr);
+    std::vector<std::vector<unsigned char>> binaries;
+    std::vector<unsigned char*> binary_ptrs;
+    for (const auto binary_size : binary_sizes)
+    {
+        auto& binary_vec = binaries.emplace_back(binary_size);
+        binary_ptrs.push_back(binary_vec.data());
+    }
+    error = dispatch_.clGetProgramInfo(program, CL_PROGRAM_BINARIES,
+                                       sizeof(unsigned char*) * num_associated_devices,
+                                       binary_ptrs.data(), nullptr);
 
     // This program is no longer needed, can be released unconditionally
     dispatch_.clReleaseProgram(program);
@@ -462,7 +497,7 @@ std::vector<unsigned char> pc::program_cache::build_program_to_binary(
     {
         throw opencl_error(error);
     }
-    return binaries;
+    return binaries[selected_device_idx];
 }
 
 cl_context pc::program_cache::get_default_context() const

@@ -51,9 +51,22 @@ int main()
         {
             return -1;
         }
+    } catch (const cl::BuildError& ex)
+    {
+        std::cout << "Error: Could not build OpenCL program\n";
+        for (auto [device, log] : ex.getBuildLog())
+        {
+            const auto device_name = device.getInfo<CL_DEVICE_NAME>();
+            std::cout << device_name << ":\n" << log << "\n";
+        }
+        return ex.err();
+    } catch (const cl::Error& ex)
+    {
+        std::cout << "An OpenCL error occurred: " << ex.what() << " (" << ex.err() << ")\n";
+        return ex.err();
     } catch (const std::exception& ex)
     {
-        std::cout << "Error: " << ex.what() << std::endl;
+        std::cout << "Error: " << ex.what() << "\n";
         return -1;
     }
 }

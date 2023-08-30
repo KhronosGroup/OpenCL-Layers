@@ -63,6 +63,7 @@ inline std::vector<std::string_view> split(std::string_view input, char delimite
 }
 
 /// @brief Returns whether \c str starts with \c start
+/// @note Remove once on C++20.
 inline bool starts_with(std::string_view str, std::string_view start)
 {
     return str.find(start) == 0;

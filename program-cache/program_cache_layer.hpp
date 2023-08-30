@@ -150,6 +150,13 @@ public:
                            void* param_value,
                            size_t* param_value_size_ret) noexcept;
 
+    cl_int clGetKernelArgInfo(cl_kernel kernel,
+                              cl_uint arg_index,
+                              cl_kernel_arg_info param_name,
+                              size_t param_value_size,
+                              void* param_value,
+                              size_t* param_value_size_ret) noexcept;
+
 private:
     /// @brief Entry that wraps a \c cl_program (potentially null) and is stored in the \c
     /// program_entries_ table.
@@ -182,6 +189,10 @@ private:
     bool is_il_program_supported(cl_context context) const;
     bool are_global_variables_supported(cl_context context) const;
     cl_int ensure_program(program_entry& entry);
+    cl_int rebuild_kernel_from_source(cl_kernel old_kernel,
+                                      const program_entry& entry,
+                                      cl_kernel& new_kernel,
+                                      cl_program& new_program) const;
 
     /// @brief OpenCL API dispatch table
     const _cl_icd_dispatch* tdispatch_;

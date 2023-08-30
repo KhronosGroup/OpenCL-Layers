@@ -1,4 +1,3 @@
-
 if (NOT DEPENDENCIES_FORCE_DOWNLOAD)
     find_package(OpenCLHeadersCpp)
 endif ()

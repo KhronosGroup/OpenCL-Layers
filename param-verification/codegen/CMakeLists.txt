@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
+# Project name is deliberately short: avoid long paths problem on Windows
 project(CodeGen CXX)
 include("${CMAKE_MODULE_PATH}/RapidXml.cmake")
 

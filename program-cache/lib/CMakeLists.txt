@@ -23,16 +23,10 @@ target_link_libraries(ProgramCache
         OpenCL::Headers
     PRIVATE
         $<BUILD_INTERFACE:Boost::wave>
+        # Boost::format is needed with newer Boost versions, because it is missing from the
+        # dependency list of Boost::wave, even though it depends on it.
+        $<BUILD_INTERFACE:$<TARGET_NAME_IF_EXISTS:Boost::format>>
 )
-# Boost::format is needed with newer Boost versions, because it is missing from the
-# dependency list of Boost::wave, even though it depends on it.
-# -> CMake 3.12: TARGET_NAME_IF_EXISTS
-if (TARGET Boost::format)
-    target_link_libraries(ProgramCache
-        PRIVATE
-            $<BUILD_INTERFACE:Boost::format>
-    )
-endif()
 target_compile_features(ProgramCache PUBLIC cxx_std_17)
 target_compile_definitions(ProgramCache PRIVATE
     $<$<OR:$<PLATFORM_ID:Darwin>,$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>>:BOOST_WAVE_SEPARATE_LEXER_INSTANTIATION=0>

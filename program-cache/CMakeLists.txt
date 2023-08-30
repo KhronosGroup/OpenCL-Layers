@@ -3,9 +3,7 @@ add_subdirectory(lib)
 add_library (ProgramCacheLayer SHARED
     program_cache_layer_surface.cpp
     program_cache_layer.cpp
-#   PLATFORM_ID taking a comma-separated list is CMake 3.15
-#   $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:icd_print_layer.def>
-    $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:program_cache_layer.def>
+    $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:program_cache_layer.def>
     $<$<CXX_COMPILER_ID:GNU>:program_cache_layer.map>
 )
 

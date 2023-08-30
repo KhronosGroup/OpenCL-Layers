@@ -36,8 +36,8 @@
 
 namespace ocl::program_cache {
 
-// Boost::Wave crashes on "#pragma\n":
-// https://github.com/boostorg/wave/issues/188 Added to header for testing
+// Boost::Wave crashes on "#pragma\n": https://github.com/boostorg/wave/issues/188
+// Function declaration is added to this header for testing purpose
 std::string_view remove_empty_pragmas(std::string_view kernel_source, std::string& allocated_str);
 
 struct DefinitionOpt

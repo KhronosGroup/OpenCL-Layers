@@ -61,7 +61,6 @@ namespace pc = ocl::program_cache;
 using lex_iterator_t = boost::wave::cpplexer::lex_iterator<boost::wave::cpplexer::lex_token<>>;
 using context_t = boost::wave::context<std::string_view::iterator, lex_iterator_t>;
 
-
 void undefine_default_macros(context_t& context)
 {
     using string_type = context_t::string_type;
@@ -106,11 +105,11 @@ void add_opencl_macro_defs(cl_device_id device,
     const int platform_id = 100 * platform_major + 10 * platform_minor;
     const int device_c_id = get_device_opencl_c_id(device, dispatch);
 
-    context.add_macro_definition("__kernel_exec(x, typen)=__kernel "
+    context.add_macro_definition("__kernel_exec(X, typen)=__kernel "
                                  "__attribute__((work_group_size_hint(X, 1, "
                                  "1))) __attribute__((vec_type_hint(typen)))");
     context.add_macro_definition(
-        "kernel_exec(x, typen)=__kernel __attribute__((work_group_size_hint(X, "
+        "kernel_exec(X, typen)=__kernel __attribute__((work_group_size_hint(X, "
         "1, 1))) __attribute__((vec_type_hint(typen)))");
     context.add_macro_definition("__OPENCL_VERSION__=" + std::to_string(device_c_id));
     if (device_c_id >= 110)
@@ -210,17 +209,27 @@ std::string_view pc::remove_empty_pragmas(std::string_view kernel_source,
     const auto last_pragma_idx = kernel_source.rfind("#pragma");
     const bool ends_with_pragma =
         last_pragma_idx == (kernel_source.size() - std::string_view("#pragma").size());
-    if (pragma_newline_idx == std::string_view::npos && !ends_with_pragma)
+    if (pragma_newline_idx == std::string_view::npos)
     {
-        return kernel_source;
-    }
-    if (pragma_newline_idx == std::string_view::npos && ends_with_pragma)
-    {
-        return kernel_source.substr(0, last_pragma_idx);
+        if (ends_with_pragma)
+        {
+            return kernel_source.substr(0, last_pragma_idx);
+        }
+        else
+        {
+            return kernel_source;
+        }
     }
     // At this point, #pragma\n is somewhere in the middle of the string
     // To remove them, we must make a copy of the entire source.
-    allocated_str = std::string(kernel_source.begin(), kernel_source.end());
+    if (ends_with_pragma)
+    {
+        allocated_str = std::string(kernel_source.begin(), kernel_source.begin() + last_pragma_idx);
+    }
+    else
+    {
+        allocated_str = std::string(kernel_source.begin(), kernel_source.end());
+    }
     while (pragma_newline_idx != std::string::npos)
     {
         allocated_str.erase(pragma_newline_idx, std::string_view("#pragma\n").size());
@@ -280,9 +289,9 @@ std::vector<pc::Option> pc::parse_options(std::string_view options)
             ret.emplace_back(FastRelaxedMathOpt{});
             ++it;
         }
-        else if (utils::starts_with(*it, "-cl-std="))
+        else if (const std::string_view std_opt("-cl-std="); utils::starts_with(*it, std_opt))
         {
-            ret.emplace_back(LanguageVersionOpt(it->substr(8)));
+            ret.emplace_back(LanguageVersionOpt(it->substr(std_opt.size())));
             ++it;
         }
         else

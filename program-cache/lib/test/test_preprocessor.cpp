@@ -54,6 +54,9 @@ TEST(PreprocessorTest, RemoveEmptyPragmas)
     EXPECT_EQ(
         "kernel void foo(){\n#pragma bar\n}\n",
         remove_empty_pragmas("kernel void foo(){\n#pragma\n#pragma bar\n#pragma\n}\n", alloc_str));
+    EXPECT_EQ("kernel void foo(){\n#pragma bar\n}\n",
+              remove_empty_pragmas("kernel void foo(){\n#pragma\n#pragma bar\n#pragma\n}\n#pragma",
+                                   alloc_str));
 }
 
 TEST(PreprocessorTest, ParseOptions)

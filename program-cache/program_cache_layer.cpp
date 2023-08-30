@@ -118,10 +118,9 @@ cl_program pcl::program_cache_layer::clCreateProgramWithIL(cl_context context,
         return nullptr;
     }
 
-    std::vector<char> source(length);
-    std::copy_n(static_cast<const char*>(il), length, source.begin());
     program_entry entry(context);
-    entry.source_ = std::move(source);
+    entry.source_ =
+        std::vector<char>(static_cast<const char*>(il), static_cast<const char*>(il) + length);
 
     const std::lock_guard lock(programs_mutex_);
     const auto index = next_program_idx_++;
@@ -732,35 +731,9 @@ cl_int pcl::program_cache_layer::clGetKernelInfo(cl_kernel kernel,
                 // Since we might have a program that is read from the cache and
                 // created with clCreateProgramWithBinary, we must recompile the
                 // source to get the attributes.
-                std::size_t kernel_name_size{};
-                error = tdispatch_->clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME, 0, nullptr,
-                                                    &kernel_name_size);
-                if (error != CL_SUCCESS) return error;
-                std::string kernel_name;
-                kernel_name.resize(kernel_name_size);
-                error = tdispatch_->clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME,
-                                                    kernel_name_size, kernel_name.data(), nullptr);
-                if (error != CL_SUCCESS) return error;
-                const auto& source = std::get<std::string>(found_it->second.source_);
-                const char* source_str = source.data();
-                const std::size_t source_size = source.size();
-                const auto tmp_program = tdispatch_->clCreateProgramWithSource(
-                    found_it->second.context_, 1, &source_str, &source_size, &error);
-                if (error != CL_SUCCESS) return error;
-                error = tdispatch_->clBuildProgram(
-                    tmp_program, 0, nullptr, found_it->second.options_.c_str(), nullptr, nullptr);
-                if (error != CL_SUCCESS)
-                {
-                    tdispatch_->clReleaseProgram(tmp_program);
-                    return error;
-                }
-                const auto tmp_kernel =
-                    tdispatch_->clCreateKernel(tmp_program, kernel_name.c_str(), &error);
-                if (error != CL_SUCCESS)
-                {
-                    tdispatch_->clReleaseProgram(tmp_program);
-                    return error;
-                }
+                cl_program tmp_program{};
+                cl_kernel tmp_kernel{};
+                rebuild_kernel_from_source(kernel, found_it->second, tmp_kernel, tmp_program);
                 error =
                     tdispatch_->clGetKernelInfo(tmp_kernel, CL_KERNEL_ATTRIBUTES, param_value_size,
                                                 param_value, param_value_size_ret);
@@ -779,6 +752,44 @@ cl_int pcl::program_cache_layer::clGetKernelInfo(cl_kernel kernel,
             return tdispatch_->clGetKernelInfo(kernel, param_name, param_value_size, param_value,
                                                param_value_size_ret);
     }
+}
+
+cl_int pcl::program_cache_layer::clGetKernelArgInfo(cl_kernel kernel,
+                                                    cl_uint arg_index,
+                                                    cl_kernel_arg_info param_name,
+                                                    size_t param_value_size,
+                                                    void* param_value,
+                                                    size_t* param_value_size_ret) noexcept
+{
+    // If this layer is used, all kernels are created from programs that are built as a binary.
+    // To acquire information about the kernel args, we must recompile the kernel from source.
+    cl_program wrapped_program{};
+    cl_int error = tdispatch_->clGetKernelInfo(kernel, CL_KERNEL_PROGRAM, sizeof(wrapped_program),
+                                               &wrapped_program, nullptr);
+    if (error != CL_SUCCESS) return error;
+    const std::lock_guard lock(programs_mutex_);
+    const auto found_it = std::find_if(program_entries_.begin(), program_entries_.end(),
+                                       [wrapped_program](const auto& key_value) {
+                                           return key_value.second.program_ == wrapped_program;
+                                       });
+    assert(found_it != program_entries_.end());
+
+    if (std::holds_alternative<std::string>(found_it->second.source_))
+    {
+        cl_program tmp_program{};
+        cl_kernel tmp_kernel{};
+        rebuild_kernel_from_source(kernel, found_it->second, tmp_kernel, tmp_program);
+        error = tdispatch_->clGetKernelArgInfo(tmp_kernel, arg_index, param_name, param_value_size,
+                                               param_value, param_value_size_ret);
+        tdispatch_->clReleaseKernel(tmp_kernel);
+        tdispatch_->clReleaseProgram(tmp_program);
+    }
+    else
+    {
+        error = tdispatch_->clGetKernelArgInfo(kernel, arg_index, param_name, param_value_size,
+                                               param_value, param_value_size_ret);
+    }
+    return error;
 }
 
 bool pcl::program_cache_layer::is_il_program_supported(cl_context context) const
@@ -839,6 +850,42 @@ cl_int pcl::program_cache_layer::ensure_program(program_entry& entry)
                                              entry.context_, il.data(), il.size(), &error);
                                      } },
                    entry.source_);
+    }
+    return error;
+}
+
+cl_int pcl::program_cache_layer::rebuild_kernel_from_source(cl_kernel old_kernel,
+                                                            const program_entry& entry,
+                                                            cl_kernel& new_kernel,
+                                                            cl_program& new_program) const
+{
+    std::size_t kernel_name_size{};
+    cl_int error = tdispatch_->clGetKernelInfo(old_kernel, CL_KERNEL_FUNCTION_NAME, 0, nullptr,
+                                               &kernel_name_size);
+    if (error != CL_SUCCESS) return error;
+    std::string kernel_name;
+    kernel_name.resize(kernel_name_size);
+    error = tdispatch_->clGetKernelInfo(old_kernel, CL_KERNEL_FUNCTION_NAME, kernel_name_size,
+                                        kernel_name.data(), nullptr);
+    if (error != CL_SUCCESS) return error;
+    assert(std::holds_alternative<std::string>(entry.source_));
+    const auto& source = std::get<std::string>(entry.source_);
+    const char* source_str = source.data();
+    const std::size_t source_size = source.size();
+    new_program =
+        tdispatch_->clCreateProgramWithSource(entry.context_, 1, &source_str, &source_size, &error);
+    if (error != CL_SUCCESS) return error;
+    error = tdispatch_->clBuildProgram(new_program, 0, nullptr, entry.options_.c_str(), nullptr,
+                                       nullptr);
+    if (error != CL_SUCCESS)
+    {
+        tdispatch_->clReleaseProgram(new_program);
+        return error;
+    }
+    new_kernel = tdispatch_->clCreateKernel(new_program, kernel_name.c_str(), &error);
+    if (error != CL_SUCCESS)
+    {
+        tdispatch_->clReleaseProgram(new_program);
     }
     return error;
 }

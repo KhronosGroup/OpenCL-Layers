@@ -212,6 +212,18 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelInfo_wrap(cl_kernel kernel,
                                                   param_value_size_ret);
 }
 
+CL_API_ENTRY cl_int CL_API_CALL clGetKernelArgInfo_wrap(cl_kernel kernel,
+                                                        cl_uint arg_index,
+                                                        cl_kernel_arg_info param_name,
+                                                        size_t param_value_size,
+                                                        void* param_value,
+                                                        size_t* param_value_size_ret)
+{
+    assert(g_program_cache_layer != nullptr);
+    return g_program_cache_layer->clGetKernelArgInfo(
+        kernel, arg_index, param_name, param_value_size, param_value, param_value_size_ret);
+}
+
 void init_dispatch()
 {
     g_dispatch = {};
@@ -231,6 +243,7 @@ void init_dispatch()
     g_dispatch.clCreateKernel = &clCreateKernel_wrap;
     g_dispatch.clCreateKernelsInProgram = &clCreateKernelsInProgram_wrap;
     g_dispatch.clGetKernelInfo = &clGetKernelInfo_wrap;
+    g_dispatch.clGetKernelArgInfo = &clGetKernelArgInfo_wrap;
 }
 
 } // namespace

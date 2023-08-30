@@ -19,7 +19,7 @@
 /// @file instantiate_lexer.cpp
 /// @brief Explicit template specializations for the Boost::Wave lexer.
 ///
-/// This file is only needed on Windows. \c std::string_view::iterator is \c char* on other
+/// This file is needed on Windows and mac OS. \c std::string_view::iterator is \c char* on other
 /// platforms which is already instantiated in Boost::Wave.
 
 #if defined(_MSC_VER)

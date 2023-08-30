@@ -49,11 +49,11 @@ target_compile_definitions (LayersCommon
 
 if (LAYERS_BUILD_TESTS)
     if (NOT TARGET OpenCL)
-        # if(APPLE) # Apple's own loader can't load layers. We have to avoid it.
+        if(APPLE) # Apple's own loader can't load layers. We have to avoid it.
           find_package (OpenCLICDLoader REQUIRED)
-        # else()
-        #   find_package (OpenCL REQUIRED)
-        # endif()
+        else()
+          find_package (OpenCL REQUIRED)
+        endif()
     endif ()
 endif ()
 

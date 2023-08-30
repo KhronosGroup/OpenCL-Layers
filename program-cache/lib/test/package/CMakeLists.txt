@@ -25,3 +25,4 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:NOMINMAX>
 )
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+set_tests_properties(${PROJECT_NAME} PROPERTIES LABELS "system-icd")
