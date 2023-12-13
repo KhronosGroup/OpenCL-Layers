@@ -34,8 +34,9 @@ find_package_handle_standard_args (
 
 if (RapidXml_FOUND)
   set (RapidXml_INCLUDE_DIR ${RapidXml_INCLUDE_PATH})
-  add_library (RapidXml::RapidXml INTERFACE IMPORTED)
-  target_include_directories (RapidXml::RapidXml INTERFACE ${RapidXml_INCLUDE_PATH})
+  add_library (RapidXml INTERFACE)
+  target_include_directories (RapidXml INTERFACE ${RapidXml_INCLUDE_PATH})
+  add_library (RapidXml::RapidXml ALIAS RapidXml)
 endif ()
 
 mark_as_advanced(RapidXml_INCLUDE_PATH)
