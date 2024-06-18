@@ -1,8 +1,6 @@
 add_library (CLObjectLifetimeLayer SHARED
     object_lifetime.cpp
-#   PLATFORM_ID taking a comma-separated list is CMake 3.15
-#   $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:object_lifetime.def>
-    $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:object_lifetime.def>
+    $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:object_lifetime.def>
     $<$<CXX_COMPILER_ID:GNU>:object_lifetime.map>
 )
 
@@ -20,9 +18,7 @@ if (LAYERS_BUILD_TESTS)
         object_lifetime_test_icd.hpp
         object_lifetime_test_icd.cpp
         object_lifetime_test_icd_surface.cpp
-#       PLATFORM_ID taking a comma-separated list is CMake 3.15
-#       $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:object_lifetime_test_icd.def>
-        $<$<AND:$<PLATFORM_ID:Windows>,$<OR:$<CXX_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:Clang>>>:object_lifetime_test_icd.def>
+        $<$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:MSVC,Clang>>:object_lifetime_test_icd.def>
         $<$<CXX_COMPILER_ID:GNU>:object_lifetime_test_icd.map>
     )
     target_link_libraries (CLObjectLifetimeICD
@@ -33,11 +29,11 @@ if (LAYERS_BUILD_TESTS)
     )
 
     add_subdirectory (test)
-endif ()
 
-list (APPEND BUILD_TARGETS
-    CLObjectLifetimeICD
-)
+    list (APPEND BUILD_TARGETS
+        CLObjectLifetimeICD
+    )
+endif ()
 
 set_target_properties (${BUILD_TARGETS}
     PROPERTIES
