@@ -456,7 +456,7 @@ bool list_violation(cl_version version, const char * name, T param)
 std::vector<cl_device_id> get_devices(cl_context context)
 {
   // suppose minimum OpenCL 1.1
-  cl_int nd = 0;
+  cl_uint nd = 0;
   tdispatch->clGetContextInfo(
     context,
     CL_CONTEXT_NUM_DEVICES,
@@ -477,7 +477,7 @@ std::vector<cl_device_id> get_devices(cl_context context)
 
 std::vector<cl_device_id> get_devices(cl_program program)
 {
-  cl_int nd = 0;
+  cl_uint nd = 0;
   tdispatch->clGetProgramInfo(
     program,
     CL_PROGRAM_NUM_DEVICES,
@@ -505,7 +505,7 @@ std::vector<cl_device_id> get_devices(cl_kernel kernel)
     sizeof(pr),
     &pr,
     NULL);
-  cl_int nd;
+  cl_uint nd;
   tdispatch->clGetProgramInfo(
     pr,
     CL_PROGRAM_NUM_DEVICES,
